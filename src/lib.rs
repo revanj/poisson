@@ -50,6 +50,10 @@ impl ApplicationHandler for PoissonEngine {
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
         println!("{event:?}");
         match event {
+            // those two should push event to a queue to be resolved before render loop
+            WindowEvent::KeyboardInput { .. } => {},
+            WindowEvent::PointerButton { .. } => {},
+            
             WindowEvent::CloseRequested => {
                 println!("Close was requested; stopping");
                 event_loop.exit();
@@ -58,12 +62,7 @@ impl ApplicationHandler for PoissonEngine {
                 self.window.as_ref().expect("resize event without a window").request_redraw();
             },
             WindowEvent::RedrawRequested => {
-                // Redraw the application.
-                //
-                // It's preferable for applications that do not render continuously to render in
-                // this event rather than in AboutToWait, since rendering in here allows
-                // the program to gracefully handle redraws requested by the OS.
-
+                
                 let window = self.window.as_ref()
                     .expect("redraw request without a window");
                 window.pre_present_notify();
