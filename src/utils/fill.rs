@@ -125,28 +125,3 @@ mod platform {
     }
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-mod platform {
-    #[allow(dead_code)]
-    pub fn fill_window(_window: &dyn winit::window::Window) {
-        // No-op on mobile platforms.
-    }
-
-    #[allow(dead_code)]
-    pub fn fill_window_with_color(_window: &dyn winit::window::Window, _color: u32) {
-        // No-op on mobile platforms.
-    }
-
-    #[allow(dead_code)]
-    pub fn fill_window_with_animated_color(
-        _window: &dyn winit::window::Window,
-        _start: std::time::Instant,
-    ) {
-        // No-op on mobile platforms.
-    }
-
-    #[allow(dead_code)]
-    pub fn cleanup_window(_window: &dyn winit::window::Window) {
-        // No-op on mobile platforms.
-    }
-}

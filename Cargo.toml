@@ -14,3 +14,5 @@ softbuffer = { version = "0.4.6", default-features = false, features = [
     "wayland",
     "wayland-dlopen",
 ] }
+ash = "0.38.0+1.3.281"
+ash-window = "0.13.0"
