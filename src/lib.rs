@@ -23,8 +23,36 @@ impl PoissonEngine {
         }
     }
 
-    pub fn init() {
-
+    fn init(self: &mut Self) {
+        if let Some(window_value) = &self.window {
+            self.vulkan_context = Some(VulkanContext::new(
+                window_value.display_handle().unwrap().as_raw()));
+        }
+    }
+    
+    fn update(self: &mut Self) {
+        
+    }
+    
+    fn pre_present_notify(self: &mut Self) {
+        self.window.as_ref()
+            .expect("redraw request without a window").pre_present_notify();
+    }
+    
+    fn request_redraw(self: &mut Self) {
+        self.window.as_ref()
+            .expect("redraw request without a window").request_redraw();
+    }
+    
+    fn render_loop(self: &mut Self) {
+        let window = self.window.as_ref()
+            .expect("redraw request without a window").as_ref();
+        
+        fill::fill_window(window);
+    }
+    
+    fn present(self: &mut Self) {
+        
     }
 }
 
@@ -32,6 +60,7 @@ impl ApplicationHandler for PoissonEngine {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
     {
         let window_attributes = WindowAttributes::default();
+        
         self.window = match event_loop.create_window(window_attributes) {
             Ok(window) => Some(window),
             Err(err) => {
@@ -40,11 +69,8 @@ impl ApplicationHandler for PoissonEngine {
                 return;
             },
         };
-
-        if let Some(window_value) = &self.window {
-            self.vulkan_context = Some(VulkanContext::new(
-                window_value.display_handle().unwrap().as_raw()));
-        }
+        
+        self.init();
     }
 
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
@@ -53,7 +79,7 @@ impl ApplicationHandler for PoissonEngine {
             // those two should push event to a queue to be resolved before render loop
             WindowEvent::KeyboardInput { .. } => {},
             WindowEvent::PointerButton { .. } => {},
-            
+
             WindowEvent::CloseRequested => {
                 println!("Close was requested; stopping");
                 event_loop.exit();
@@ -62,14 +88,11 @@ impl ApplicationHandler for PoissonEngine {
                 self.window.as_ref().expect("resize event without a window").request_redraw();
             },
             WindowEvent::RedrawRequested => {
-                
-                let window = self.window.as_ref()
-                    .expect("redraw request without a window");
-                window.pre_present_notify();
-                
-                fill::fill_window(window.as_ref());
-
-                window.request_redraw();
+                self.update();
+                self.render_loop();
+                self.pre_present_notify();
+                self.present();
+                self.request_redraw()
             },
             _ => (),
         }
