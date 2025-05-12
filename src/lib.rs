@@ -12,7 +12,7 @@ mod fill;
 
 pub struct PoissonEngine {
     window: Option<Box<dyn Window>>,
-    vulkan_context: Option<VulkanContext>
+    vulkan_context: Option<VulkanContext>,
 }
 
 impl PoissonEngine {
@@ -25,34 +25,33 @@ impl PoissonEngine {
 
     fn init(self: &mut Self) {
         if let Some(window_value) = &self.window {
-            self.vulkan_context = Some(VulkanContext::new(
-                window_value.display_handle().unwrap().as_raw()));
+            unsafe {
+                self.vulkan_context = Some(VulkanContext::new(window_value));
+            }
         }
     }
-    
+
     fn update(self: &mut Self) {
-        
+
     }
-    
+
     fn pre_present_notify(self: &mut Self) {
         self.window.as_ref()
             .expect("redraw request without a window").pre_present_notify();
     }
-    
+
     fn request_redraw(self: &mut Self) {
         self.window.as_ref()
             .expect("redraw request without a window").request_redraw();
     }
-    
+
     fn render_loop(self: &mut Self) {
         let window = self.window.as_ref()
             .expect("redraw request without a window").as_ref();
-        
-        fill::fill_window(window);
     }
-    
+
     fn present(self: &mut Self) {
-        
+
     }
 }
 
@@ -60,7 +59,7 @@ impl ApplicationHandler for PoissonEngine {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
     {
         let window_attributes = WindowAttributes::default();
-        
+
         self.window = match event_loop.create_window(window_attributes) {
             Ok(window) => Some(window),
             Err(err) => {
@@ -69,7 +68,7 @@ impl ApplicationHandler for PoissonEngine {
                 return;
             },
         };
-        
+
         self.init();
     }
 
@@ -85,6 +84,7 @@ impl ApplicationHandler for PoissonEngine {
                 event_loop.exit();
             },
             WindowEvent::SurfaceResized(_) => {
+                self.vulkan_context.as_mut().unwrap().notify_window_resized();
                 self.window.as_ref().expect("resize event without a window").request_redraw();
             },
             WindowEvent::RedrawRequested => {
