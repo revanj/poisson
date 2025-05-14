@@ -1,3 +1,4 @@
+use ash::vk;
 use winit::window::Window;
 mod vulkan;
 use vulkan::VulkanContext;
@@ -6,9 +7,71 @@ use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::{WindowAttributes, WindowId};
+use ash::util::Align;
+
+
 
 #[path = "utils/fill.rs"]
 mod fill;
+
+#[derive(Clone, Debug, Copy)]
+struct Vertex {
+    pos: [f32; 4],
+    color: [f32; 4],
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
+    device: &ash::Device,
+    command_buffer: vk::CommandBuffer,
+    command_buffer_reuse_fence: vk::Fence,
+    submit_queue: vk::Queue,
+    wait_mask: &[vk::PipelineStageFlags],
+    wait_semaphores: &[vk::Semaphore],
+    signal_semaphores: &[vk::Semaphore],
+    f: F,
+) {
+    unsafe {
+        device
+            .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)
+            .expect("Wait for fence failed.");
+
+        device
+            .reset_fences(&[command_buffer_reuse_fence])
+            .expect("Reset fences failed.");
+
+        device
+            .reset_command_buffer(
+                command_buffer,
+                vk::CommandBufferResetFlags::RELEASE_RESOURCES,
+            )
+            .expect("Reset command buffer failed.");
+
+        let command_buffer_begin_info = vk::CommandBufferBeginInfo::default()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+        device
+            .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+            .expect("Begin commandbuffer");
+        f(device, command_buffer);
+        device
+            .end_command_buffer(command_buffer)
+            .expect("End commandbuffer");
+
+        let command_buffers = vec![command_buffer];
+
+        let submit_info = vk::SubmitInfo::default()
+            .wait_semaphores(wait_semaphores)
+            .wait_dst_stage_mask(wait_mask)
+            .command_buffers(&command_buffers)
+            .signal_semaphores(signal_semaphores);
+
+        device
+            .queue_submit(submit_queue, &[submit_info], command_buffer_reuse_fence)
+            .expect("queue submit failed.");
+    }
+}
+
 
 pub struct PoissonEngine {
     window: Option<Box<dyn Window>>,
@@ -23,6 +86,21 @@ impl PoissonEngine {
         }
     }
 
+    pub fn find_memorytype_index(
+        memory_req: &vk::MemoryRequirements,
+        memory_prop: &vk::PhysicalDeviceMemoryProperties,
+        flags: vk::MemoryPropertyFlags,
+    ) -> Option<u32> {
+        memory_prop.memory_types[..memory_prop.memory_type_count as _]
+            .iter()
+            .enumerate()
+            .find(|(index, memory_type)| {
+                (1u32 << index) & memory_req.memory_type_bits != 0
+                    && memory_type.property_flags & flags == flags
+            })
+            .map(|(index, _memory_type)| index as _)
+    }
+
     fn init(self: &mut Self) {
         if let Some(window_value) = &self.window {
             unsafe {
@@ -31,8 +109,103 @@ impl PoissonEngine {
         }
     }
 
-    fn update(self: &mut Self) {
+    unsafe fn update(self: &mut Self) {
+        let vulkan = self.vulkan_context.as_mut().unwrap();
+        let viewports = [vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: vulkan.surface_resolution.width as f32,
+            height: vulkan.surface_resolution.height as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        }];
+        let scissors = [vulkan.surface_resolution.into()];
+        let (present_index, _) = vulkan
+            .swapchain_loader
+            .acquire_next_image(
+                vulkan.swapchain,
+                u64::MAX,
+                vulkan.present_complete_semaphore,
+                vk::Fence::null(),
+            )
+            .unwrap();
+        let clear_values = [
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 0.0],
+                },
+            },
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            },
+        ];
 
+        let render_pass_begin_info = vk::RenderPassBeginInfo::default()
+            .render_pass(vulkan.render_pass)
+            .framebuffer(vulkan.framebuffers[present_index as usize])
+            .render_area(vulkan.surface_resolution.into())
+            .clear_values(&clear_values);
+
+        record_submit_commandbuffer(
+            &vulkan.device,
+            vulkan.draw_command_buffer,
+            vulkan.draw_commands_reuse_fence,
+            vulkan.present_queue,
+            &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
+            &[vulkan.present_complete_semaphore],
+            &[vulkan.rendering_complete_semaphore],
+            |device, draw_command_buffer| {
+                device.cmd_begin_render_pass(
+                    draw_command_buffer,
+                    &render_pass_begin_info,
+                    vk::SubpassContents::INLINE,
+                );
+                device.cmd_bind_pipeline(
+                    draw_command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    vulkan.graphics_pipeline,
+                );
+                device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                device.cmd_bind_vertex_buffers(
+                    draw_command_buffer,
+                    0,
+                    &[vulkan.vertex_input_buffer],
+                    &[0],
+                );
+                device.cmd_bind_index_buffer(
+                    draw_command_buffer,
+                    vulkan.index_buffer,
+                    0,
+                    vk::IndexType::UINT32,
+                );
+                device.cmd_draw_indexed(
+                    draw_command_buffer,
+                    3, // index_buffer_data.len() as u32, #TODO: change this to a variable
+                    1,
+                    0,
+                    0,
+                    1,
+                );
+                // Or draw without the index buffer
+                // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
+                device.cmd_end_render_pass(draw_command_buffer);
+            },
+        );
+        let wait_semaphors = [vulkan.rendering_complete_semaphore];
+        let swapchains = [vulkan.swapchain];
+        let image_indices = [present_index];
+        let present_info = vk::PresentInfoKHR::default()
+            .wait_semaphores(&wait_semaphors) // &base.rendering_complete_semaphore)
+            .swapchains(&swapchains)
+            .image_indices(&image_indices);
+
+        vulkan.swapchain_loader
+            .queue_present(vulkan.present_queue, &present_info)
+            .unwrap();
     }
 
     fn pre_present_notify(self: &mut Self) {
@@ -88,7 +261,9 @@ impl ApplicationHandler for PoissonEngine {
                 self.window.as_ref().expect("resize event without a window").request_redraw();
             },
             WindowEvent::RedrawRequested => {
-                self.update();
+                unsafe {
+                    self.update();
+                }
                 self.render_loop();
                 self.pre_present_notify();
                 self.present();
