@@ -25,7 +25,7 @@ struct Vertex {
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
     device: &ash::Device,
     command_buffer: vk::CommandBuffer,
-    command_buffer_reuse_fence: vk::Fence,
+    in_flight_fence: vk::Fence,
     submit_queue: vk::Queue,
     wait_mask: &[vk::PipelineStageFlags],
     wait_semaphores: &[vk::Semaphore],
@@ -33,14 +33,6 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
     f: F,
 ) {
     unsafe {
-        device
-            .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)
-            .expect("Wait for fence failed.");
-
-        device
-            .reset_fences(&[command_buffer_reuse_fence])
-            .expect("Reset fences failed.");
-
         device
             .reset_command_buffer(
                 command_buffer,
@@ -68,7 +60,7 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
             .signal_semaphores(signal_semaphores);
 
         device
-            .queue_submit(submit_queue, &[submit_info], command_buffer_reuse_fence)
+            .queue_submit(submit_queue, &[submit_info], in_flight_fence)
             .expect("queue submit failed.");
     }
 }
@@ -113,7 +105,8 @@ impl PoissonEngine {
     unsafe fn update(self: &mut Self) {
         let vulkan = self.vulkan_context.as_mut().unwrap();
 
-        //vulkan.device.wait_for_fences(&[vulkan.draw_commands_reuse_fence], true, u64::MAX).unwrap();
+        vulkan.device.wait_for_fences(&[vulkan.frames_in_flight_fence], true, u64::MAX).unwrap();
+
 
         let viewports = [vk::Viewport {
             x: 0.0,
@@ -136,7 +129,7 @@ impl PoissonEngine {
             .acquire_next_image(
                 vulkan.swapchain,
                 u64::MAX,
-                vulkan.present_complete_semaphore,
+                vulkan.image_available_semaphore,
                 vk::Fence::null());
 
         let present_index = match acquire_result {
@@ -144,6 +137,7 @@ impl PoissonEngine {
             _ => panic!("Failed to acquire swapchain."),
         };
 
+        vulkan.device.reset_fences(&[vulkan.frames_in_flight_fence]).unwrap();
 
         let clear_values = [
             vk::ClearValue {
@@ -168,10 +162,10 @@ impl PoissonEngine {
         record_submit_commandbuffer(
             &vulkan.device,
             vulkan.draw_command_buffer,
-            vulkan.draw_commands_reuse_fence,
+            vulkan.frames_in_flight_fence,
             vulkan.present_queue,
             &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-            &[vulkan.present_complete_semaphore],
+            &[vulkan.image_available_semaphore],
             &[vulkan.rendering_complete_semaphore],
             |device, draw_command_buffer| {
                 device.cmd_begin_render_pass(
@@ -211,11 +205,11 @@ impl PoissonEngine {
                 device.cmd_end_render_pass(draw_command_buffer);
             },
         );
-        let wait_semaphores = [vulkan.rendering_complete_semaphore];
+        let signal_semaphores = [vulkan.rendering_complete_semaphore];
         let swapchains = [vulkan.swapchain];
         let image_indices = [present_index];
         let present_info = vk::PresentInfoKHR::default()
-            .wait_semaphores(&wait_semaphores) // &base.rendering_complete_semaphore)
+            .wait_semaphores(&signal_semaphores) // &base.rendering_complete_semaphore)
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 

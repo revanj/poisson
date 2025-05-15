@@ -42,7 +42,7 @@ unsafe extern "system" fn vulkan_debug_callback(
         };
 
         println!(
-            "{message_severity:?}:\n{message_type:?} [{message_id_name} ({message_id_number})] : {message}",
+            "{message_severity:?}:{message_type:?} [{message_id_name} ({message_id_number})] : {message}",
         );
     }
     vk::FALSE
@@ -152,11 +152,11 @@ pub struct VulkanContext {
     pub depth_image_view: vk::ImageView,
     pub depth_image_memory: vk::DeviceMemory,
 
-    pub present_complete_semaphore: vk::Semaphore,
+    pub image_available_semaphore: vk::Semaphore,
     pub rendering_complete_semaphore: vk::Semaphore,
 
-    pub draw_commands_reuse_fence: vk::Fence,
-    pub setup_commands_reuse_fence: vk::Fence,
+    pub frames_in_flight_fence: vk::Fence,
+
     pub render_pass: vk::RenderPass,
     pub framebuffers: Vec<vk::Framebuffer>,
     pub graphics_pipeline: vk::Pipeline,
@@ -418,12 +418,14 @@ impl VulkanContext {
         let fence_create_info =
             vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
 
-        let draw_commands_reuse_fence = device
-            .create_fence(&fence_create_info, None)
-            .expect("Create fence failed.");
+
+
         let setup_commands_reuse_fence = device
             .create_fence(&fence_create_info, None)
             .expect("Create fence failed.");
+
+        let mut frames_in_flight_fence= device.create_fence(&fence_create_info, None).unwrap();
+
 
         record_submit_commandbuffer(
             &device,
@@ -836,11 +838,11 @@ impl VulkanContext {
             depth_image_view,
             depth_image_memory,
 
-            present_complete_semaphore,
+            image_available_semaphore: present_complete_semaphore,
             rendering_complete_semaphore,
 
-            draw_commands_reuse_fence,
-            setup_commands_reuse_fence,
+            frames_in_flight_fence,
+
             render_pass,
             framebuffers,
             graphics_pipeline,
@@ -870,7 +872,10 @@ impl VulkanContext {
             .get_physical_device_surface_capabilities(self.physical_device, self.surface)
             .unwrap();
 
-        let mut desired_image_count = surface_capabilities.min_image_count + 1;
+        //let mut desired_image_count = surface_capabilities.min_image_count + 1;
+
+        let mut desired_image_count = 1;
+
         if surface_capabilities.max_image_count > 0
             && desired_image_count > surface_capabilities.max_image_count
         {
@@ -1041,10 +1046,10 @@ impl Drop for VulkanContext {
             self.device.destroy_render_pass(self.render_pass, None);
 
 
-            self.device.destroy_semaphore(self.present_complete_semaphore, None);
+            self.device.destroy_semaphore(self.image_available_semaphore, None);
             self.device.destroy_semaphore(self.rendering_complete_semaphore, None);
-            self.device.destroy_fence(self.draw_commands_reuse_fence, None);
-            self.device.destroy_fence(self.setup_commands_reuse_fence, None);
+
+            self.device.destroy_fence(self.frames_in_flight_fence, None);
 
             self.device.free_memory(self.depth_image_memory, None);
             self.device.destroy_image_view(self.depth_image_view, None);
