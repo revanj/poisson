@@ -1,15 +1,15 @@
+use ash::prelude::VkResult;
 use ash::vk;
 use winit::window::Window;
 mod vulkan;
 use vulkan::VulkanContext;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
-use winit::event_loop::ActiveEventLoop;
+use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::{WindowAttributes, WindowId};
 use ash::util::Align;
-
-
+use winit::dpi::PhysicalSize;
 
 #[path = "utils/fill.rs"]
 mod fill;
@@ -120,15 +120,20 @@ impl PoissonEngine {
             max_depth: 1.0,
         }];
         let scissors = [vulkan.surface_resolution.into()];
-        let (present_index, _) = vulkan
+
+        let acquire_result = vulkan
             .swapchain_loader
             .acquire_next_image(
                 vulkan.swapchain,
                 u64::MAX,
                 vulkan.present_complete_semaphore,
-                vk::Fence::null(),
-            )
-            .unwrap();
+                vk::Fence::null());
+
+        let present_index = match acquire_result {
+            Ok((present_index, _)) => present_index,
+            _ => panic!("Failed to acquire swapchain."),
+        };
+
         let clear_values = [
             vk::ClearValue {
                 color: vk::ClearColorValue {
@@ -206,6 +211,7 @@ impl PoissonEngine {
         vulkan.swapchain_loader
             .queue_present(vulkan.present_queue, &present_info)
             .unwrap();
+        println!("update finished running")
     }
 
     fn pre_present_notify(self: &mut Self) {
@@ -219,8 +225,8 @@ impl PoissonEngine {
     }
 
     fn render_loop(self: &mut Self) {
-        let window = self.window.as_ref()
-            .expect("redraw request without a window").as_ref();
+        // let window = self.window.as_ref()
+        //     .expect("redraw request without a window").as_ref();
     }
 
     fn present(self: &mut Self) {
@@ -231,7 +237,8 @@ impl PoissonEngine {
 impl ApplicationHandler for PoissonEngine {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
     {
-        let window_attributes = WindowAttributes::default();
+        event_loop.set_control_flow(ControlFlow::Poll);
+        let window_attributes = WindowAttributes::default().with_resizable(true);
 
         self.window = match event_loop.create_window(window_attributes) {
             Ok(window) => Some(window),
@@ -245,8 +252,18 @@ impl ApplicationHandler for PoissonEngine {
         self.init();
     }
 
+    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
+        unsafe {
+            self.update();
+        }
+        self.render_loop();
+        self.pre_present_notify();
+        self.present();
+        self.request_redraw()
+    }
+
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        println!("{event:?}");
+        //println!("{event:?}");
         match event {
             // those two should push event to a queue to be resolved before render loop
             WindowEvent::KeyboardInput { .. } => {},
@@ -256,19 +273,7 @@ impl ApplicationHandler for PoissonEngine {
                 println!("Close was requested; stopping");
                 event_loop.exit();
             },
-            WindowEvent::SurfaceResized(_) => {
-                self.vulkan_context.as_mut().unwrap().notify_window_resized();
-                self.window.as_ref().expect("resize event without a window").request_redraw();
-            },
-            WindowEvent::RedrawRequested => {
-                unsafe {
-                    self.update();
-                }
-                self.render_loop();
-                self.pre_present_notify();
-                self.present();
-                self.request_redraw()
-            },
+            WindowEvent::SurfaceResized(PhysicalSize { width, height }) => { },
             _ => (),
         }
     }
