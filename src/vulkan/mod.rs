@@ -139,6 +139,7 @@ pub struct VulkanContext {
     pub surface_resolution: vk::Extent2D,
 
     pub swapchain: vk::SwapchainKHR,
+    pub new_swapchain_size: Option<vk::Extent2D>,
 
     pub present_images: Vec<vk::Image>,
     pub present_image_views: Vec<vk::ImageView>,
@@ -823,6 +824,7 @@ impl VulkanContext {
             surface_resolution,
 
             swapchain,
+            new_swapchain_size: None,
 
             present_images,
             present_image_views,
@@ -853,6 +855,7 @@ impl VulkanContext {
     }
 
     pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
+        self.device.device_wait_idle().unwrap();
         self.device.free_memory(self.depth_image_memory, None);
         self.device.destroy_image_view(self.depth_image_view, None);
         self.device.destroy_image(self.depth_image, None);
@@ -874,7 +877,7 @@ impl VulkanContext {
             desired_image_count = surface_capabilities.max_image_count;
         }
 
-        let surface_resolution = match surface_capabilities.current_extent.width {
+        self.surface_resolution = match surface_capabilities.current_extent.width {
             u32::MAX => vk::Extent2D {
                 width: surface_size.width,
                 height: surface_size.height,
@@ -906,7 +909,7 @@ impl VulkanContext {
             .min_image_count(desired_image_count)
             .image_color_space(self.surface_format.color_space)
             .image_format(self.surface_format.format)
-            .image_extent(surface_resolution)
+            .image_extent(self.surface_resolution)
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .pre_transform(pre_transform)
@@ -920,6 +923,7 @@ impl VulkanContext {
             .unwrap();
 
         self.present_images = swapchain_loader.get_swapchain_images(self.swapchain).unwrap();
+
         self.present_image_views = self.present_images
             .iter()
             .map(|&image| {
@@ -948,7 +952,7 @@ impl VulkanContext {
         let depth_image_create_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(vk::Format::D16_UNORM)
-            .extent(surface_resolution.into())
+            .extent(self.surface_resolution.into())
             .mip_levels(1)
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
@@ -991,6 +995,24 @@ impl VulkanContext {
         self.depth_image_view = self.device
             .create_image_view(&depth_image_view_info, None)
             .unwrap();
+
+        self.framebuffers = self.present_image_views
+            .iter()
+            .map(|&present_image_view| {
+                let framebuffer_attachments = [present_image_view, self.depth_image_view];
+                let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
+                    .render_pass(self.render_pass)
+                    .attachments(&framebuffer_attachments)
+                    .width(self.surface_resolution.width)
+                    .height(self.surface_resolution.height)
+                    .layers(1);
+
+                self.device
+                    .create_framebuffer(&frame_buffer_create_info, None)
+                    .unwrap()
+            })
+            .collect();
+
     }
 }
 

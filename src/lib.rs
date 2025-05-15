@@ -9,6 +9,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::{WindowAttributes, WindowId};
 use ash::util::Align;
+use ash::vk::Extent2D;
 use winit::dpi::PhysicalSize;
 
 #[path = "utils/fill.rs"]
@@ -111,6 +112,9 @@ impl PoissonEngine {
 
     unsafe fn update(self: &mut Self) {
         let vulkan = self.vulkan_context.as_mut().unwrap();
+
+        //vulkan.device.wait_for_fences(&[vulkan.draw_commands_reuse_fence], true, u64::MAX).unwrap();
+
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
@@ -120,6 +124,12 @@ impl PoissonEngine {
             max_depth: 1.0,
         }];
         let scissors = [vulkan.surface_resolution.into()];
+
+        // if let Some(extent) = vulkan.new_swapchain_size {
+        //     vulkan.recreate_swapchain(extent);
+        //     vulkan.new_swapchain_size = None;
+        //     return;
+        // }
 
         let acquire_result = vulkan
             .swapchain_loader
@@ -133,6 +143,7 @@ impl PoissonEngine {
             Ok((present_index, _)) => present_index,
             _ => panic!("Failed to acquire swapchain."),
         };
+
 
         let clear_values = [
             vk::ClearValue {
@@ -200,18 +211,17 @@ impl PoissonEngine {
                 device.cmd_end_render_pass(draw_command_buffer);
             },
         );
-        let wait_semaphors = [vulkan.rendering_complete_semaphore];
+        let wait_semaphores = [vulkan.rendering_complete_semaphore];
         let swapchains = [vulkan.swapchain];
         let image_indices = [present_index];
         let present_info = vk::PresentInfoKHR::default()
-            .wait_semaphores(&wait_semaphors) // &base.rendering_complete_semaphore)
+            .wait_semaphores(&wait_semaphores) // &base.rendering_complete_semaphore)
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 
         vulkan.swapchain_loader
             .queue_present(vulkan.present_queue, &present_info)
             .unwrap();
-        println!("update finished running")
     }
 
     fn pre_present_notify(self: &mut Self) {
@@ -273,7 +283,9 @@ impl ApplicationHandler for PoissonEngine {
                 println!("Close was requested; stopping");
                 event_loop.exit();
             },
-            WindowEvent::SurfaceResized(PhysicalSize { width, height }) => { },
+            WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
+                self.vulkan_context.as_mut().unwrap().new_swapchain_size = Some(vk::Extent2D {width, height });
+            },
             _ => (),
         }
     }
