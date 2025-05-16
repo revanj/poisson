@@ -880,169 +880,224 @@ impl VulkanContext {
         }
     }
 
-    // pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
-    //     self.device.device_wait_idle().unwrap();
-    //     self.device.free_memory(self.depth_image_memory, None);
-    //     self.device.destroy_image_view(self.depth_image_view, None);
-    //     self.device.destroy_image(self.depth_image, None);
-    //
-    //     for &image_view in self.present_image_views.iter() {
-    //         self.device.destroy_image_view(image_view, None);
-    //     }
-    //
-    //     self.swapchain_loader.destroy_swapchain(self.swapchain, None);
-    //
-    //     let surface_capabilities = self.surface_loader
-    //         .get_physical_device_surface_capabilities(self.physical_device, self.surface)
-    //         .unwrap();
-    //
-    //     //let mut desired_image_count = surface_capabilities.min_image_count + 1;
-    //
-    //     let mut desired_image_count = 1;
-    //
-    //     if surface_capabilities.max_image_count > 0
-    //         && desired_image_count > surface_capabilities.max_image_count
-    //     {
-    //         desired_image_count = surface_capabilities.max_image_count;
-    //     }
-    //
-    //     self.surface_resolution = match surface_capabilities.current_extent.width {
-    //         u32::MAX => vk::Extent2D {
-    //             width: surface_size.width,
-    //             height: surface_size.height,
-    //         },
-    //         _ => surface_capabilities.current_extent,
-    //     };
-    //
-    //     let pre_transform = if surface_capabilities
-    //         .supported_transforms
-    //         .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
-    //     {
-    //         vk::SurfaceTransformFlagsKHR::IDENTITY
-    //     } else {
-    //         surface_capabilities.current_transform
-    //     };
-    //
-    //     let present_modes = self.surface_loader
-    //         .get_physical_device_surface_present_modes(self.physical_device, self.surface)
-    //         .unwrap();
-    //     let present_mode = present_modes
-    //         .iter()
-    //         .cloned()
-    //         .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
-    //         .unwrap_or(vk::PresentModeKHR::FIFO);
-    //     let swapchain_loader = ash_swapchain::Device::new(&self.instance, &self.device);
-    //
-    //     let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
-    //         .surface(self.surface)
-    //         .min_image_count(desired_image_count)
-    //         .image_color_space(self.surface_format.color_space)
-    //         .image_format(self.surface_format.format)
-    //         .image_extent(self.surface_resolution)
-    //         .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-    //         .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-    //         .pre_transform(pre_transform)
-    //         .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-    //         .present_mode(present_mode)
-    //         .clipped(true)
-    //         .image_array_layers(1);
-    //
-    //     self.swapchain = swapchain_loader
-    //         .create_swapchain(&swapchain_create_info, None)
-    //         .unwrap();
-    //
-    //     self.present_images = swapchain_loader.get_swapchain_images(self.swapchain).unwrap();
-    //
-    //     self.present_image_views = self.present_images
-    //         .iter()
-    //         .map(|&image| {
-    //             let create_view_info = vk::ImageViewCreateInfo::default()
-    //                 .view_type(vk::ImageViewType::TYPE_2D)
-    //                 .format(self.surface_format.format)
-    //                 .components(vk::ComponentMapping {
-    //                     r: vk::ComponentSwizzle::R,
-    //                     g: vk::ComponentSwizzle::G,
-    //                     b: vk::ComponentSwizzle::B,
-    //                     a: vk::ComponentSwizzle::A,
-    //                 })
-    //                 .subresource_range(vk::ImageSubresourceRange {
-    //                     aspect_mask: vk::ImageAspectFlags::COLOR,
-    //                     base_mip_level: 0,
-    //                     level_count: 1,
-    //                     base_array_layer: 0,
-    //                     layer_count: 1,
-    //                 })
-    //                 .image(image);
-    //             self.device.create_image_view(&create_view_info, None).unwrap()
-    //         })
-    //         .collect();
-    //
-    //     let device_memory_properties = self.instance.get_physical_device_memory_properties(self.physical_device);
-    //     let depth_image_create_info = vk::ImageCreateInfo::default()
-    //         .image_type(vk::ImageType::TYPE_2D)
-    //         .format(vk::Format::D16_UNORM)
-    //         .extent(self.surface_resolution.into())
-    //         .mip_levels(1)
-    //         .array_layers(1)
-    //         .samples(vk::SampleCountFlags::TYPE_1)
-    //         .tiling(vk::ImageTiling::OPTIMAL)
-    //         .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
-    //         .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    //
-    //     self.depth_image = self.device.create_image(&depth_image_create_info, None).unwrap();
-    //     let depth_image_memory_req = self.device.get_image_memory_requirements(self.depth_image);
-    //     let depth_image_memory_index = find_memorytype_index(
-    //         &depth_image_memory_req,
-    //         &device_memory_properties,
-    //         vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    //     )
-    //         .expect("Unable to find suitable memory index for depth image.");
-    //
-    //     let depth_image_allocate_info = vk::MemoryAllocateInfo::default()
-    //         .allocation_size(depth_image_memory_req.size)
-    //         .memory_type_index(depth_image_memory_index);
-    //
-    //     self.depth_image_memory = self.device
-    //         .allocate_memory(&depth_image_allocate_info, None)
-    //         .unwrap();
-    //
-    //     self.device
-    //         .bind_image_memory(self.depth_image, self.depth_image_memory, 0)
-    //         .expect("Unable to bind depth image memory");
-    //
-    //     let depth_image_view_info = vk::ImageViewCreateInfo::default()
-    //         .subresource_range(
-    //             vk::ImageSubresourceRange::default()
-    //                 .aspect_mask(vk::ImageAspectFlags::DEPTH)
-    //                 .level_count(1)
-    //                 .layer_count(1),
-    //         )
-    //         .image(self.depth_image)
-    //         .format(depth_image_create_info.format)
-    //         .view_type(vk::ImageViewType::TYPE_2D);
-    //
-    //     self.depth_image_view = self.device
-    //         .create_image_view(&depth_image_view_info, None)
-    //         .unwrap();
-    //
-    //     self.framebuffers = self.present_image_views
-    //         .iter()
-    //         .map(|&present_image_view| {
-    //             let framebuffer_attachments = [present_image_view, self.depth_image_view];
-    //             let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
-    //                 .render_pass(self.render_pass)
-    //                 .attachments(&framebuffer_attachments)
-    //                 .width(self.surface_resolution.width)
-    //                 .height(self.surface_resolution.height)
-    //                 .layers(1);
-    //
-    //             self.device
-    //                 .create_framebuffer(&frame_buffer_create_info, None)
-    //                 .unwrap()
-    //         })
-    //         .collect();
-    //
-    // }
+    pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
+        self.device.device_wait_idle().unwrap();
+
+        for framebuffer in self.framebuffers.iter() {
+            self.device.destroy_framebuffer(*framebuffer, None);
+        }
+
+        for i in 0..self.framebuffers.len() {
+            self.device.free_memory(self.depth_image_memories[i], None);
+            self.device.destroy_image_view(self.depth_image_views[i], None);
+            self.device.destroy_image(self.depth_images[i], None);
+        }
+
+
+        for &image_view in self.present_image_views.iter() {
+            self.device.destroy_image_view(image_view, None);
+        }
+
+
+        self.swapchain_loader.destroy_swapchain(self.swapchain, None);
+
+        let surface_capabilities = self.surface_loader
+            .get_physical_device_surface_capabilities(self.physical_device, self.surface)
+            .unwrap();
+
+
+        let mut desired_image_count = surface_capabilities.min_image_count + 1;
+        if surface_capabilities.max_image_count > 0
+            && desired_image_count > surface_capabilities.max_image_count
+        {
+            desired_image_count = surface_capabilities.max_image_count;
+        }
+
+        self.surface_resolution = match surface_capabilities.current_extent.width {
+            u32::MAX => vk::Extent2D {
+                width: surface_size.width,
+                height: surface_size.height,
+            },
+            _ => surface_capabilities.current_extent,
+        };
+
+        let pre_transform = if surface_capabilities
+            .supported_transforms
+            .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
+        {
+            vk::SurfaceTransformFlagsKHR::IDENTITY
+        } else {
+            surface_capabilities.current_transform
+        };
+
+        let present_modes = self.surface_loader
+            .get_physical_device_surface_present_modes(self.physical_device, self.surface)
+            .unwrap();
+        let present_mode = present_modes
+            .iter()
+            .cloned()
+            .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
+            .unwrap_or(vk::PresentModeKHR::FIFO);
+        let swapchain_loader = ash_swapchain::Device::new(&self.instance, &self.device);
+
+        let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
+            .surface(self.surface)
+            .min_image_count(desired_image_count)
+            .image_color_space(self.surface_format.color_space)
+            .image_format(self.surface_format.format)
+            .image_extent(self.surface_resolution)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .pre_transform(pre_transform)
+            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(present_mode)
+            .clipped(true)
+            .image_array_layers(1);
+
+        self.swapchain = swapchain_loader
+            .create_swapchain(&swapchain_create_info, None)
+            .unwrap();
+
+        self.present_images = swapchain_loader.get_swapchain_images(self.swapchain).unwrap();
+        self.present_image_views = self.present_images
+            .iter()
+            .map(|&image| {
+                let create_view_info = vk::ImageViewCreateInfo::default()
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(self.surface_format.format)
+                    .components(vk::ComponentMapping {
+                        r: vk::ComponentSwizzle::R,
+                        g: vk::ComponentSwizzle::G,
+                        b: vk::ComponentSwizzle::B,
+                        a: vk::ComponentSwizzle::A,
+                    })
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    })
+                    .image(image);
+                self.device.create_image_view(&create_view_info, None).unwrap()
+            })
+            .collect();
+
+        let n_frame_buffers = self.present_images.len();
+
+        let device_memory_properties = self.instance.get_physical_device_memory_properties(self.physical_device);
+
+        self.depth_images = Vec::new();
+        self.depth_image_views = Vec::new();
+        self.depth_image_memories = Vec::new();
+
+        for _ in 0..n_frame_buffers {
+            let depth_image_create_info = vk::ImageCreateInfo::default()
+                .image_type(vk::ImageType::TYPE_2D)
+                .format(vk::Format::D16_UNORM)
+                .extent(self.surface_resolution.into())
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL)
+                .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            let depth_image = self.device.create_image(&depth_image_create_info, None).unwrap();
+            let depth_image_memory_req = self.device.get_image_memory_requirements(depth_image);
+            let depth_image_memory_index = find_memorytype_index(
+                &depth_image_memory_req,
+                &device_memory_properties,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            )
+                .expect("Unable to find suitable memory index for depth image.");
+
+            let depth_image_allocate_info = vk::MemoryAllocateInfo::default()
+                .allocation_size(depth_image_memory_req.size)
+                .memory_type_index(depth_image_memory_index);
+
+            let depth_image_memory = self.device
+                .allocate_memory(&depth_image_allocate_info, None)
+                .unwrap();
+
+            self.device
+                .bind_image_memory(depth_image, depth_image_memory, 0)
+                .expect("Unable to bind depth image memory");
+
+
+            record_submit_commandbuffer(
+                &self.device,
+                self.setup_command_buffer,
+                self.setup_commands_reuse_fence,
+                self.present_queue,
+                &[],
+                &[],
+                &[],
+                |device, setup_command_buffer| {
+                    let layout_transition_barriers = vk::ImageMemoryBarrier::default()
+                        .image(depth_image)
+                        .dst_access_mask(
+                            vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                        )
+                        .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                        .old_layout(vk::ImageLayout::UNDEFINED)
+                        .subresource_range(
+                            vk::ImageSubresourceRange::default()
+                                .aspect_mask(vk::ImageAspectFlags::DEPTH)
+                                .layer_count(1)
+                                .level_count(1),
+                        );
+
+                    device.cmd_pipeline_barrier(
+                        setup_command_buffer,
+                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                        vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[layout_transition_barriers],
+                    );
+                },
+            );
+
+            let depth_image_view_info = vk::ImageViewCreateInfo::default()
+                .subresource_range(
+                    vk::ImageSubresourceRange::default()
+                        .aspect_mask(vk::ImageAspectFlags::DEPTH)
+                        .level_count(1)
+                        .layer_count(1),
+                )
+                .image(depth_image)
+                .format(depth_image_create_info.format)
+                .view_type(vk::ImageViewType::TYPE_2D);
+
+            let depth_image_view = self.device
+                .create_image_view(&depth_image_view_info, None)
+                .unwrap();
+
+            self.depth_images.push(depth_image);
+            self.depth_image_views.push(depth_image_view);
+            self.depth_image_memories.push(depth_image_memory);
+        }
+
+        self.framebuffers = self.present_image_views
+            .iter().enumerate()
+            .map(|(index, &present_image_view)| {
+                let framebuffer_attachments = [present_image_view, self.depth_image_views[index]];
+                let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
+                    .render_pass(self.render_pass)
+                    .attachments(&framebuffer_attachments)
+                    .width(self.surface_resolution.width)
+                    .height(self.surface_resolution.height)
+                    .layers(1);
+
+                self.device
+                    .create_framebuffer(&frame_buffer_create_info, None)
+                    .unwrap()
+            })
+            .collect();
+
+    }
 }
 
 impl Drop for VulkanContext {

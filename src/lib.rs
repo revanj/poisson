@@ -108,7 +108,6 @@ impl PoissonEngine {
         let vulkan = self.vulkan_context.as_mut().unwrap();
 
         vulkan.device.wait_for_fences(&[vulkan.frames_in_flight_fences[self.current_frame]], true, u64::MAX).unwrap();
-        vulkan.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap();
 
         let viewports = [vk::Viewport {
             x: 0.0,
@@ -120,11 +119,13 @@ impl PoissonEngine {
         }];
         let scissors = [vulkan.surface_resolution.into()];
 
-        // if let Some(extent) = vulkan.new_swapchain_size {
-        //     vulkan.recreate_swapchain(extent);
-        //     vulkan.new_swapchain_size = None;
-        //     return;
-        // }
+        if let Some(extent) = vulkan.new_swapchain_size {
+            vulkan.recreate_swapchain(extent);
+            vulkan.new_swapchain_size = None;
+            return;
+        }
+
+        vulkan.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap();
 
         let acquire_result = vulkan
             .swapchain_loader
