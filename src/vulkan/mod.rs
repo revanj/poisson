@@ -1,5 +1,4 @@
 
-mod utils;
 use std::ops::Drop;
 use ash::vk;
 use std::ffi;
