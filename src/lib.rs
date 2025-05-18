@@ -12,8 +12,6 @@ use ash::util::Align;
 use ash::vk::Extent2D;
 use winit::dpi::PhysicalSize;
 
-#[path = "utils/fill.rs"]
-mod fill;
 
 #[derive(Clone, Debug, Copy)]
 struct Vertex {
