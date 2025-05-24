@@ -120,7 +120,6 @@ impl PoissonEngine {
         if let Some(extent) = vulkan.new_swapchain_size {
             vulkan.recreate_swapchain(extent);
             vulkan.new_swapchain_size = None;
-            return;
         }
 
         vulkan.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap();
@@ -137,7 +136,6 @@ impl PoissonEngine {
             Ok((present_index, _)) => present_index,
             _ => panic!("Failed to acquire swapchain."),
         };
-
 
 
         let clear_values = [
@@ -261,15 +259,7 @@ impl ApplicationHandler for PoissonEngine {
         self.init();
     }
 
-    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
-        unsafe {
-            self.update();
-        }
-        self.render_loop();
-        self.pre_present_notify();
-        self.present();
-        self.request_redraw()
-    }
+    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {}
 
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
         //println!("{event:?}");
@@ -277,13 +267,23 @@ impl ApplicationHandler for PoissonEngine {
             // those two should push event to a queue to be resolved before render loop
             WindowEvent::KeyboardInput { .. } => {},
             WindowEvent::PointerButton { .. } => {},
-
             WindowEvent::CloseRequested => {
                 println!("Close was requested; stopping");
                 event_loop.exit();
             },
+            WindowEvent::RedrawRequested { .. } => {
+                unsafe {
+                    self.update();
+                }
+                self.render_loop();
+                self.pre_present_notify();
+                self.present();
+                self.request_redraw();
+            },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
+                println!("Window resized to {width}, {height}");
                 self.vulkan_context.as_mut().unwrap().new_swapchain_size = Some(vk::Extent2D {width, height });
+                self.request_redraw();
             },
             _ => (),
         }
