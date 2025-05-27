@@ -92,8 +92,8 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
 /// There will probably be a pointer of this being passed around
 
 pub struct VulkanContext {
-    pub instance: Instance,
     pub physical_surface: PhysicalSurface,
+    pub instance: Instance,
     pub device : ash::Device,
     pub swapchain_loader: ash::khr::swapchain::Device,
     pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
@@ -137,6 +137,7 @@ impl VulkanContext {
     pub unsafe fn new(window: &Box<dyn Window>) -> Self {
 
         let instance = Instance::new(window);
+
         let physical_surface = PhysicalSurface::new(&instance, window);
 
         let device_extension_names_raw = [
@@ -816,7 +817,7 @@ impl VulkanContext {
             .cloned()
             .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO);
-        let swapchain_loader = ash_swapchain::Device::new(&self.instance.instance, &self.device);
+        self.swapchain_loader = ash_swapchain::Device::new(&self.instance.instance, &self.device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(self.physical_surface.surface)
@@ -832,11 +833,11 @@ impl VulkanContext {
             .clipped(true)
             .image_array_layers(1);
 
-        self.swapchain = swapchain_loader
+        self.swapchain = self.swapchain_loader
             .create_swapchain(&swapchain_create_info, None)
             .unwrap();
 
-        self.present_images = swapchain_loader.get_swapchain_images(self.swapchain).unwrap();
+        self.present_images = self.swapchain_loader.get_swapchain_images(self.swapchain).unwrap();
         self.present_image_views = self.present_images
             .iter()
             .map(|&image| {

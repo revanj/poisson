@@ -71,3 +71,12 @@ impl PhysicalSurface {
         
     }
 }
+
+impl Drop for PhysicalSurface {
+    fn drop(&mut self) {
+        unsafe {
+            println!("destroying surface");
+            self.surface_loader.destroy_surface(self.surface, None);
+        }
+    }
+}
