@@ -1,13 +1,15 @@
 mod image;
 mod instance;
+mod physical_surface;
 
+pub use instance::*;
 use std::ops::Drop;
 use ash::vk;
 use std::ffi;
 use std::borrow::Cow;
 use ash::ext::debug_utils as ash_debug_utils;
 use ash::khr::{surface, swapchain as ash_swapchain};
-use ash::vk::DebugUtilsMessengerEXT;
+use ash::vk::{DebugUtilsMessengerEXT, PhysicalDevice};
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasWindowHandle, RawDisplayHandle};
 use std::ffi::c_char;
 use std::io::Cursor;
@@ -15,13 +17,7 @@ use ash::util::read_spv;
 use ash_window;
 use winit::window::Window;
 use crate::Vertex;
-
-
-const ENABLE_VALIDATION_LAYERS: bool = true;
-const REQUIRED_LAYERS: [&'static str; 1] = ["VK_LAYER_LUNARG_standard_validation"];
-
-
-
+use crate::vulkan::physical_surface::PhysicalSurface;
 
 pub fn find_memorytype_index(
     memory_req: &vk::MemoryRequirements,
@@ -96,16 +92,12 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
 /// There will probably be a pointer of this being passed around
 
 pub struct VulkanContext {
-    pub instance: instance::Instance,
+    pub instance: Instance,
+    pub physical_surface: PhysicalSurface,
     pub device : ash::Device,
-    pub surface_loader: ash::khr::surface::Instance,
     pub swapchain_loader: ash::khr::swapchain::Device,
-    pub physical_device: vk::PhysicalDevice,
     pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
-    pub queue_family_index: u32,
     pub present_queue: vk::Queue,
-
-    pub surface: vk::SurfaceKHR,
     pub surface_format: vk::SurfaceFormatKHR,
     pub surface_resolution: vk::Extent2D,
 
@@ -144,44 +136,8 @@ pub struct VulkanContext {
 impl VulkanContext {
     pub unsafe fn new(window: &Box<dyn Window>) -> Self {
 
-        let instance = instance::Instance::new(window);
-
-        let surface =
-            ash_window::create_surface(
-                &instance.entry, &instance.instance,
-                window.display_handle().unwrap().as_raw(),
-                window.window_handle().unwrap().as_raw(),
-            None).unwrap();
-
-        let physical_devices = instance.instance.enumerate_physical_devices().expect("Failed to enumerate physical devices");
-        let surface_loader = surface::Instance::new(&instance.entry, &instance.instance);
-        let mut selected_device = None;
-
-        for physical_device in physical_devices.iter() {
-            let queue_family_properties =
-                instance.instance.get_physical_device_queue_family_properties(*physical_device);
-
-            for (index, info) in queue_family_properties.iter().enumerate() {
-                let supports_graphics = info.queue_flags.contains(vk::QueueFlags::GRAPHICS);
-                let supports_surface = surface_loader
-                    .get_physical_device_surface_support(*physical_device, index as u32, surface)
-                    .unwrap();
-
-                if supports_graphics && supports_surface {
-                    selected_device = Some((*physical_device, index));
-                    break;
-                }
-            }
-
-            if selected_device.is_some() {
-                break;
-            }
-        }
-
-        let (physical_device, queue_family_index) = selected_device
-            .expect("Failed to find suitable physical device");
-
-        let queue_family_index = queue_family_index as u32;
+        let instance = Instance::new(window);
+        let physical_surface = PhysicalSurface::new(&instance, window);
 
         let device_extension_names_raw = [
             ash_swapchain::NAME.as_ptr(),
@@ -194,7 +150,7 @@ impl VulkanContext {
         let priorities = [1.0];
 
         let queue_info = vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_index)
+            .queue_family_index(physical_surface.queue_family_index)
             .queue_priorities(&priorities);
 
         let device_create_info = vk::DeviceCreateInfo::default()
@@ -203,18 +159,18 @@ impl VulkanContext {
             .enabled_features(&features);
 
         let device: ash::Device = instance.instance
-            .create_device(physical_device, &device_create_info, None)
+            .create_device(physical_surface.physical_device, &device_create_info, None)
             .unwrap();
 
 
-        let present_queue = device.get_device_queue(queue_family_index, 0);
+        let present_queue = device.get_device_queue(physical_surface.queue_family_index, 0);
 
-        let surface_format = surface_loader
-            .get_physical_device_surface_formats(physical_device, surface)
+        let surface_format = physical_surface.surface_loader
+            .get_physical_device_surface_formats(physical_surface.physical_device, physical_surface.surface)
             .unwrap()[0];
 
-        let surface_capabilities = surface_loader
-            .get_physical_device_surface_capabilities(physical_device, surface)
+        let surface_capabilities = physical_surface.surface_loader
+            .get_physical_device_surface_capabilities(physical_surface.physical_device, physical_surface.surface)
             .unwrap();
 
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
@@ -240,8 +196,8 @@ impl VulkanContext {
         } else {
             surface_capabilities.current_transform
         };
-        let present_modes = surface_loader
-            .get_physical_device_surface_present_modes(physical_device, surface)
+        let present_modes = physical_surface.surface_loader
+            .get_physical_device_surface_present_modes(physical_surface.physical_device, physical_surface.surface)
             .unwrap();
         let present_mode = present_modes
             .iter()
@@ -251,7 +207,7 @@ impl VulkanContext {
         let swapchain_loader = ash_swapchain::Device::new(&instance.instance, &device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
-            .surface(surface)
+            .surface(physical_surface.surface)
             .min_image_count(desired_image_count)
             .image_color_space(surface_format.color_space)
             .image_format(surface_format.format)
@@ -297,7 +253,7 @@ impl VulkanContext {
 
         let pool_create_info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(queue_family_index);
+            .queue_family_index(physical_surface.queue_family_index);
 
         let pool = device.create_command_pool(&pool_create_info, None).unwrap();
 
@@ -319,7 +275,7 @@ impl VulkanContext {
 
         let draw_command_buffers = device.allocate_command_buffers(&draw_command_buffer_allocate_info).unwrap();
 
-        let device_memory_properties = instance.instance.get_physical_device_memory_properties(physical_device);
+        let device_memory_properties = instance.instance.get_physical_device_memory_properties(physical_surface.physical_device);
 
         let mut depth_images = Vec::new();
         let mut depth_image_views = Vec::new();
@@ -761,14 +717,11 @@ impl VulkanContext {
 
         Self {
             instance,
+            physical_surface,
             device,
-            surface_loader,
             swapchain_loader,
-            physical_device,
             device_memory_properties,
-            queue_family_index,
             present_queue,
-            surface,
             surface_format,
             surface_resolution,
 
@@ -826,8 +779,8 @@ impl VulkanContext {
 
         self.swapchain_loader.destroy_swapchain(self.swapchain, None);
 
-        let surface_capabilities = self.surface_loader
-            .get_physical_device_surface_capabilities(self.physical_device, self.surface)
+        let surface_capabilities = self.physical_surface.surface_loader
+            .get_physical_device_surface_capabilities(self.physical_surface.physical_device, self.physical_surface.surface)
             .unwrap();
 
 
@@ -855,8 +808,8 @@ impl VulkanContext {
             surface_capabilities.current_transform
         };
 
-        let present_modes = self.surface_loader
-            .get_physical_device_surface_present_modes(self.physical_device, self.surface)
+        let present_modes = self.physical_surface.surface_loader
+            .get_physical_device_surface_present_modes(self.physical_surface.physical_device, self.physical_surface.surface)
             .unwrap();
         let present_mode = present_modes
             .iter()
@@ -866,7 +819,7 @@ impl VulkanContext {
         let swapchain_loader = ash_swapchain::Device::new(&self.instance.instance, &self.device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
-            .surface(self.surface)
+            .surface(self.physical_surface.surface)
             .min_image_count(desired_image_count)
             .image_color_space(self.surface_format.color_space)
             .image_format(self.surface_format.format)
@@ -910,7 +863,7 @@ impl VulkanContext {
 
         let n_frame_buffers = self.present_images.len();
 
-        let device_memory_properties = self.instance.instance.get_physical_device_memory_properties(self.physical_device);
+        let device_memory_properties = self.instance.instance.get_physical_device_memory_properties(self.physical_surface.physical_device);
 
         self.depth_images = Vec::new();
         self.depth_image_views = Vec::new();
@@ -1070,8 +1023,6 @@ impl Drop for VulkanContext {
 
             self.swapchain_loader.destroy_swapchain(self.swapchain, None);
             self.device.destroy_device(None);
-            self.surface_loader.destroy_surface(self.surface, None);
-
         }
     }
 }
