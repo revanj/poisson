@@ -105,9 +105,8 @@ impl PoissonEngine {
 
     unsafe fn update(self: &mut Self) {
         let vulkan = self.vulkan_context.as_mut().unwrap();
-        println!("wait for fence");
         vulkan.device.wait_for_fences(&[vulkan.frames_in_flight_fences[self.current_frame]], true, u64::MAX).unwrap();
-        println!("finished waiting for fence");
+
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
@@ -120,13 +119,11 @@ impl PoissonEngine {
 
         if let Some(extent) = vulkan.new_swapchain_size {
             vulkan.recreate_swapchain(extent);
-            println!("recreating swapchain");
             vulkan.new_swapchain_size = None;
         }
 
         vulkan.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap();
-
-        println!("begin acquire result");
+        
         let acquire_result = vulkan
             .swapchain_loader
             .acquire_next_image(
@@ -134,7 +131,6 @@ impl PoissonEngine {
                 u64::MAX,
                 vulkan.image_available_semaphores[self.current_frame],
                 vk::Fence::null());
-        println!("acquired result");
 
         let present_index = match acquire_result {
             Ok((present_index, _)) => present_index,
@@ -274,7 +270,13 @@ impl ApplicationHandler for PoissonEngine {
             },
             WindowEvent::RedrawRequested { .. } => {
                 println!("redraw!");
-
+                unsafe {
+                    self.update();
+                }
+                self.render_loop();
+                self.pre_present_notify();
+                self.present();
+                self.request_redraw();
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
                 println!("Window resized to {width}, {height}");

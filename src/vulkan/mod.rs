@@ -13,6 +13,7 @@ use ash::vk::{DebugUtilsMessengerEXT, PhysicalDevice};
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasWindowHandle, RawDisplayHandle};
 use std::ffi::c_char;
 use std::io::Cursor;
+use std::mem::ManuallyDrop;
 use ash::util::read_spv;
 use ash_window;
 use winit::window::Window;
@@ -92,8 +93,8 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
 /// There will probably be a pointer of this being passed around
 
 pub struct VulkanContext {
-    pub physical_surface: PhysicalSurface,
-    pub instance: Instance,
+    pub instance: ManuallyDrop<Instance>,
+    pub physical_surface: ManuallyDrop<PhysicalSurface>,
     pub device : ash::Device,
     pub swapchain_loader: ash::khr::swapchain::Device,
     pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
@@ -136,9 +137,9 @@ pub struct VulkanContext {
 impl VulkanContext {
     pub unsafe fn new(window: &Box<dyn Window>) -> Self {
 
-        let instance = Instance::new(window);
-
-        let physical_surface = PhysicalSurface::new(&instance, window);
+        let instance = ManuallyDrop::new(Instance::new(window));
+        
+        let physical_surface = ManuallyDrop::new(PhysicalSurface::new(&instance, window));
 
         let device_extension_names_raw = [
             ash_swapchain::NAME.as_ptr(),
@@ -1024,6 +1025,9 @@ impl Drop for VulkanContext {
 
             self.swapchain_loader.destroy_swapchain(self.swapchain, None);
             self.device.destroy_device(None);
+            
+            ManuallyDrop::drop(&mut self.physical_surface);
+            ManuallyDrop::drop(&mut self.instance);
         }
     }
 }
