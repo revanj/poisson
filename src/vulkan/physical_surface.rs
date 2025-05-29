@@ -9,6 +9,8 @@ pub struct PhysicalSurface {
     pub surface_loader: surface::Instance,
     pub physical_device: vk::PhysicalDevice,
     pub queue_family_index: u32,
+    pub surface_format: vk::SurfaceFormatKHR,
+    pub surface_capabilities: vk::SurfaceCapabilitiesKHR,
 }
 
 impl PhysicalSurface {
@@ -62,11 +64,21 @@ impl PhysicalSurface {
 
         let queue_family_index = queue_family_index as u32;
         
+        let surface_format = unsafe { surface_loader
+            .get_physical_device_surface_formats(physical_device, surface)
+            .unwrap()[0] }; 
+
+        let surface_capabilities = unsafe { surface_loader
+            .get_physical_device_surface_capabilities(physical_device, surface)
+            .unwrap() };
+        
         Self {
             surface,
             surface_loader,
             physical_device,
-            queue_family_index
+            queue_family_index,
+            surface_format,
+            surface_capabilities
         }
         
     }

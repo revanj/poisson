@@ -103,9 +103,21 @@ impl PoissonEngine {
         }
     }
 
-    unsafe fn update(self: &mut Self) {
+    fn update(self: &mut Self) {
         let vulkan = self.vulkan_context.as_mut().unwrap();
-        vulkan.device.wait_for_fences(&[vulkan.frames_in_flight_fences[self.current_frame]], true, u64::MAX).unwrap();
+        unsafe {
+            vulkan.device.device.wait_for_fences(
+                &[vulkan.frames_in_flight_fences[self.current_frame]],
+                true, u64::MAX).unwrap();
+        }
+
+        if let Some(extent) = vulkan.new_swapchain_size {
+            if extent.width <= 0 || extent.height <= 0 {
+                return;
+            }
+            unsafe { vulkan.recreate_swapchain(extent)};
+            vulkan.new_swapchain_size = None;
+        }
 
         let viewports = [vk::Viewport {
             x: 0.0,
@@ -117,20 +129,15 @@ impl PoissonEngine {
         }];
         let scissors = [vulkan.surface_resolution.into()];
 
-        if let Some(extent) = vulkan.new_swapchain_size {
-            vulkan.recreate_swapchain(extent);
-            vulkan.new_swapchain_size = None;
-        }
-
-        vulkan.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap();
+        unsafe {vulkan.device.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap()};
         
-        let acquire_result = vulkan
+        let acquire_result = unsafe {vulkan
             .swapchain_loader
             .acquire_next_image(
                 vulkan.swapchain,
                 u64::MAX,
                 vulkan.image_available_semaphores[self.current_frame],
-                vk::Fence::null());
+                vk::Fence::null())};
 
         let present_index = match acquire_result {
             Ok((present_index, _)) => present_index,
@@ -159,15 +166,15 @@ impl PoissonEngine {
             .clear_values(&clear_values);
 
         record_submit_commandbuffer(
-            &vulkan.device,
+            &vulkan.device.device,
             vulkan.draw_command_buffers[self.current_frame],
             &vulkan.frames_in_flight_fences[self.current_frame],
-            vulkan.present_queue,
+            vulkan.device.present_queue,
             &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
             &[vulkan.image_available_semaphores[self.current_frame]],
             &[vulkan.rendering_complete_semaphores[present_index as usize]],
             |device, draw_command_buffer| {
-                device.cmd_begin_render_pass(
+                unsafe { device.cmd_begin_render_pass(
                     draw_command_buffer,
                     &render_pass_begin_info,
                     vk::SubpassContents::INLINE,
@@ -201,7 +208,7 @@ impl PoissonEngine {
                 );
                 // Or draw without the index buffer
                 // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-                device.cmd_end_render_pass(draw_command_buffer);
+                device.cmd_end_render_pass(draw_command_buffer);}
             },
         );
         let signal_semaphores = [vulkan.rendering_complete_semaphores[present_index as usize]];
@@ -212,13 +219,13 @@ impl PoissonEngine {
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 
+        unsafe {
         vulkan.swapchain_loader
-            .queue_present(vulkan.present_queue, &present_info)
-            .unwrap();
+            .queue_present(vulkan.device.present_queue, &present_info)
+            .unwrap()};
 
         self.current_frame += 1;
         self.current_frame = self.current_frame % vulkan.frames_in_flight_fences.len();
-        println!("current_frame is {}", self.current_frame);
     }
 
     fn pre_present_notify(self: &mut Self) {
@@ -260,40 +267,31 @@ impl ApplicationHandler for PoissonEngine {
     }
 
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        println!("{event:?}");
         match event {
             // those two should push event to a queue to be resolved before render loop
             WindowEvent::KeyboardInput { .. } => {},
             WindowEvent::CloseRequested => {
-                println!("Close was requested; stopping");
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested { .. } => {
-                println!("redraw!");
-                unsafe {
+                #[cfg(target_os = "windows")]
+                {
                     self.update();
+                    self.request_redraw();
                 }
-                self.render_loop();
-                self.pre_present_notify();
-                self.present();
-                self.request_redraw();
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
-                println!("Window resized to {width}, {height}");
                 self.vulkan_context.as_mut().unwrap().new_swapchain_size = Some(vk::Extent2D {width, height });
-                println!("requesting redraw!");
+                self.update();
                 self.request_redraw();
             },
             _ => (),
         }
     }
 
+    // in linux the frame is driven from about_to_wait
+    #[cfg(target_os = "linux")]
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
-        unsafe {
-            self.update();
-        }
-        self.render_loop();
-        self.pre_present_notify();
-        self.present();
+        self.update();
     }
 }
