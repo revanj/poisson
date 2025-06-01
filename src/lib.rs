@@ -122,19 +122,19 @@ impl PoissonEngine {
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
-            width: vulkan.surface_resolution.width as f32,
-            height: vulkan.surface_resolution.height as f32,
+            width: vulkan.physical_surface.surface_resolution.width as f32,
+            height: vulkan.physical_surface.surface_resolution.height as f32,
             min_depth: 0.0,
             max_depth: 1.0,
         }];
-        let scissors = [vulkan.surface_resolution.into()];
+        let scissors = [vulkan.physical_surface.surface_resolution.into()];
 
         unsafe {vulkan.device.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap()};
         
         let acquire_result = unsafe {vulkan
-            .swapchain_loader
+            .swapchain.swapchain_loader
             .acquire_next_image(
-                vulkan.swapchain,
+                vulkan.swapchain.swapchain,
                 u64::MAX,
                 vulkan.image_available_semaphores[self.current_frame],
                 vk::Fence::null())};
@@ -162,7 +162,7 @@ impl PoissonEngine {
         let render_pass_begin_info = vk::RenderPassBeginInfo::default()
             .render_pass(vulkan.render_pass)
             .framebuffer(vulkan.framebuffers[present_index as usize])
-            .render_area(vulkan.surface_resolution.into())
+            .render_area(vulkan.physical_surface.surface_resolution.into())
             .clear_values(&clear_values);
 
         record_submit_commandbuffer(
@@ -212,7 +212,7 @@ impl PoissonEngine {
             },
         );
         let signal_semaphores = [vulkan.rendering_complete_semaphores[present_index as usize]];
-        let swapchains = [vulkan.swapchain];
+        let swapchains = [vulkan.swapchain.swapchain];
         let image_indices = [present_index];
         let present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(&signal_semaphores) // &base.rendering_complete_semaphore)
@@ -220,7 +220,7 @@ impl PoissonEngine {
             .image_indices(&image_indices);
 
         unsafe {
-        vulkan.swapchain_loader
+        vulkan.swapchain.swapchain_loader
             .queue_present(vulkan.device.present_queue, &present_info)
             .unwrap()};
 

@@ -2,14 +2,12 @@ mod image;
 mod instance;
 mod physical_surface;
 mod device;
+mod swapchain;
 
 pub use instance::*;
 use std::ops::Drop;
 use ash::vk;
 use ash::khr::{swapchain as ash_swapchain};
-use std::ffi;
-use std::borrow::Cow;
-use ash::ext::debug_utils as ash_debug_utils;
 
 use ash::vk::{DebugUtilsMessengerEXT, PhysicalDevice};
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasWindowHandle, RawDisplayHandle};
@@ -22,6 +20,7 @@ use winit::window::Window;
 use crate::Vertex;
 use crate::vulkan::device::Device;
 use crate::vulkan::physical_surface::PhysicalSurface;
+use crate::vulkan::swapchain::Swapchain;
 
 pub fn find_memorytype_index(
     memory_req: &vk::MemoryRequirements,
@@ -99,15 +98,11 @@ pub struct VulkanContext {
     pub instance: ManuallyDrop<Instance>,
     pub physical_surface: ManuallyDrop<PhysicalSurface>,
     pub device : ManuallyDrop<Device>,
-    pub swapchain_loader: ash::khr::swapchain::Device,
+    pub swapchain: ManuallyDrop<Swapchain>,
+
     pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
-    pub surface_resolution: vk::Extent2D,
 
-    pub swapchain: vk::SwapchainKHR,
     pub new_swapchain_size: Option<vk::Extent2D>,
-
-    pub present_images: Vec<vk::Image>,
-    pub present_image_views: Vec<vk::ImageView>,
 
     pub pool: vk::CommandPool,
     pub draw_command_buffers: Vec<vk::CommandBuffer>,
@@ -144,62 +139,12 @@ impl VulkanContext {
         let physical_surface =
             ManuallyDrop::new(PhysicalSurface::new(&instance, window));
 
-        let device = ManuallyDrop::new(Device::new(&instance, &physical_surface));
+        let device = ManuallyDrop::new(Device::new(
+            &instance, &physical_surface));
 
-        let desired_image_count = physical_surface.swapchain_image_count();
-
-        let window_size = window.surface_size();
-        let surface_resolution =
-            physical_surface.surface_resolution(window_size.width, window_size.height);
-        let pre_transform = physical_surface.pre_transform();
-        let present_mode = physical_surface.present_mode();
-
-        let swapchain_loader = ash_swapchain::Device::new(&instance.instance, &device.device);
-
-        let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
-            .surface(physical_surface.surface)
-            .min_image_count(desired_image_count)
-            .image_color_space(physical_surface.surface_format.color_space)
-            .image_format(physical_surface.surface_format.format)
-            .image_extent(surface_resolution)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(pre_transform)
-            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(present_mode)
-            .clipped(true)
-            .image_array_layers(1);
-
-        let swapchain = swapchain_loader
-            .create_swapchain(&swapchain_create_info, None)
-            .unwrap();
-
-        let present_images = swapchain_loader.get_swapchain_images(swapchain).unwrap();
-        let present_image_views: Vec<vk::ImageView> = present_images
-            .iter()
-            .map(|&image| {
-                let create_view_info = vk::ImageViewCreateInfo::default()
-                    .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(physical_surface.surface_format.format)
-                    .components(vk::ComponentMapping {
-                        r: vk::ComponentSwizzle::R,
-                        g: vk::ComponentSwizzle::G,
-                        b: vk::ComponentSwizzle::B,
-                        a: vk::ComponentSwizzle::A,
-                    })
-                    .subresource_range(vk::ImageSubresourceRange {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    })
-                    .image(image);
-                device.device.create_image_view(&create_view_info, None).unwrap()
-            })
-            .collect();
-
-        let n_frame_buffers = present_images.len();
+        let swapchain = ManuallyDrop::new(Swapchain::new(
+            &instance, &physical_surface, &device
+        ));
 
         let pool_create_info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
@@ -219,7 +164,7 @@ impl VulkanContext {
         let setup_command_buffer = setup_command_buffers[0];
 
         let draw_command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
-            .command_buffer_count((n_frame_buffers) as u32)
+            .command_buffer_count(swapchain.images_count().try_into().unwrap())
             .command_pool(pool)
             .level(vk::CommandBufferLevel::PRIMARY);
 
@@ -238,11 +183,11 @@ impl VulkanContext {
             .create_fence(&fence_create_info, None)
             .expect("Create fence failed.");
 
-        for _ in 0..n_frame_buffers {
+        for _ in 0..swapchain.images_count() {
             let depth_image_create_info = vk::ImageCreateInfo::default()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::D16_UNORM)
-                .extent(surface_resolution.into())
+                .extent(physical_surface.surface_resolution.into())
                 .mip_levels(1)
                 .array_layers(1)
                 .samples(vk::SampleCountFlags::TYPE_1)
@@ -335,7 +280,7 @@ impl VulkanContext {
         let mut image_available_semaphores = Vec::new();
         let mut rendering_complete_semaphores = Vec::new();
 
-        for _ in 0..n_frame_buffers {
+        for _ in 0..swapchain.images_count() {
             let fence = device.device.create_fence(&fence_create_info, None).unwrap();
             frames_in_flight_fences.push(fence);
             let present_complete_semaphore = device.device.create_semaphore(&semaphore_create_info, None).unwrap();
@@ -394,14 +339,14 @@ impl VulkanContext {
             .create_render_pass(&renderpass_create_info, None)
             .unwrap();
 
-        let framebuffers: Vec<vk::Framebuffer> = present_image_views.iter().enumerate()
+        let framebuffers: Vec<vk::Framebuffer> = swapchain.image_views.iter().enumerate()
             .map(|(index, &present_image_view)| {
                 let framebuffer_attachments = [present_image_view, depth_image_views[index]];
                 let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
                     .render_pass(render_pass)
                     .attachments(&framebuffer_attachments)
-                    .width(surface_resolution.width)
-                    .height(surface_resolution.height)
+                    .width(physical_surface.surface_resolution.width)
+                    .height(physical_surface.surface_resolution.height)
                     .layers(1);
 
                 device.device
@@ -590,12 +535,12 @@ impl VulkanContext {
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
-            width: surface_resolution.width as f32,
-            height: surface_resolution.height as f32,
+            width: physical_surface.surface_resolution.width as f32,
+            height: physical_surface.surface_resolution.height as f32,
             min_depth: 0.0,
             max_depth: 1.0,
         }];
-        let scissors = [surface_resolution.into()];
+        let scissors = [physical_surface.surface_resolution.into()];
         let viewport_state_info = vk::PipelineViewportStateCreateInfo::default()
             .scissors(&scissors)
             .viewports(&viewports);
@@ -669,15 +614,10 @@ impl VulkanContext {
             instance,
             physical_surface,
             device,
-            swapchain_loader,
-            device_memory_properties,
-            surface_resolution,
-
             swapchain,
-            new_swapchain_size: None,
+            device_memory_properties,
 
-            present_images,
-            present_image_views,
+            new_swapchain_size: None,
 
             pool,
             draw_command_buffers,
@@ -720,12 +660,12 @@ impl VulkanContext {
         }
 
 
-        for &image_view in self.present_image_views.iter() {
+        for &image_view in self.swapchain.image_views.iter() {
             self.device.device.destroy_image_view(image_view, None);
         }
 
 
-        self.swapchain_loader.destroy_swapchain(self.swapchain, None);
+        self.swapchain.swapchain_loader.destroy_swapchain(self.swapchain.swapchain, None);
 
         let surface_capabilities = self.physical_surface.surface_loader
             .get_physical_device_surface_capabilities(self.physical_surface.physical_device, self.physical_surface.surface)
@@ -739,7 +679,7 @@ impl VulkanContext {
             desired_image_count = surface_capabilities.max_image_count;
         }
 
-        self.surface_resolution = match surface_capabilities.current_extent.width {
+        self.physical_surface.surface_resolution = match surface_capabilities.current_extent.width {
             u32::MAX => vk::Extent2D {
                 width: surface_size.width,
                 height: surface_size.height,
@@ -764,14 +704,14 @@ impl VulkanContext {
             .cloned()
             .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO);
-        self.swapchain_loader = ash_swapchain::Device::new(&self.instance.instance, &self.device.device);
+        self.swapchain.swapchain_loader = ash_swapchain::Device::new(&self.instance.instance, &self.device.device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(self.physical_surface.surface)
             .min_image_count(desired_image_count)
             .image_color_space(self.physical_surface.surface_format.color_space)
             .image_format(self.physical_surface.surface_format.format)
-            .image_extent(self.surface_resolution)
+            .image_extent(self.physical_surface.surface_resolution)
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .pre_transform(pre_transform)
@@ -780,12 +720,12 @@ impl VulkanContext {
             .clipped(true)
             .image_array_layers(1);
 
-        self.swapchain = self.swapchain_loader
+        self.swapchain.swapchain = self.swapchain.swapchain_loader
             .create_swapchain(&swapchain_create_info, None)
             .unwrap();
 
-        self.present_images = self.swapchain_loader.get_swapchain_images(self.swapchain).unwrap();
-        self.present_image_views = self.present_images
+        self.swapchain.images = self.swapchain.swapchain_loader.get_swapchain_images(self.swapchain.swapchain).unwrap();
+        self.swapchain.image_views = self.swapchain.images
             .iter()
             .map(|&image| {
                 let create_view_info = vk::ImageViewCreateInfo::default()
@@ -809,7 +749,7 @@ impl VulkanContext {
             })
             .collect();
 
-        let n_frame_buffers = self.present_images.len();
+        let n_frame_buffers = self.swapchain.images_count();
 
         let device_memory_properties = self.instance.instance.get_physical_device_memory_properties(self.physical_surface.physical_device);
 
@@ -821,7 +761,7 @@ impl VulkanContext {
             let depth_image_create_info = vk::ImageCreateInfo::default()
                 .image_type(vk::ImageType::TYPE_2D)
                 .format(vk::Format::D16_UNORM)
-                .extent(self.surface_resolution.into())
+                .extent(self.physical_surface.surface_resolution.into())
                 .mip_levels(1)
                 .array_layers(1)
                 .samples(vk::SampleCountFlags::TYPE_1)
@@ -906,15 +846,15 @@ impl VulkanContext {
             self.depth_image_memories.push(depth_image_memory);
         }
 
-        self.framebuffers = self.present_image_views
+        self.framebuffers = self.swapchain.image_views
             .iter().enumerate()
             .map(|(index, &present_image_view)| {
                 let framebuffer_attachments = [present_image_view, self.depth_image_views[index]];
                 let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
                     .render_pass(self.render_pass)
                     .attachments(&framebuffer_attachments)
-                    .width(self.surface_resolution.width)
-                    .height(self.surface_resolution.height)
+                    .width(self.physical_surface.surface_resolution.width)
+                    .height(self.physical_surface.surface_resolution.height)
                     .layers(1);
 
                 self.device.device
@@ -962,15 +902,16 @@ impl Drop for VulkanContext {
             }
 
 
-        for &image_view in self.present_image_views.iter() {
+        for &image_view in self.swapchain.image_views.iter() {
                 self.device.device.destroy_image_view(image_view, None);
             }
 
             self.device.device.destroy_command_pool(self.pool, None);
             self.device.device.destroy_fence(self.setup_commands_reuse_fence, None);
 
-            self.swapchain_loader.destroy_swapchain(self.swapchain, None);
 
+
+            ManuallyDrop::drop(&mut self.swapchain);
             ManuallyDrop::drop(&mut self.device);
             ManuallyDrop::drop(&mut self.physical_surface);
             ManuallyDrop::drop(&mut self.instance);
