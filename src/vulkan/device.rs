@@ -2,10 +2,12 @@ use ash::vk;
 use crate::vulkan::Instance;
 use crate::vulkan::physical_surface::PhysicalSurface;
 use ash::khr::{swapchain as ash_swapchain};
+use crate::vulkan::command_buffer::{CommandBuffers};
 
 pub struct Device {
     pub device: ash::Device,
     pub present_queue: vk::Queue,
+    pub command_pool: vk::CommandPool
 }
 
 impl Device {
@@ -39,17 +41,29 @@ impl Device {
         let present_queue = unsafe {
             device.get_device_queue(physical_surface.queue_family_index, 0)
         };
-        
+
+        let pool_create_info = vk::CommandPoolCreateInfo::default()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(physical_surface.queue_family_index);
+
+        let command_pool = unsafe {device.create_command_pool(&pool_create_info, None).unwrap()};
+
         Self {
             device,
-            present_queue
+            present_queue,
+            command_pool
         }
+    }
+
+    pub fn spawn_command_buffers(self: &Self, count: u32) -> CommandBuffers{
+        return CommandBuffers::new(self, count);
     }
 }
 
 impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
+            self.device.destroy_command_pool(self.command_pool, None);
             self.device.destroy_device(None);
         }
     }

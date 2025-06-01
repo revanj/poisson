@@ -167,7 +167,7 @@ impl PoissonEngine {
 
         record_submit_commandbuffer(
             &vulkan.device.device,
-            vulkan.draw_command_buffers[self.current_frame],
+            vulkan.draw_command_buffers.command_buffers[self.current_frame],
             &vulkan.frames_in_flight_fences[self.current_frame],
             vulkan.device.present_queue,
             &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],

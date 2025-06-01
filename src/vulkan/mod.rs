@@ -3,13 +3,14 @@ mod instance;
 mod physical_surface;
 mod device;
 mod swapchain;
+mod command_buffer;
 
 pub use instance::*;
 use std::ops::Drop;
 use ash::vk;
 use ash::khr::{swapchain as ash_swapchain};
 
-use ash::vk::{DebugUtilsMessengerEXT, PhysicalDevice};
+use ash::vk::{CommandBuffer, DebugUtilsMessengerEXT, PhysicalDevice};
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasWindowHandle, RawDisplayHandle};
 use std::ffi::c_char;
 use std::io::Cursor;
@@ -18,6 +19,7 @@ use ash::util::read_spv;
 use ash_window;
 use winit::window::Window;
 use crate::Vertex;
+use crate::vulkan::command_buffer::{CommandBuffers, OneshotCommandBuffer};
 use crate::vulkan::device::Device;
 use crate::vulkan::physical_surface::PhysicalSurface;
 use crate::vulkan::swapchain::Swapchain;
@@ -104,10 +106,7 @@ pub struct VulkanContext {
 
     pub new_swapchain_size: Option<vk::Extent2D>,
 
-    pub pool: vk::CommandPool,
-    pub draw_command_buffers: Vec<vk::CommandBuffer>,
-    pub setup_command_buffer: vk::CommandBuffer,
-    pub setup_commands_reuse_fence : vk::Fence,
+    pub draw_command_buffers: CommandBuffers,
 
     pub depth_images: Vec<vk::Image>,
     pub depth_image_views: Vec<vk::ImageView>,
@@ -131,8 +130,37 @@ pub struct VulkanContext {
 }
 
 impl VulkanContext {
-    pub unsafe fn new(window: &Box<dyn Window>) -> Self {
+    unsafe fn transition_depth_layout(
+        device: &Device,
+        command_buffer: CommandBuffer,
+        image: vk::Image)
+    {
+        let layout_transition_barriers = vk::ImageMemoryBarrier::default()
+            .image(image)
+            .dst_access_mask(
+                vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            )
+            .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::DEPTH)
+                    .layer_count(1)
+                    .level_count(1),
+            );
 
+        device.device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+            vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+            vk::DependencyFlags::empty(),
+            &[],
+            &[],
+            &[layout_transition_barriers],
+        );
+    }
+    pub unsafe fn new(window: &Box<dyn Window>) -> Self {
         let instance =
             ManuallyDrop::new(Instance::new(window));
 
@@ -146,29 +174,8 @@ impl VulkanContext {
             &instance, &physical_surface, &device
         ));
 
-        let pool_create_info = vk::CommandPoolCreateInfo::default()
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(physical_surface.queue_family_index);
 
-        let pool = device.device.create_command_pool(&pool_create_info, None).unwrap();
-
-        let setup_command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
-            .command_buffer_count((1) as u32)
-            .command_pool(pool)
-            .level(vk::CommandBufferLevel::PRIMARY);
-
-        let setup_command_buffers = device.device
-            .allocate_command_buffers(&setup_command_buffer_allocate_info)
-            .unwrap();
-
-        let setup_command_buffer = setup_command_buffers[0];
-
-        let draw_command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
-            .command_buffer_count(swapchain.images_count().try_into().unwrap())
-            .command_pool(pool)
-            .level(vk::CommandBufferLevel::PRIMARY);
-
-        let draw_command_buffers = device.device.allocate_command_buffers(&draw_command_buffer_allocate_info).unwrap();
+        let draw_command_buffers = device.spawn_command_buffers(swapchain.images_count().try_into().unwrap());
 
         let device_memory_properties = instance.instance.get_physical_device_memory_properties(physical_surface.physical_device);
 
@@ -176,12 +183,7 @@ impl VulkanContext {
         let mut depth_image_views = Vec::new();
         let mut depth_image_memories = Vec::new();
 
-        let fence_create_info =
-            vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
 
-        let setup_commands_reuse_fence = device.device
-            .create_fence(&fence_create_info, None)
-            .expect("Create fence failed.");
 
         for _ in 0..swapchain.images_count() {
             let depth_image_create_info = vk::ImageCreateInfo::default()
@@ -215,44 +217,12 @@ impl VulkanContext {
                 .bind_image_memory(depth_image, depth_image_memory, 0)
                 .expect("Unable to bind depth image memory");
 
-
-            record_submit_commandbuffer(
-                &(device.device),
-                setup_command_buffer,
-                setup_commands_reuse_fence,
-                device.present_queue,
-                &[],
-                &[],
-                &[],
-                |device, setup_command_buffer| {
-                    let layout_transition_barriers = vk::ImageMemoryBarrier::default()
-                        .image(depth_image)
-                        .dst_access_mask(
-                            vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                        )
-                        .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                        .old_layout(vk::ImageLayout::UNDEFINED)
-                        .subresource_range(
-                            vk::ImageSubresourceRange::default()
-                                .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                                .layer_count(1)
-                                .level_count(1),
-                        );
-
-                    device.cmd_pipeline_barrier(
-                        setup_command_buffer,
-                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[layout_transition_barriers],
-                    );
-                },
-            );
-
-
+            let setup_cmd_buffer = OneshotCommandBuffer::new(&device);
+            Self::transition_depth_layout(
+                &device,
+                setup_cmd_buffer.command_buffer,
+                depth_image);
+            setup_cmd_buffer.submit(&device);
 
             let depth_image_view_info = vk::ImageViewCreateInfo::default()
                 .subresource_range(
@@ -275,6 +245,8 @@ impl VulkanContext {
         }
 
         let semaphore_create_info = vk::SemaphoreCreateInfo::default();
+        let fence_create_info = vk::FenceCreateInfo::default()
+            .flags(vk::FenceCreateFlags::SIGNALED);
 
         let mut frames_in_flight_fences = Vec::new();
         let mut image_available_semaphores = Vec::new();
@@ -619,10 +591,7 @@ impl VulkanContext {
 
             new_swapchain_size: None,
 
-            pool,
             draw_command_buffers,
-            setup_command_buffer,
-            setup_commands_reuse_fence,
 
             depth_images,
             depth_image_views,
@@ -789,42 +758,12 @@ impl VulkanContext {
                 .bind_image_memory(depth_image, depth_image_memory, 0)
                 .expect("Unable to bind depth image memory");
 
-
-            record_submit_commandbuffer(
-                &self.device.device,
-                self.setup_command_buffer,
-                self.setup_commands_reuse_fence,
-                self.device.present_queue,
-                &[],
-                &[],
-                &[],
-                |device, setup_command_buffer| {
-                    let layout_transition_barriers = vk::ImageMemoryBarrier::default()
-                        .image(depth_image)
-                        .dst_access_mask(
-                            vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                        )
-                        .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                        .old_layout(vk::ImageLayout::UNDEFINED)
-                        .subresource_range(
-                            vk::ImageSubresourceRange::default()
-                                .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                                .layer_count(1)
-                                .level_count(1),
-                        );
-
-                    device.cmd_pipeline_barrier(
-                        setup_command_buffer,
-                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[layout_transition_barriers],
-                    );
-                },
-            );
+            let setup_cmd_buffer = OneshotCommandBuffer::new(&self.device);
+            Self::transition_depth_layout(
+                &self.device,
+                setup_cmd_buffer.command_buffer,
+                depth_image);
+            setup_cmd_buffer.submit(&self.device);
 
             let depth_image_view_info = vk::ImageViewCreateInfo::default()
                 .subresource_range(
@@ -901,15 +840,9 @@ impl Drop for VulkanContext {
                 self.device.device.destroy_image(self.depth_images[i], None);
             }
 
-
-        for &image_view in self.swapchain.image_views.iter() {
+            for &image_view in self.swapchain.image_views.iter() {
                 self.device.device.destroy_image_view(image_view, None);
             }
-
-            self.device.device.destroy_command_pool(self.pool, None);
-            self.device.device.destroy_fence(self.setup_commands_reuse_fence, None);
-
-
 
             ManuallyDrop::drop(&mut self.swapchain);
             ManuallyDrop::drop(&mut self.device);
