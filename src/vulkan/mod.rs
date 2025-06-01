@@ -146,38 +146,14 @@ impl VulkanContext {
 
         let device = ManuallyDrop::new(Device::new(&instance, &physical_surface));
 
+        let desired_image_count = physical_surface.swapchain_image_count();
 
-        let mut desired_image_count = physical_surface.surface_capabilities.min_image_count + 1;
-        if physical_surface.surface_capabilities.max_image_count > 0
-            && desired_image_count > physical_surface.surface_capabilities.max_image_count
-        {
-            desired_image_count = physical_surface.surface_capabilities.max_image_count;
-        }
         let window_size = window.surface_size();
-        let surface_resolution = match physical_surface.surface_capabilities.current_extent.width {
-            u32::MAX => vk::Extent2D {
-                width: window_size.width,
-                height: window_size.height,
-            },
-            _ => physical_surface.surface_capabilities.current_extent,
-        };
+        let surface_resolution =
+            physical_surface.surface_resolution(window_size.width, window_size.height);
+        let pre_transform = physical_surface.pre_transform();
+        let present_mode = physical_surface.present_mode();
 
-        let pre_transform = if physical_surface.surface_capabilities
-            .supported_transforms
-            .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
-        {
-            vk::SurfaceTransformFlagsKHR::IDENTITY
-        } else {
-            physical_surface.surface_capabilities.current_transform
-        };
-        let present_modes = physical_surface.surface_loader
-            .get_physical_device_surface_present_modes(physical_surface.physical_device, physical_surface.surface)
-            .unwrap();
-        let present_mode = present_modes
-            .iter()
-            .cloned()
-            .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
-            .unwrap_or(vk::PresentModeKHR::FIFO);
         let swapchain_loader = ash_swapchain::Device::new(&instance.instance, &device.device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()

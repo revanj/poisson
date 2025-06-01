@@ -1,5 +1,6 @@
 use ash::khr::surface;
 use ash::vk;
+use ash::vk::{PresentModeKHR, SurfaceTransformFlagsKHR};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 use crate::vulkan;
@@ -80,8 +81,58 @@ impl PhysicalSurface {
             surface_format,
             surface_capabilities
         }
-        
     }
+
+    pub fn swapchain_image_count(self: &Self) -> u32 {
+        let mut desired_image_count = self.surface_capabilities.min_image_count + 1;
+        if self.surface_capabilities.max_image_count > 0
+            && desired_image_count > self.surface_capabilities.max_image_count
+        {
+            desired_image_count = self.surface_capabilities.max_image_count;
+        }
+
+        desired_image_count
+    }
+
+    pub fn surface_resolution(self: &Self, width: u32, height: u32) -> vk::Extent2D {
+        let surface_resolution =
+            match self.surface_capabilities.current_extent.width {
+            u32::MAX => vk::Extent2D { width, height},
+            _ => self.surface_capabilities.current_extent,
+        };
+
+        surface_resolution
+    }
+
+    pub fn pre_transform(self: &Self) -> SurfaceTransformFlagsKHR {
+        let pre_transform = if self.surface_capabilities
+            .supported_transforms
+            .contains(SurfaceTransformFlagsKHR::IDENTITY)
+        {
+            SurfaceTransformFlagsKHR::IDENTITY
+        } else {
+            self.surface_capabilities.current_transform
+        };
+
+        pre_transform
+    }
+
+    pub fn present_mode(self: &Self) -> PresentModeKHR {
+        let present_modes = unsafe {
+            self.surface_loader
+            .get_physical_device_surface_present_modes(
+                self.physical_device,
+                self.surface)
+            .unwrap() };
+        let present_mode = present_modes
+            .iter()
+            .cloned()
+            .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
+            .unwrap_or(vk::PresentModeKHR::FIFO);
+
+        present_mode
+    }
+
 }
 
 impl Drop for PhysicalSurface {
