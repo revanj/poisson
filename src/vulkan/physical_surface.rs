@@ -86,9 +86,6 @@ impl PhysicalSurface {
                 _ => surface_capabilities.current_extent,
             };
 
-        let memory_properties = instance.
-            get_physical_device_memory_properties(physical_device);
-        
         Self {
             surface,
             surface_loader,

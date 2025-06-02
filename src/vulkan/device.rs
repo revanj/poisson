@@ -8,7 +8,7 @@ pub struct Device {
     pub device: ash::Device,
     pub present_queue: vk::Queue,
     pub command_pool: vk::CommandPool,
-    pub memory_properties: vk::PhysicalDeviceMemoryProperties,
+    pub physical_memory_properties: vk::PhysicalDeviceMemoryProperties,
 }
 
 impl Device {
@@ -58,7 +58,7 @@ impl Device {
             device,
             present_queue,
             command_pool,
-            memory_properties
+            physical_memory_properties: memory_properties
         }
     }
 

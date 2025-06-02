@@ -103,15 +103,11 @@ pub struct VulkanContext {
     pub device : ManuallyDrop<Device>,
     pub swapchain: ManuallyDrop<Swapchain>,
 
-    pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
-
     pub new_swapchain_size: Option<vk::Extent2D>,
 
     pub draw_command_buffers: CommandBuffers,
 
-    pub depth_images: Vec<vk::Image>,
-    pub depth_image_views: Vec<vk::ImageView>,
-    pub depth_image_memories: Vec<vk::DeviceMemory>,
+    pub depth_images: Vec<Image>,
 
     pub image_available_semaphores: Vec<vk::Semaphore>,
     pub rendering_complete_semaphores: Vec<vk::Semaphore>,
@@ -155,7 +151,8 @@ impl VulkanContext {
         let mut depth_images = Vec::new();
 
         for _ in 0..swapchain.images_count() {
-            let depth_image = Image::new_depth_image(&device, )
+            let depth_image = Image::new_depth_image(&device, physical_surface.surface_resolution);
+            depth_images.push(depth_image);
         }
 
         let semaphore_create_info = vk::SemaphoreCreateInfo::default();
@@ -169,9 +166,9 @@ impl VulkanContext {
         for _ in 0..swapchain.images_count() {
             let fence = device.device.create_fence(&fence_create_info, None).unwrap();
             frames_in_flight_fences.push(fence);
-            let present_complete_semaphore = device.device.create_semaphore(&semaphore_create_info, None).unwrap();
+            let image_available_semaphore = device.device.create_semaphore(&semaphore_create_info, None).unwrap();
             let rendering_complete_semaphore = device.device.create_semaphore(&semaphore_create_info, None).unwrap();
-            image_available_semaphores.push(present_complete_semaphore);
+            image_available_semaphores.push(image_available_semaphore);
             rendering_complete_semaphores.push(rendering_complete_semaphore);
         }
 
@@ -227,7 +224,7 @@ impl VulkanContext {
 
         let framebuffers: Vec<vk::Framebuffer> = swapchain.image_views.iter().enumerate()
             .map(|(index, &present_image_view)| {
-                let framebuffer_attachments = [present_image_view, depth_image_views[index]];
+                let framebuffer_attachments = [present_image_view, depth_images[index].view];
                 let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
                     .render_pass(render_pass)
                     .attachments(&framebuffer_attachments)
@@ -251,7 +248,7 @@ impl VulkanContext {
         let index_buffer_memory_req = device.device.get_buffer_memory_requirements(index_buffer);
         let index_buffer_memory_index = find_memorytype_index(
             &index_buffer_memory_req,
-            &device_memory_properties,
+            &device.physical_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
             .expect("Unable to find suitable memorytype for the index buffer.");
@@ -299,7 +296,7 @@ impl VulkanContext {
 
         let vertex_input_buffer_memory_index = find_memorytype_index(
             &vertex_input_buffer_memory_req,
-            &device_memory_properties,
+            &device.physical_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )
             .expect("Unable to find suitable memorytype for the vertex buffer.");
@@ -501,15 +498,11 @@ impl VulkanContext {
             physical_surface,
             device,
             swapchain,
-            device_memory_properties,
-
             new_swapchain_size: None,
 
             draw_command_buffers,
 
             depth_images,
-            depth_image_views,
-            depth_image_memories,
 
             image_available_semaphores,
             rendering_complete_semaphores,
@@ -537,9 +530,9 @@ impl VulkanContext {
         }
 
         for i in 0..self.framebuffers.len() {
-            self.device.device.free_memory(self.depth_image_memories[i], None);
-            self.device.device.destroy_image_view(self.depth_image_views[i], None);
-            self.device.device.destroy_image(self.depth_images[i], None);
+            self.device.device.free_memory(self.depth_images[i].memory, None);
+            self.device.device.destroy_image_view(self.depth_images[i].view, None);
+            self.device.device.destroy_image(self.depth_images[i].image, None);
         }
 
 
@@ -553,7 +546,6 @@ impl VulkanContext {
         let surface_capabilities = self.physical_surface.surface_loader
             .get_physical_device_surface_capabilities(self.physical_surface.physical_device, self.physical_surface.surface)
             .unwrap();
-
 
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
@@ -582,11 +574,13 @@ impl VulkanContext {
         let present_modes = self.physical_surface.surface_loader
             .get_physical_device_surface_present_modes(self.physical_surface.physical_device, self.physical_surface.surface)
             .unwrap();
+
         let present_mode = present_modes
             .iter()
             .cloned()
             .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
             .unwrap_or(vk::PresentModeKHR::FIFO);
+
         self.swapchain.swapchain_loader = ash_swapchain::Device::new(&self.instance.instance, &self.device.device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
@@ -634,75 +628,16 @@ impl VulkanContext {
 
         let n_frame_buffers = self.swapchain.images_count();
 
-        let device_memory_properties = self.instance.instance.get_physical_device_memory_properties(self.physical_surface.physical_device);
-
         self.depth_images = Vec::new();
-        self.depth_image_views = Vec::new();
-        self.depth_image_memories = Vec::new();
-
         for _ in 0..n_frame_buffers {
-            let depth_image_create_info = vk::ImageCreateInfo::default()
-                .image_type(vk::ImageType::TYPE_2D)
-                .format(vk::Format::D16_UNORM)
-                .extent(self.physical_surface.surface_resolution.into())
-                .mip_levels(1)
-                .array_layers(1)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL)
-                .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            let depth_image = self.device.device.create_image(&depth_image_create_info, None).unwrap();
-            let depth_image_memory_req = self.device.device.get_image_memory_requirements(depth_image);
-            let depth_image_memory_index = find_memorytype_index(
-                &depth_image_memory_req,
-                &device_memory_properties,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            )
-                .expect("Unable to find suitable memory index for depth image.");
-
-            let depth_image_allocate_info = vk::MemoryAllocateInfo::default()
-                .allocation_size(depth_image_memory_req.size)
-                .memory_type_index(depth_image_memory_index);
-
-            let depth_image_memory = self.device.device
-                .allocate_memory(&depth_image_allocate_info, None)
-                .unwrap();
-
-            self.device.device
-                .bind_image_memory(depth_image, depth_image_memory, 0)
-                .expect("Unable to bind depth image memory");
-
-            let setup_cmd_buffer = OneshotCommandBuffer::new(&self.device);
-            Self::transition_depth_layout(
-                &self.device,
-                setup_cmd_buffer.command_buffer,
-                depth_image);
-            setup_cmd_buffer.submit(&self.device);
-
-            let depth_image_view_info = vk::ImageViewCreateInfo::default()
-                .subresource_range(
-                    vk::ImageSubresourceRange::default()
-                        .aspect_mask(vk::ImageAspectFlags::DEPTH)
-                        .level_count(1)
-                        .layer_count(1),
-                )
-                .image(depth_image)
-                .format(depth_image_create_info.format)
-                .view_type(vk::ImageViewType::TYPE_2D);
-
-            let depth_image_view = self.device.device
-                .create_image_view(&depth_image_view_info, None)
-                .unwrap();
-
+            let depth_image = Image::new_depth_image(&self.device, self.physical_surface.surface_resolution);
             self.depth_images.push(depth_image);
-            self.depth_image_views.push(depth_image_view);
-            self.depth_image_memories.push(depth_image_memory);
         }
 
         self.framebuffers = self.swapchain.image_views
             .iter().enumerate()
             .map(|(index, &present_image_view)| {
-                let framebuffer_attachments = [present_image_view, self.depth_image_views[index]];
+                let framebuffer_attachments = [present_image_view, self.depth_images[index].view];
                 let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
                     .render_pass(self.render_pass)
                     .attachments(&framebuffer_attachments)
@@ -749,9 +684,9 @@ impl Drop for VulkanContext {
 
                 self.device.device.destroy_fence(self.frames_in_flight_fences[i], None);
 
-                self.device.device.free_memory(self.depth_image_memories[i], None);
-                self.device.device.destroy_image_view(self.depth_image_views[i], None);
-                self.device.device.destroy_image(self.depth_images[i], None);
+                self.device.device.free_memory(self.depth_images[i].memory, None);
+                self.device.device.destroy_image_view(self.depth_images[i].view, None);
+                self.device.device.destroy_image(self.depth_images[i].image, None);
             }
 
             for &image_view in self.swapchain.image_views.iter() {

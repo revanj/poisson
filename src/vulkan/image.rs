@@ -5,9 +5,9 @@ use crate::vulkan::command_buffer::OneshotCommandBuffer;
 use crate::vulkan::device::Device;
 
 pub struct Image {
-    image: vk::Image,
-    memory: vk::DeviceMemory,
-    view: vk::ImageView,
+    pub image: vk::Image,
+    pub memory: vk::DeviceMemory,
+    pub view: vk::ImageView,
 }
 
 impl Image {
@@ -57,7 +57,7 @@ impl Image {
             .get_image_memory_requirements(depth_image)};
         let depth_image_memory_index = find_memorytype_index(
             &depth_image_memory_req,
-            &device.memory_properties,
+            &device.physical_memory_properties,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         ).expect("Unable to find suitable memory index for depth image.");
 
