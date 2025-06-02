@@ -85,6 +85,9 @@ impl PhysicalSurface {
                 u32::MAX => window_extent,
                 _ => surface_capabilities.current_extent,
             };
+
+        let memory_properties = instance.
+            get_physical_device_memory_properties(physical_device);
         
         Self {
             surface,

@@ -7,7 +7,8 @@ use crate::vulkan::command_buffer::{CommandBuffers};
 pub struct Device {
     pub device: ash::Device,
     pub present_queue: vk::Queue,
-    pub command_pool: vk::CommandPool
+    pub command_pool: vk::CommandPool,
+    pub memory_properties: vk::PhysicalDeviceMemoryProperties,
 }
 
 impl Device {
@@ -48,10 +49,16 @@ impl Device {
 
         let command_pool = unsafe {device.create_command_pool(&pool_create_info, None).unwrap()};
 
+        let memory_properties = unsafe {
+            instance.instance.get_physical_device_memory_properties(
+                physical_surface.physical_device)
+        };
+
         Self {
             device,
             present_queue,
-            command_pool
+            command_pool,
+            memory_properties
         }
     }
 
