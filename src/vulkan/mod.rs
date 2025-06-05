@@ -23,6 +23,7 @@ use winit::window::Window;
 use crate::Vertex;
 use crate::vulkan::command_buffer::{CommandBuffers, OneshotCommandBuffer};
 use crate::vulkan::device::Device;
+use crate::vulkan::framebuffer::Framebuffer;
 use crate::vulkan::physical_surface::PhysicalSurface;
 use crate::vulkan::swapchain::Swapchain;
 use crate::vulkan::image::Image;
@@ -116,7 +117,7 @@ pub struct VulkanContext {
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
     pub render_pass: ManuallyDrop<RenderPass>,
-    pub framebuffers: Vec<vk::Framebuffer>,
+    pub framebuffers: Vec<Framebuffer>,
     pub graphics_pipeline: vk::Pipeline,
     pub vertex_input_buffer: vk::Buffer,
     pub vertex_input_buffer_memory: vk::DeviceMemory,
@@ -180,19 +181,9 @@ impl VulkanContext {
         let render_pass = ManuallyDrop::new(
             RenderPass::new(&physical_surface, &device));
 
-        let framebuffers: Vec<vk::Framebuffer> = swapchain.image_views.iter().enumerate()
-            .map(|(index, &present_image_view)| {
-                let framebuffer_attachments = [present_image_view, depth_images[index].view];
-                let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(render_pass.render_pass)
-                    .attachments(&framebuffer_attachments)
-                    .width(physical_surface.surface_resolution.width)
-                    .height(physical_surface.surface_resolution.height)
-                    .layers(1);
-
-                device.device
-                    .create_framebuffer(&frame_buffer_create_info, None)
-                    .unwrap()
+        let framebuffers: Vec<Framebuffer> = swapchain.image_views.iter()
+            .map(|&present_image_view| {
+                Framebuffer::new(&*device, &render_pass, present_image_view, physical_surface.surface_resolution)
             })
             .collect();
 
@@ -484,7 +475,7 @@ impl VulkanContext {
         self.device.device.device_wait_idle().unwrap();
 
         for framebuffer in self.framebuffers.iter() {
-            self.device.device.destroy_framebuffer(*framebuffer, None);
+            self.device.device.destroy_framebuffer(framebuffer.framebuffer, None);
         }
 
         for i in 0..self.framebuffers.len() {
@@ -592,20 +583,9 @@ impl VulkanContext {
             self.depth_images.push(depth_image);
         }
 
-        self.framebuffers = self.swapchain.image_views
-            .iter().enumerate()
-            .map(|(index, &present_image_view)| {
-                let framebuffer_attachments = [present_image_view, self.depth_images[index].view];
-                let frame_buffer_create_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(self.render_pass.render_pass)
-                    .attachments(&framebuffer_attachments)
-                    .width(self.physical_surface.surface_resolution.width)
-                    .height(self.physical_surface.surface_resolution.height)
-                    .layers(1);
-
-                self.device.device
-                    .create_framebuffer(&frame_buffer_create_info, None)
-                    .unwrap()
+        self.framebuffers = self.swapchain.image_views.iter()
+            .map(|&present_image_view| {
+                Framebuffer::new(&*self.device, &self.render_pass, present_image_view, self.physical_surface.surface_resolution)
             })
             .collect();
 
@@ -629,7 +609,7 @@ impl Drop for VulkanContext {
             self.device.device.destroy_buffer(self.vertex_input_buffer, None);
 
             for framebuffer in self.framebuffers.iter() {
-                self.device.device.destroy_framebuffer(*framebuffer, None);
+                self.device.device.destroy_framebuffer(framebuffer.framebuffer, None);
             }
 
             self.device.device.destroy_pipeline_layout(self.pipeline_layout, None);

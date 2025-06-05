@@ -9,6 +9,7 @@ use crate::vulkan::physical_surface::PhysicalSurface;
 pub struct Swapchain {
     pub device: sync::Weak<Device>,
     pub swapchain_loader: ash::khr::swapchain::Device,
+    pub resolution: vk::Extent2D,
     pub swapchain: vk::SwapchainKHR,
     pub images: Vec<vk::Image>,
     pub image_views: Vec<vk::ImageView>
@@ -28,12 +29,14 @@ impl Swapchain {
                 &instance.instance,
                 &dev.device);
 
+        let resolution = physical_surface.surface_resolution;
+
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(physical_surface.surface)
             .min_image_count(physical_surface.swapchain_image_count())
             .image_color_space(physical_surface.surface_format.color_space)
             .image_format(physical_surface.surface_format.format)
-            .image_extent(physical_surface.surface_resolution)
+            .image_extent(resolution)
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             .pre_transform(physical_surface.pre_transform())
@@ -72,6 +75,7 @@ impl Swapchain {
         Self {
             device,
             swapchain_loader,
+            resolution,
             swapchain,
             images,
             image_views
