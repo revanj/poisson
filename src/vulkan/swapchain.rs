@@ -1,3 +1,5 @@
+use std::sync;
+use std::sync::Arc;
 use ash::vk;
 use ash::vk::Extent2D;
 use crate::vulkan::device::Device;
@@ -5,6 +7,7 @@ use crate::vulkan::Instance;
 use crate::vulkan::physical_surface::PhysicalSurface;
 
 pub struct Swapchain {
+    pub device: sync::Weak<Device>,
     pub swapchain_loader: ash::khr::swapchain::Device,
     pub swapchain: vk::SwapchainKHR,
     pub images: Vec<vk::Image>,
@@ -15,13 +18,15 @@ impl Swapchain {
     pub fn new(
         instance: &Instance,
         physical_surface: &PhysicalSurface,
-        device: &Device) -> Self
+        device: &Arc<Device>) -> Self
     {
+        let device = Arc::downgrade(device);
+        let dev = device.upgrade().unwrap();
+
         let swapchain_loader =
             ash::khr::swapchain::Device::new(
                 &instance.instance,
-                &device.device);
-
+                &dev.device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(physical_surface.surface)
@@ -61,10 +66,11 @@ impl Swapchain {
                     layer_count: 1,
                 })
                 .image(image);
-            unsafe { device.device.create_image_view(&create_view_info, None) }.unwrap()
+            unsafe { dev.device.create_image_view(&create_view_info, None) }.unwrap()
         }).collect();
 
         Self {
+            device,
             swapchain_loader,
             swapchain,
             images,
@@ -79,7 +85,12 @@ impl Swapchain {
 
 impl Drop for Swapchain {
     fn drop(&mut self) {
-
-        unsafe { self.swapchain_loader.destroy_swapchain(self.swapchain, None); }
+        unsafe {
+            for &image_view in self.image_views.iter() {
+                self.device.upgrade().unwrap()
+                    .device.destroy_image_view(image_view, None);
+            }
+            self.swapchain_loader.destroy_swapchain(self.swapchain, None);
+        }
     }
 }

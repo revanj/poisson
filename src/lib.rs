@@ -160,7 +160,7 @@ impl PoissonEngine {
         ];
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::default()
-            .render_pass(vulkan.render_pass)
+            .render_pass(vulkan.render_pass.render_pass)
             .framebuffer(vulkan.framebuffers[present_index as usize])
             .render_area(vulkan.physical_surface.surface_resolution.into())
             .clear_values(&clear_values);
