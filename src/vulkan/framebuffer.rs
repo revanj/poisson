@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::Arc;
 use ash::vk;
 use ash::vk::{Extent2D, ImageView};
@@ -44,6 +45,9 @@ impl Framebuffer {
 
 impl Drop for Framebuffer {
     fn drop(&mut self) {
-
+        let device = self.device.upgrade().unwrap();
+        unsafe {
+            device.device.destroy_framebuffer(self.framebuffer, None);
+        }
     }
 }

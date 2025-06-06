@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use ash::vk;
 use ash::vk::CommandBuffer;
 use crate::vulkan::{find_memorytype_index, record_submit_commandbuffer};
@@ -5,6 +6,7 @@ use crate::vulkan::command_buffer::OneshotCommandBuffer;
 use crate::vulkan::device::Device;
 
 pub struct Image {
+    pub device: std::sync::Weak<Device>,
     pub image: vk::Image,
     pub memory: vk::DeviceMemory,
     pub view: vk::ImageView,
@@ -40,7 +42,7 @@ impl Image {
             &[layout_transition_barriers],
         );
     }
-    pub fn new_depth_image(device: &Device, extent: vk::Extent2D) -> Self {
+    pub fn new_depth_image(device: &Arc<Device>, extent: vk::Extent2D) -> Self {
         let depth_image_create_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(vk::Format::D16_UNORM)
@@ -98,6 +100,7 @@ impl Image {
             .unwrap()};
 
         Self {
+            device: Arc::downgrade(&device),
             image: depth_image,
             memory: depth_image_memory,
             view: depth_image_view,
@@ -106,3 +109,13 @@ impl Image {
     }
 }
 
+impl Drop for Image {
+    fn drop(&mut self) {
+        let device = self.device.upgrade().unwrap();
+        unsafe {
+            device.device.free_memory(self.memory, None);
+            device.device.destroy_image_view(self.view, None);
+            device.device.destroy_image(self.image, None);
+        }
+    }
+}

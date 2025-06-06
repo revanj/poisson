@@ -12,7 +12,8 @@ pub struct PhysicalSurface {
     pub queue_family_index: u32,
     pub surface_format: vk::SurfaceFormatKHR,
     pub surface_capabilities: vk::SurfaceCapabilitiesKHR,
-    pub surface_resolution: vk::Extent2D
+    surface_resolution: vk::Extent2D
+
 }
 
 impl PhysicalSurface {
@@ -95,6 +96,23 @@ impl PhysicalSurface {
             surface_capabilities,
             surface_resolution
         }
+    }
+
+    pub fn update_resolution(&mut self, window_extent: vk::Extent2D) {
+        self.surface_capabilities = unsafe { self.surface_loader
+            .get_physical_device_surface_capabilities(self.physical_device, self.surface)
+            .unwrap()
+        };
+
+        self.surface_resolution =
+            match self.surface_capabilities.current_extent.width {
+                u32::MAX => window_extent,
+                _ => self.surface_capabilities.current_extent,
+            };
+    }
+
+    pub fn resolution(self: &Self) -> vk::Extent2D {
+        self.surface_resolution
     }
 
     pub fn swapchain_image_count(self: &Self) -> u32 {

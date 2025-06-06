@@ -108,16 +108,17 @@ pub struct VulkanContext {
     pub swapchain: ManuallyDrop<Swapchain>,
     pub new_swapchain_size: Option<vk::Extent2D>,
 
+    pub render_pass: ManuallyDrop<RenderPass>,
+    pub framebuffers: ManuallyDrop<Vec<Framebuffer>>,
+
     pub draw_command_buffers: CommandBuffers,
 
-    pub depth_images: Vec<Image>,
 
     pub image_available_semaphores: Vec<vk::Semaphore>,
     pub rendering_complete_semaphores: Vec<vk::Semaphore>,
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
-    pub render_pass: ManuallyDrop<RenderPass>,
-    pub framebuffers: Vec<Framebuffer>,
+
     pub graphics_pipeline: vk::Pipeline,
     pub vertex_input_buffer: vk::Buffer,
     pub vertex_input_buffer_memory: vk::DeviceMemory,
@@ -153,14 +154,6 @@ impl VulkanContext {
             device.spawn_command_buffers(swapchain.images_count().try_into().unwrap());
 
 
-
-        let mut depth_images = Vec::new();
-
-        for _ in 0..swapchain.images_count() {
-            let depth_image = Image::new_depth_image(&device, physical_surface.surface_resolution);
-            depth_images.push(depth_image);
-        }
-
         let semaphore_create_info = vk::SemaphoreCreateInfo::default();
         let fence_create_info = vk::FenceCreateInfo::default()
             .flags(vk::FenceCreateFlags::SIGNALED);
@@ -181,11 +174,19 @@ impl VulkanContext {
         let render_pass = ManuallyDrop::new(
             RenderPass::new(&physical_surface, &device));
 
-        let framebuffers: Vec<Framebuffer> = swapchain.image_views.iter()
-            .map(|&present_image_view| {
-                Framebuffer::new(&*device, &render_pass, present_image_view, physical_surface.surface_resolution)
-            })
-            .collect();
+
+        let mut framebuffers = Vec::new();
+        for &swapchain_image_view in swapchain.image_views.iter() {
+            let framebuffer =
+                Framebuffer::new(
+                    &*device,
+                    &render_pass,
+                    swapchain_image_view,
+                    physical_surface.resolution());
+            framebuffers.push(framebuffer);
+        }
+
+        let framebuffers = ManuallyDrop::new(framebuffers);
 
         let index_buffer_data = [0u32, 1, 2];
         let index_buffer_info = vk::BufferCreateInfo::default()
@@ -364,15 +365,17 @@ impl VulkanContext {
             topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             ..Default::default()
         };
+
+        let resolution = physical_surface.resolution();
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
-            width: physical_surface.surface_resolution.width as f32,
-            height: physical_surface.surface_resolution.height as f32,
+            width: resolution.width as f32,
+            height: resolution.height as f32,
             min_depth: 0.0,
             max_depth: 1.0,
         }];
-        let scissors = [physical_surface.surface_resolution.into()];
+        let scissors = [resolution.into()];
         let viewport_state_info = vk::PipelineViewportStateCreateInfo::default()
             .scissors(&scissors)
             .viewports(&viewports);
@@ -449,17 +452,15 @@ impl VulkanContext {
             swapchain,
             new_swapchain_size: None,
 
-            draw_command_buffers,
+            render_pass,
+            framebuffers,
 
-            depth_images,
+            draw_command_buffers,
 
             image_available_semaphores,
             rendering_complete_semaphores,
-
             frames_in_flight_fences,
 
-            render_pass,
-            framebuffers,
             graphics_pipeline,
             vertex_input_buffer,
             vertex_input_buffer_memory,
@@ -474,121 +475,21 @@ impl VulkanContext {
     pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
         self.device.device.device_wait_idle().unwrap();
 
-        for framebuffer in self.framebuffers.iter() {
-            self.device.device.destroy_framebuffer(framebuffer.framebuffer, None);
+        self.physical_surface.update_resolution(surface_size);
+
+        ManuallyDrop::drop(&mut self.framebuffers);
+        ManuallyDrop::drop(&mut self.swapchain);
+
+        self.swapchain = ManuallyDrop::new(Swapchain::new(
+            &self.instance, &self.physical_surface, &self.device));
+
+        let mut framebuffers = Vec::new();
+        for &swapchain_image_view in self.swapchain.image_views.iter() {
+            let framebuffer = Framebuffer::new(&*self.device, &self.render_pass,
+                swapchain_image_view, self.physical_surface.resolution());
+            framebuffers.push(framebuffer);
         }
-
-        for i in 0..self.framebuffers.len() {
-            self.device.device.free_memory(self.depth_images[i].memory, None);
-            self.device.device.destroy_image_view(self.depth_images[i].view, None);
-            self.device.device.destroy_image(self.depth_images[i].image, None);
-        }
-
-
-        for &image_view in self.swapchain.image_views.iter() {
-            self.device.device.destroy_image_view(image_view, None);
-        }
-
-
-        self.swapchain.swapchain_loader.destroy_swapchain(self.swapchain.swapchain, None);
-
-        let surface_capabilities = self.physical_surface.surface_loader
-            .get_physical_device_surface_capabilities(self.physical_surface.physical_device, self.physical_surface.surface)
-            .unwrap();
-
-        let mut desired_image_count = surface_capabilities.min_image_count + 1;
-        if surface_capabilities.max_image_count > 0
-            && desired_image_count > surface_capabilities.max_image_count
-        {
-            desired_image_count = surface_capabilities.max_image_count;
-        }
-
-        self.physical_surface.surface_resolution = match surface_capabilities.current_extent.width {
-            u32::MAX => vk::Extent2D {
-                width: surface_size.width,
-                height: surface_size.height,
-            },
-            _ => surface_capabilities.current_extent,
-        };
-
-        let pre_transform = if surface_capabilities
-            .supported_transforms
-            .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
-        {
-            vk::SurfaceTransformFlagsKHR::IDENTITY
-        } else {
-            surface_capabilities.current_transform
-        };
-
-        let present_modes = self.physical_surface.surface_loader
-            .get_physical_device_surface_present_modes(self.physical_surface.physical_device, self.physical_surface.surface)
-            .unwrap();
-
-        let present_mode = present_modes
-            .iter()
-            .cloned()
-            .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
-            .unwrap_or(vk::PresentModeKHR::FIFO);
-
-        self.swapchain.swapchain_loader = ash_swapchain::Device::new(&self.instance.instance, &self.device.device);
-
-        let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
-            .surface(self.physical_surface.surface)
-            .min_image_count(desired_image_count)
-            .image_color_space(self.physical_surface.surface_format.color_space)
-            .image_format(self.physical_surface.surface_format.format)
-            .image_extent(self.physical_surface.surface_resolution)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(pre_transform)
-            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(present_mode)
-            .clipped(true)
-            .image_array_layers(1);
-
-        self.swapchain.swapchain = self.swapchain.swapchain_loader
-            .create_swapchain(&swapchain_create_info, None)
-            .unwrap();
-
-        self.swapchain.images = self.swapchain.swapchain_loader.get_swapchain_images(self.swapchain.swapchain).unwrap();
-        self.swapchain.image_views = self.swapchain.images
-            .iter()
-            .map(|&image| {
-                let create_view_info = vk::ImageViewCreateInfo::default()
-                    .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(self.physical_surface.surface_format.format)
-                    .components(vk::ComponentMapping {
-                        r: vk::ComponentSwizzle::R,
-                        g: vk::ComponentSwizzle::G,
-                        b: vk::ComponentSwizzle::B,
-                        a: vk::ComponentSwizzle::A,
-                    })
-                    .subresource_range(vk::ImageSubresourceRange {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    })
-                    .image(image);
-                self.device.device.create_image_view(&create_view_info, None).unwrap()
-            })
-            .collect();
-
-        let n_frame_buffers = self.swapchain.images_count();
-
-        self.depth_images = Vec::new();
-        for _ in 0..n_frame_buffers {
-            let depth_image = Image::new_depth_image(&self.device, self.physical_surface.surface_resolution);
-            self.depth_images.push(depth_image);
-        }
-
-        self.framebuffers = self.swapchain.image_views.iter()
-            .map(|&present_image_view| {
-                Framebuffer::new(&*self.device, &self.render_pass, present_image_view, self.physical_surface.surface_resolution)
-            })
-            .collect();
-
+        self.framebuffers = ManuallyDrop::new(framebuffers);
     }
 }
 
@@ -608,10 +509,6 @@ impl Drop for VulkanContext {
             self.device.device.free_memory(self.vertex_input_buffer_memory, None);
             self.device.device.destroy_buffer(self.vertex_input_buffer, None);
 
-            for framebuffer in self.framebuffers.iter() {
-                self.device.device.destroy_framebuffer(framebuffer.framebuffer, None);
-            }
-
             self.device.device.destroy_pipeline_layout(self.pipeline_layout, None);
 
 
@@ -621,12 +518,9 @@ impl Drop for VulkanContext {
                 self.device.device.destroy_semaphore(self.rendering_complete_semaphores[i], None);
 
                 self.device.device.destroy_fence(self.frames_in_flight_fences[i], None);
-
-                self.device.device.free_memory(self.depth_images[i].memory, None);
-                self.device.device.destroy_image_view(self.depth_images[i].view, None);
-                self.device.device.destroy_image(self.depth_images[i].image, None);
             }
 
+            ManuallyDrop::drop(&mut self.framebuffers);
             ManuallyDrop::drop(&mut self.render_pass);
             ManuallyDrop::drop(&mut self.swapchain);
             ManuallyDrop::drop(&mut self.device);

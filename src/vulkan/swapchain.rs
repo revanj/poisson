@@ -12,7 +12,7 @@ pub struct Swapchain {
     pub resolution: vk::Extent2D,
     pub swapchain: vk::SwapchainKHR,
     pub images: Vec<vk::Image>,
-    pub image_views: Vec<vk::ImageView>
+    pub image_views: Vec<vk::ImageView>,
 }
 
 impl Swapchain {
@@ -29,7 +29,7 @@ impl Swapchain {
                 &instance.instance,
                 &dev.device);
 
-        let resolution = physical_surface.surface_resolution;
+        let resolution = physical_surface.resolution();
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
             .surface(physical_surface.surface)

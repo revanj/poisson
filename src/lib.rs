@@ -122,12 +122,12 @@ impl PoissonEngine {
         let viewports = [vk::Viewport {
             x: 0.0,
             y: 0.0,
-            width: vulkan.physical_surface.surface_resolution.width as f32,
-            height: vulkan.physical_surface.surface_resolution.height as f32,
+            width: vulkan.physical_surface.resolution().width as f32,
+            height: vulkan.physical_surface.resolution().height as f32,
             min_depth: 0.0,
             max_depth: 1.0,
         }];
-        let scissors = [vulkan.physical_surface.surface_resolution.into()];
+        let scissors = [vulkan.physical_surface.resolution().into()];
 
         unsafe {vulkan.device.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap()};
         
@@ -162,7 +162,7 @@ impl PoissonEngine {
         let render_pass_begin_info = vk::RenderPassBeginInfo::default()
             .render_pass(vulkan.render_pass.render_pass)
             .framebuffer(vulkan.framebuffers[present_index as usize].framebuffer)
-            .render_area(vulkan.physical_surface.surface_resolution.into())
+            .render_area(vulkan.physical_surface.resolution().into())
             .clear_values(&clear_values);
 
         record_submit_commandbuffer(
