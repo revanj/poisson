@@ -5,14 +5,11 @@ edition = "2024"
 
 [dependencies]
 winit = {git = "https://github.com/rust-windowing/winit.git", rev = "5199474"}
-tracing = { version = "0.1.40", default-features = false, features = ["log"] }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-image = "0.25.6"
-softbuffer = { version = "0.4.6", default-features = false, features = [
-    "x11",
-    "x11-dlopen",
-    "wayland",
-    "wayland-dlopen",
-] }
 ash = "0.38.0+1.3.281"
 ash-window = "0.13.0"
+cxx = "1.0"
+
+[build-dependencies]
+cmake = "0.1"
+cxx-build = "1.0"
+build-print = "1.0"

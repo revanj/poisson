@@ -1,5 +1,3 @@
-use std::thread;
-use ash::prelude::VkResult;
 use ash::vk;
 use winit::window::Window;
 mod vulkan;
@@ -9,8 +7,6 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::{WindowAttributes, WindowId};
-use ash::util::Align;
-use ash::vk::Extent2D;
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ControlFlow::Poll;
 
