@@ -7,3 +7,5 @@ public:
 };
 
 std::unique_ptr<BlobstoreClient> new_blobstore_client();
+
+int compile();
