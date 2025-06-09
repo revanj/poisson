@@ -16,22 +16,9 @@ const char* shortestShader =
 "    result[threadId.x] = threadId.x;"
 "}";
 
-void diagnoseIfNeeded(slang::IBlob* diagnosticsBlob)
-{
-    if (diagnosticsBlob != nullptr)
-    {
-        std::cout << (const char*)diagnosticsBlob->getBufferPointer() << std::endl;
-    }
-}
 
-BlobstoreClient::BlobstoreClient() {}
-
-int compile() {
-    // 1. Create Global Session
-    Slang::ComPtr<slang::IGlobalSession> globalSession;
+SlangCompilerOpaque::SlangCompilerOpaque() {
     createGlobalSession(globalSession.writeRef());
-
-    // 2. Create Session
     slang::SessionDesc sessionDesc = {};
     slang::TargetDesc targetDesc = {};
     targetDesc.format = SLANG_SPIRV;
@@ -41,93 +28,120 @@ int compile() {
     sessionDesc.targetCount = 1;
 
     std::array<slang::CompilerOptionEntry, 1> options =
+    {
         {
-            {
-                slang::CompilerOptionName::EmitSpirvDirectly,
-                {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}
-            }
-        };
+            slang::CompilerOptionName::EmitSpirvDirectly,
+            { slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr }
+        }
+    };
     sessionDesc.compilerOptionEntries = options.data();
     sessionDesc.compilerOptionEntryCount = options.size();
 
-    Slang::ComPtr<slang::ISession> session;
     globalSession->createSession(sessionDesc, session.writeRef());
-
-    // 3. Load module
-    Slang::ComPtr<slang::IModule> slangModule;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        slangModule = session->loadModuleFromSourceString(
-            "shortest",                  // Module name
-            "shortest.slang",            // Module path
-            shortestShader,              // Shader source code
-            diagnosticsBlob.writeRef()); // Optional diagnostic container
-        diagnoseIfNeeded(diagnosticsBlob);
-        if (!slangModule)
-        {
-            return -1;
-        }
-    }
-
-    // 4. Query Entry Points
-    Slang::ComPtr<slang::IEntryPoint> entryPoint;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        slangModule->findEntryPointByName("computeMain", entryPoint.writeRef());
-        if (!entryPoint)
-        {
-            std::cout << "Error getting entry point" << std::endl;
-            return -1;
-        }
-    }
-
-    // 5. Compose Modules + Entry Points
-    std::array<slang::IComponentType*, 2> componentTypes =
-        {
-            slangModule,
-            entryPoint
-        };
-
-    Slang::ComPtr<slang::IComponentType> composedProgram;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        SlangResult result = session->createCompositeComponentType(
-            componentTypes.data(),
-            componentTypes.size(),
-            composedProgram.writeRef(),
-            diagnosticsBlob.writeRef());
-        diagnoseIfNeeded(diagnosticsBlob);
-        SLANG_RETURN_ON_FAIL(result);
-    }
-
-    // 6. Link
-    Slang::ComPtr<slang::IComponentType> linkedProgram;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        SlangResult result = composedProgram->link(
-            linkedProgram.writeRef(),
-            diagnosticsBlob.writeRef());
-        diagnoseIfNeeded(diagnosticsBlob);
-        SLANG_RETURN_ON_FAIL(result);
-    }
-
-    // 7. Get Target Kernel Code
-    Slang::ComPtr<slang::IBlob> spirvCode;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        SlangResult result = linkedProgram->getEntryPointCode(
-            0,
-            0,
-            spirvCode.writeRef(),
-            diagnosticsBlob.writeRef());
-        diagnoseIfNeeded(diagnosticsBlob);
-        SLANG_RETURN_ON_FAIL(result);
-    }
-
-    std::cout << "Compiled " << spirvCode->getBufferSize() << " bytes of SPIR-V" << std::endl;
-    return 0;
 }
 
-std::unique_ptr<BlobstoreClient> new_blobstore_client() {
-  return std::unique_ptr<BlobstoreClient>(new BlobstoreClient());
+
+std::unique_ptr<SlangCompilerOpaque> new_slang_compiler() {
+  return std::unique_ptr<SlangCompilerOpaque>(new SlangCompilerOpaque());
 }
+
+std::unique_ptr<SlangModuleOpaque> SlangCompilerOpaque::load_module(rust::Str path_name) const {
+    Slang::ComPtr<slang::IModule> mod;
+    Slang::ComPtr<slang::IBlob> blob;
+    mod = session->loadModule(((std::string)path_name).c_str(), blob.writeRef());
+    if (blob != nullptr)
+    {
+        std::cout << (const char*)blob->getBufferPointer() << std::endl;
+    } else {
+        std::cout << "successfully compiled hello world!" << std::endl;
+    }
+    return std::unique_ptr<SlangModuleOpaque>(new SlangModuleOpaque(mod, blob));
+}
+
+SlangModuleOpaque::SlangModuleOpaque(Slang::ComPtr<slang::IModule> mod, Slang::ComPtr<slang::IBlob> blob)
+    : module(mod), diagnostics_blob(blob) {}
+
+//void diagnoseIfNeeded(slang::IBlob* diagnosticsBlob)
+//{
+//
+//}
+
+
+//int compile() {
+//    Slang::ComPtr<slang::IModule> slangModule;
+//    {
+//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+//        slangModule = session->loadModuleFromSourceString(
+//            "shortest",                  // Module name
+//            "shortest.slang",            // Module path
+//            shortestShader,              // Shader source code
+//            diagnosticsBlob.writeRef()); // Optional diagnostic container
+//        diagnoseIfNeeded(diagnosticsBlob);
+//        if (!slangModule)
+//        {
+//            return -1;
+//        }
+//    }
+//
+//    // 4. Query Entry Points
+//    Slang::ComPtr<slang::IEntryPoint> entryPoint;
+//    {
+//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+//        slangModule->findEntryPointByName("computeMain", entryPoint.writeRef());
+//        if (!entryPoint)
+//        {
+//            std::cout << "Error getting entry point" << std::endl;
+//            return -1;
+//        }
+//    }
+//
+//    // 5. Compose Modules + Entry Points
+//    std::array<slang::IComponentType*, 2> componentTypes =
+//        {
+//            slangModule,
+//            entryPoint
+//        };
+//
+//    Slang::ComPtr<slang::IComponentType> composedProgram;
+//    {
+//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+//        SlangResult result = session->createCompositeComponentType(
+//            componentTypes.data(),
+//            componentTypes.size(),
+//            composedProgram.writeRef(),
+//            diagnosticsBlob.writeRef());
+//        diagnoseIfNeeded(diagnosticsBlob);
+//        SLANG_RETURN_ON_FAIL(result);
+//    }
+//
+//    // 6. Link
+//    Slang::ComPtr<slang::IComponentType> linkedProgram;
+//    {
+//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+//        SlangResult result = composedProgram->link(
+//            linkedProgram.writeRef(),
+//            diagnosticsBlob.writeRef());
+//        diagnoseIfNeeded(diagnosticsBlob);
+//        SLANG_RETURN_ON_FAIL(result);
+//    }
+//
+//    // 7. Get Target Kernel Code
+//    Slang::ComPtr<slang::IBlob> spirvCode;
+//    {
+//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+//        SlangResult result = linkedProgram->getEntryPointCode(
+//            0,
+//            0,
+//            spirvCode.writeRef(),
+//            diagnosticsBlob.writeRef());
+//        diagnoseIfNeeded(diagnosticsBlob);
+//        SLANG_RETURN_ON_FAIL(result);
+//    }
+//
+//    std::cout << "Compiled " << spirvCode->getBufferSize() << " bytes of SPIR-V" << std::endl;
+//    return 0;
+//}
+
+//std::unique_ptr<BlobstoreClient> new_blobstore_client() {
+//  return std::unique_ptr<BlobstoreClient>(new BlobstoreClient());
+//}

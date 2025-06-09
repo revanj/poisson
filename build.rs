@@ -2,7 +2,7 @@ use cmake;
 use cxx_build;
 
 fn main() {
-    cxx_build::bridge("src/bin/main.rs")
+    cxx_build::bridge("src/slang/mod.rs")
         .file("src/slang/slang.cc")
         .std("c++14")
         .compile("rust-renderer");

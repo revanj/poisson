@@ -1,6 +1,8 @@
 use ash::vk;
 use winit::window::Window;
-mod vulkan;
+pub mod vulkan;
+pub mod slang;
+
 use vulkan::VulkanContext;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
