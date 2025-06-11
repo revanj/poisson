@@ -16,6 +16,35 @@ const char* shortestShader =
 "    result[threadId.x] = threadId.x;"
 "}";
 
+SlangEntryPointOpaque::SlangEntryPointOpaque(
+    Slang::ComPtr<slang::IEntryPoint> entry):
+        entry_point(entry) {}
+
+SlangModuleOpaque::SlangModuleOpaque(Slang::ComPtr<slang::IModule> mod, Slang::ComPtr<slang::IBlob> blob)
+    : module(mod), diagnostics_blob(blob) {}
+
+std::unique_ptr<SlangEntryPointOpaque> SlangModuleOpaque::find_entry_point_by_name(rust::Str name) const {
+     Slang::ComPtr<slang::IEntryPoint> entry;
+     module->findEntryPointByName(((std::string)name).c_str(), entry.writeRef());
+
+     if (!entry)
+     {
+        std::cout << "no entry point!" << std::endl;
+     }
+
+     return std::unique_ptr<SlangEntryPointOpaque>(new SlangEntryPointOpaque(entry));
+}
+
+void SlangComponentListOpaque::add_module(std::unique_ptr<SlangModuleOpaque> module) {
+    components.push_back(module->module);
+}
+
+void SlangComponentListOpaque::add_entry_point(std::unique_ptr<SlangEntryPointOpaque> entry_point) {
+    components.push_back(entry_point->entry_point);
+}
+
+SlangComponentOpaque::SlangComponentOpaque(Slang::ComPtr<slang::IComponentType> comp, Slang::ComPtr<slang::IBlob> blob):
+    component(comp), diagnostics_blob(blob) {}
 
 SlangCompilerOpaque::SlangCompilerOpaque() {
     createGlobalSession(globalSession.writeRef());
@@ -41,10 +70,6 @@ SlangCompilerOpaque::SlangCompilerOpaque() {
 }
 
 
-std::unique_ptr<SlangCompilerOpaque> new_slang_compiler() {
-  return std::unique_ptr<SlangCompilerOpaque>(new SlangCompilerOpaque());
-}
-
 std::unique_ptr<SlangModuleOpaque> SlangCompilerOpaque::load_module(rust::Str path_name) const {
     Slang::ComPtr<slang::IModule> mod;
     Slang::ComPtr<slang::IBlob> blob;
@@ -53,13 +78,43 @@ std::unique_ptr<SlangModuleOpaque> SlangCompilerOpaque::load_module(rust::Str pa
     {
         std::cout << (const char*)blob->getBufferPointer() << std::endl;
     } else {
-        std::cout << "successfully compiled hello world!" << std::endl;
+        std::cout << "successfully compiled module" << std::endl;
     }
     return std::unique_ptr<SlangModuleOpaque>(new SlangModuleOpaque(mod, blob));
 }
 
-SlangModuleOpaque::SlangModuleOpaque(Slang::ComPtr<slang::IModule> mod, Slang::ComPtr<slang::IBlob> blob)
-    : module(mod), diagnostics_blob(blob) {}
+std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::compose(std::unique_ptr<SlangComponentListOpaque> list) const {
+    Slang::ComPtr<slang::IComponentType> composedProgram;
+    Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+    session->createCompositeComponentType(
+        list->components.data(),
+        list->components.size(),
+        composedProgram.writeRef(),
+        diagnosticsBlob.writeRef());
+
+    return std::unique_ptr<SlangComponentOpaque>(new SlangComponentOpaque(composedProgram, diagnosticsBlob));
+}
+
+std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::link(std::unique_ptr<SlangComponentOpaque> composed) const {
+    Slang::ComPtr<slang::IComponentType> linkedProgram;
+    Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+    composed->component->link(
+        linkedProgram.writeRef(),
+        diagnosticsBlob.writeRef());
+    return std::unique_ptr<SlangComponentOpaque>(new SlangComponentOpaque(linkedProgram, diagnosticsBlob));
+}
+
+std::unique_ptr<SlangComponentListOpaque> new_slang_component_list() {
+    return std::unique_ptr<SlangComponentListOpaque>(new SlangComponentListOpaque());
+}
+
+std::unique_ptr<SlangCompilerOpaque> new_slang_compiler() {
+  return std::unique_ptr<SlangCompilerOpaque>(new SlangCompilerOpaque());
+}
+
+
+
+
 
 //void diagnoseIfNeeded(slang::IBlob* diagnosticsBlob)
 //{

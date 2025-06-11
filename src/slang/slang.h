@@ -8,12 +8,35 @@
 
 #include <memory>
 #include <string>
+#include <vector>
+
+class SlangEntryPointOpaque {
+public:
+    SlangEntryPointOpaque(Slang::ComPtr<slang::IEntryPoint> entry);
+    Slang::ComPtr<slang::IEntryPoint> entry_point;
+};
 
 class SlangModuleOpaque {
 public:
     SlangModuleOpaque(Slang::ComPtr<slang::IModule> mod, Slang::ComPtr<slang::IBlob> blob);
-private:
+    std::unique_ptr<SlangEntryPointOpaque> find_entry_point_by_name(rust::Str name) const;
     Slang::ComPtr<slang::IModule> module;
+    Slang::ComPtr<slang::IBlob> diagnostics_blob;
+};
+
+// a little wrapper class that avoids dyn or unsafe in rust
+// accepts unique pointers to shader components (modules and entry points)
+class SlangComponentListOpaque {
+public:
+    std::vector<slang::IComponentType*> components;
+    void add_module(std::unique_ptr<SlangModuleOpaque> module);
+    void add_entry_point(std::unique_ptr<SlangEntryPointOpaque> entry_point);
+};
+
+class SlangComponentOpaque {
+public:
+    SlangComponentOpaque(Slang::ComPtr<slang::IComponentType> comp, Slang::ComPtr<slang::IBlob> blob);
+    Slang::ComPtr<slang::IComponentType> component;
     Slang::ComPtr<slang::IBlob> diagnostics_blob;
 };
 
@@ -21,11 +44,13 @@ class SlangCompilerOpaque {
 public:
     SlangCompilerOpaque();
     std::unique_ptr<SlangModuleOpaque> load_module(rust::Str path_name) const;
+    std::unique_ptr<SlangComponentOpaque> compose(std::unique_ptr<SlangComponentListOpaque> list) const;
+    std::unique_ptr<SlangComponentOpaque> link(std::unique_ptr<SlangComponentOpaque> composed) const;
+
 private:
     Slang::ComPtr<slang::IGlobalSession> globalSession;
     Slang::ComPtr<slang::ISession> session;
 };
 
-
-
+std::unique_ptr<SlangComponentListOpaque> new_slang_component_list();
 std::unique_ptr<SlangCompilerOpaque> new_slang_compiler();

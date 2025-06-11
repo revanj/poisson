@@ -6,7 +6,7 @@ use rust_renderer::slang;
 
 fn main() -> Result<(), Box<dyn Error>> {
 
-    let compiler = slang::SlangCompiler::new();
+    let compiler = slang::Compiler::new();
     compiler.load_module("shaders/hello-world.slang");
     
     let event_loop = EventLoop::new()?;
