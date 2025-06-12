@@ -19,6 +19,7 @@ mod interface {
         fn add_entry_point(self: Pin<&mut SlangComponentListOpaque>, entry_point: UniquePtr<SlangEntryPointOpaque>);
         fn compose(self: &SlangCompilerOpaque, list: UniquePtr<SlangComponentListOpaque>) -> UniquePtr<SlangComponentOpaque>;
         fn link(self: &SlangCompilerOpaque, composed: UniquePtr<SlangComponentOpaque>) -> UniquePtr<SlangComponentOpaque>;
+        fn link_module(self: &SlangCompilerOpaque, module: UniquePtr<SlangModuleOpaque>) -> UniquePtr<SlangComponentOpaque>;
         fn find_entry_point_by_name(self: &SlangModuleOpaque, fn_name: &str) -> UniquePtr<SlangEntryPointOpaque>;
         fn new_slang_component_list() -> UniquePtr<SlangComponentListOpaque>;
     }
@@ -48,9 +49,15 @@ impl Compiler {
         }
     }
 
-    pub fn link(self: &Self, composed: ComposedProgram) -> LinkedProgram {
+    pub fn link_composed_program(self: &Self, composed: ComposedProgram) -> LinkedProgram {
         LinkedProgram {
             linked_program_ptr: self.compiler_ptr.as_ref().unwrap().link(composed.composed_program_ptr)
+        }
+    }
+
+    pub fn link_module(self: &Self, module: Module) -> LinkedProgram {
+        LinkedProgram {
+            linked_program_ptr: self.compiler_ptr.as_ref().unwrap().link_module(module.module_ptr)
         }
     }
 }

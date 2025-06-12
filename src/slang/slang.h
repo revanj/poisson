@@ -46,6 +46,7 @@ public:
     std::unique_ptr<SlangModuleOpaque> load_module(rust::Str path_name) const;
     std::unique_ptr<SlangComponentOpaque> compose(std::unique_ptr<SlangComponentListOpaque> list) const;
     std::unique_ptr<SlangComponentOpaque> link(std::unique_ptr<SlangComponentOpaque> composed) const;
+    std::unique_ptr<SlangComponentOpaque> link_module(std::unique_ptr<SlangModuleOpaque> module) const;
 
 private:
     Slang::ComPtr<slang::IGlobalSession> globalSession;

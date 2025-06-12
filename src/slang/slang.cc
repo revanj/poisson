@@ -104,6 +104,15 @@ std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::link(std::unique_ptr<
     return std::unique_ptr<SlangComponentOpaque>(new SlangComponentOpaque(linkedProgram, diagnosticsBlob));
 }
 
+std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::link_module(std::unique_ptr<SlangModuleOpaque> module) const {
+    Slang::ComPtr<slang::IComponentType> linkedProgram;
+    Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+    module->module->link(
+        linkedProgram.writeRef(),
+        diagnosticsBlob.writeRef());
+    return std::unique_ptr<SlangComponentOpaque>(new SlangComponentOpaque(linkedProgram, diagnosticsBlob));
+}
+
 std::unique_ptr<SlangComponentListOpaque> new_slang_component_list() {
     return std::unique_ptr<SlangComponentListOpaque>(new SlangComponentListOpaque());
 }
