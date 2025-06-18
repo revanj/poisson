@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <cstdint>
 
 class SlangEntryPointOpaque {
 public:
@@ -24,6 +25,14 @@ public:
     Slang::ComPtr<slang::IBlob> diagnostics_blob;
 };
 
+class SlangByteCodeOpaque {
+public:
+    SlangByteCodeOpaque(Slang::ComPtr<slang::IBlob> c, Slang::ComPtr<slang::IBlob> blob);
+    rust::Slice<const uint32_t> get_bytes() const;
+    Slang::ComPtr<slang::IBlob> code;
+    Slang::ComPtr<slang::IBlob> diagnostics_blob;
+};
+
 // a little wrapper class that avoids dyn or unsafe in rust
 // accepts unique pointers to shader components (modules and entry points)
 class SlangComponentListOpaque {
@@ -36,6 +45,7 @@ public:
 class SlangComponentOpaque {
 public:
     SlangComponentOpaque(Slang::ComPtr<slang::IComponentType> comp, Slang::ComPtr<slang::IBlob> blob);
+    std::unique_ptr<SlangByteCodeOpaque> get_target_code() const;
     Slang::ComPtr<slang::IComponentType> component;
     Slang::ComPtr<slang::IBlob> diagnostics_blob;
 };
@@ -55,3 +65,4 @@ private:
 
 std::unique_ptr<SlangComponentListOpaque> new_slang_component_list();
 std::unique_ptr<SlangCompilerOpaque> new_slang_compiler();
+void reflection_test();

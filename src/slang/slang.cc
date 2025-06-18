@@ -35,6 +35,16 @@ std::unique_ptr<SlangEntryPointOpaque> SlangModuleOpaque::find_entry_point_by_na
      return std::unique_ptr<SlangEntryPointOpaque>(new SlangEntryPointOpaque(entry));
 }
 
+SlangByteCodeOpaque::SlangByteCodeOpaque(Slang::ComPtr<slang::IBlob> c, Slang::ComPtr<slang::IBlob> blob):
+    code(c), diagnostics_blob(blob) {}
+
+rust::Slice<const uint32_t> SlangByteCodeOpaque::get_bytes() const {
+    uint32_t const* buffer_start = static_cast<uint32_t const*>(code->getBufferPointer());
+    uint32_t buffer_size = static_cast<uint32_t>(code->getBufferSize()) / 4;
+
+    return rust::Slice<const uint32_t>(buffer_start, buffer_size);
+}
+
 void SlangComponentListOpaque::add_module(std::unique_ptr<SlangModuleOpaque> module) {
     components.push_back(module->module);
 }
@@ -46,12 +56,19 @@ void SlangComponentListOpaque::add_entry_point(std::unique_ptr<SlangEntryPointOp
 SlangComponentOpaque::SlangComponentOpaque(Slang::ComPtr<slang::IComponentType> comp, Slang::ComPtr<slang::IBlob> blob):
     component(comp), diagnostics_blob(blob) {}
 
+std::unique_ptr<SlangByteCodeOpaque> SlangComponentOpaque::get_target_code() const {
+    Slang::ComPtr<slang::IBlob> code;
+    Slang::ComPtr<slang::IBlob> blob;
+    component->getTargetCode(0, code.writeRef(), blob.writeRef());
+    return std::unique_ptr<SlangByteCodeOpaque>(new SlangByteCodeOpaque(code, blob));
+}
+
 SlangCompilerOpaque::SlangCompilerOpaque() {
     createGlobalSession(globalSession.writeRef());
     slang::SessionDesc sessionDesc = {};
     slang::TargetDesc targetDesc = {};
     targetDesc.format = SLANG_SPIRV;
-    targetDesc.profile = globalSession->findProfile("spirv_1_5");
+    targetDesc.profile = globalSession->findProfile("spirv_1_0");
 
     sessionDesc.targets = &targetDesc;
     sessionDesc.targetCount = 1;
@@ -121,6 +138,19 @@ std::unique_ptr<SlangCompilerOpaque> new_slang_compiler() {
   return std::unique_ptr<SlangCompilerOpaque>(new SlangCompilerOpaque());
 }
 
+void reflection_test() {
+    auto compiler = new SlangCompilerOpaque();
+    auto module = compiler->load_module("shaders/hello-world.slang");
+    //auto linked_module = compiler.link_module(module);
+    for (auto decl : module->module->getModuleReflection()->getChildren())
+    {
+        if (auto varDecl = decl->asVariable(); varDecl &&
+                                               varDecl->findModifier(slang::Modifier::Const) &&
+                                               varDecl->findModifier(slang::Modifier::Static))
+        {
+        }
+    }
+}
 
 
 

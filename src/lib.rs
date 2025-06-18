@@ -12,11 +12,8 @@ use winit::window::{WindowAttributes, WindowId};
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ControlFlow::Poll;
 
-#[derive(Clone, Debug, Copy)]
-struct Vertex {
-    pos: [f32; 4],
-    color: [f32; 4],
-}
+
+
 
 #[allow(clippy::too_many_arguments)]
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(

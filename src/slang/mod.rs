@@ -2,7 +2,7 @@ mod shader_cursor;
 
 use ash::Entry;
 use cxx::UniquePtr;
-use crate::slang::interface::{SlangComponentListOpaque, SlangComponentOpaque, SlangEntryPointOpaque, SlangModuleOpaque};
+use crate::slang::interface::{SlangByteCodeOpaque, SlangComponentListOpaque, SlangComponentOpaque, SlangEntryPointOpaque, SlangModuleOpaque};
 
 #[cxx::bridge]
 mod interface {
@@ -10,6 +10,7 @@ mod interface {
         include!("rust-renderer/src/slang/slang.h");
         type SlangEntryPointOpaque;
         type SlangModuleOpaque;
+        type SlangByteCodeOpaque;
         type SlangComponentListOpaque;
         type SlangComponentOpaque;
         type SlangCompilerOpaque;
@@ -21,8 +22,16 @@ mod interface {
         fn link(self: &SlangCompilerOpaque, composed: UniquePtr<SlangComponentOpaque>) -> UniquePtr<SlangComponentOpaque>;
         fn link_module(self: &SlangCompilerOpaque, module: UniquePtr<SlangModuleOpaque>) -> UniquePtr<SlangComponentOpaque>;
         fn find_entry_point_by_name(self: &SlangModuleOpaque, fn_name: &str) -> UniquePtr<SlangEntryPointOpaque>;
+        fn get_bytes(self: &SlangByteCodeOpaque) -> &[u32];
+        fn get_target_code(self: &SlangComponentOpaque) -> UniquePtr<SlangByteCodeOpaque>;
         fn new_slang_component_list() -> UniquePtr<SlangComponentListOpaque>;
     }
+}
+
+pub enum Type {
+    VEC2,
+    VEC3,
+    VEC4,
 }
 
 pub struct Compiler {
@@ -50,15 +59,22 @@ impl Compiler {
     }
 
     pub fn link_composed_program(self: &Self, composed: ComposedProgram) -> LinkedProgram {
-        LinkedProgram {
-            linked_program_ptr: self.compiler_ptr.as_ref().unwrap().link(composed.composed_program_ptr)
-        }
+        LinkedProgram::new(
+            self.compiler_ptr.as_ref().unwrap()
+                .link(composed.composed_program_ptr)
+        )
     }
 
     pub fn link_module(self: &Self, module: Module) -> LinkedProgram {
-        LinkedProgram {
-            linked_program_ptr: self.compiler_ptr.as_ref().unwrap().link_module(module.module_ptr)
-        }
+        LinkedProgram::new(
+            self.compiler_ptr.as_ref().unwrap().link_module(module.module_ptr)
+        )
+    }
+
+    pub fn linked_program_from_file(self: &Self, path: &str) -> LinkedProgram {
+        let module = self.load_module(path);
+
+        self.link_module(module)
     }
 }
 
@@ -95,8 +111,27 @@ pub struct ComposedProgram {
 }
 
 pub struct LinkedProgram {
-    pub linked_program_ptr: UniquePtr<SlangComponentOpaque>
+    pub linked_program_ptr: UniquePtr<SlangComponentOpaque>,
+    pub byte_code_ptr: UniquePtr<SlangByteCodeOpaque>,
 }
+
+impl LinkedProgram {
+    pub fn new(linked_ptr: UniquePtr<SlangComponentOpaque>) -> Self {
+        let byte_ptr = linked_ptr.as_ref().unwrap().get_target_code();
+        Self {
+            linked_program_ptr: linked_ptr,
+            byte_code_ptr: byte_ptr
+        }
+    }
+    pub fn get_bytecode(self: &Self) -> &[u32] {
+        self.byte_code_ptr.as_ref().unwrap().get_bytes()
+    }
+    // pub fn get_entry_point_params(self: &Self, entry: &str) -> Option<>
+    // {
+    //
+    // }
+}
+
 
 pub struct Module {
     pub module_ptr: UniquePtr<SlangModuleOpaque>

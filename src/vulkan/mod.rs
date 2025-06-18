@@ -6,6 +6,8 @@ mod swapchain;
 mod command_buffer;
 mod framebuffer;
 mod render_pass;
+pub mod render_object;
+
 
 pub use instance::*;
 use std::ops::Drop;
@@ -20,7 +22,8 @@ use std::sync::Arc;
 use ash::util::read_spv;
 use ash_window;
 use winit::window::Window;
-use crate::Vertex;
+use render_object::Vertex;
+use crate::slang;
 use crate::vulkan::command_buffer::{CommandBuffers, OneshotCommandBuffer};
 use crate::vulkan::device::Device;
 use crate::vulkan::framebuffer::Framebuffer;
@@ -125,8 +128,7 @@ pub struct VulkanContext {
     pub index_buffer: vk::Buffer,
     pub index_buffer_memory: vk::DeviceMemory,
 
-    pub vertex_shader_module: vk::ShaderModule,
-    pub fragment_shader_module: vk::ShaderModule,
+    pub triangle_shader_module: vk::ShaderModule,
     pub pipeline_layout: vk::PipelineLayout,
 }
 
@@ -263,16 +265,16 @@ impl VulkanContext {
 
         let vertices = [
             Vertex {
-                pos: [-1.0, 1.0, 0.0, 1.0],
-                color: [0.0, 1.0, 0.0, 1.0],
+                pos: [-1.0, 1.0, 0.0],
+                color: [0.0, 1.0, 0.0],
             },
             Vertex {
-                pos: [1.0, 1.0, 0.0, 1.0],
-                color: [0.0, 0.0, 1.0, 1.0],
+                pos: [1.0, 1.0, 0.0],
+                color: [0.0, 0.0, 1.0],
             },
             Vertex {
-                pos: [0.0, -1.0, 0.0, 1.0],
-                color: [1.0, 0.0, 0.0, 1.0],
+                pos: [0.0, -1.0, 0.0],
+                color: [1.0, 0.0, 0.0],
             },
         ];
 
@@ -308,13 +310,21 @@ impl VulkanContext {
             read_spv(&mut frag_spv_file).expect("Failed to read fragment shader spv file");
         let frag_shader_info = vk::ShaderModuleCreateInfo::default().code(&frag_code);
 
-        let vertex_shader_module = device.device
-            .create_shader_module(&vertex_shader_info, None)
+        let compiler = slang::Compiler::new();
+        let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
+        let compiled_triangle_shader = linked_program.get_bytecode();
+
+        let triangle_shader_info = vk::ShaderModuleCreateInfo::default().code(&compiled_triangle_shader);
+        let triangle_shader_module = unsafe { device.device.create_shader_module(&triangle_shader_info, None) }
             .expect("Vertex shader module error");
 
-        let fragment_shader_module = device.device
-            .create_shader_module(&frag_shader_info, None)
-            .expect("Fragment shader module error");
+        // let vertex_shader_module = device.device
+        //     .create_shader_module(&vertex_shader_info, None)
+        //     .expect("Vertex shader module error");
+        //
+        // let fragment_shader_module = device.device
+        //     .create_shader_module(&frag_shader_info, None)
+        //     .expect("Fragment shader module error");
 
         let layout_create_info = vk::PipelineLayoutCreateInfo::default();
 
@@ -322,18 +332,19 @@ impl VulkanContext {
             .create_pipeline_layout(&layout_create_info, None)
             .unwrap();
 
-        let shader_entry_name = c"main";
+        let vertex_entry_name = c"vertexMain";
+        let fragment_entry_name = c"fragmentMain";
         let shader_stage_create_infos = [
             vk::PipelineShaderStageCreateInfo {
-                module: vertex_shader_module,
-                p_name: shader_entry_name.as_ptr(),
+                module: triangle_shader_module,
+                p_name: vertex_entry_name.as_ptr(),
                 stage: vk::ShaderStageFlags::VERTEX,
                 ..Default::default()
             },
             vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-                module: fragment_shader_module,
-                p_name: shader_entry_name.as_ptr(),
+                module: triangle_shader_module,
+                p_name: fragment_entry_name.as_ptr(),
                 stage: vk::ShaderStageFlags::FRAGMENT,
                 ..Default::default()
             },
@@ -347,13 +358,13 @@ impl VulkanContext {
             vk::VertexInputAttributeDescription {
                 location: 0,
                 binding: 0,
-                format: vk::Format::R32G32B32A32_SFLOAT,
+                format: vk::Format::R32G32B32_SFLOAT,
                 offset: std::mem::offset_of!(Vertex, pos) as u32,
             },
             vk::VertexInputAttributeDescription {
                 location: 1,
                 binding: 0,
-                format: vk::Format::R32G32B32A32_SFLOAT,
+                format: vk::Format::R32G32B32_SFLOAT,
                 offset: std::mem::offset_of!(Vertex, color) as u32,
             },
         ];
@@ -466,8 +477,7 @@ impl VulkanContext {
             vertex_input_buffer_memory,
             index_buffer,
             index_buffer_memory,
-            fragment_shader_module,
-            vertex_shader_module,
+            triangle_shader_module,
             pipeline_layout
         }
     }
@@ -500,9 +510,7 @@ impl Drop for VulkanContext {
             self.device.device.device_wait_idle().unwrap();
 
             self.device.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device.device.destroy_shader_module(self.fragment_shader_module, None);
-            self.device.device.destroy_shader_module(self.vertex_shader_module, None);
-
+            self.device.device.destroy_shader_module(self.triangle_shader_module, None);
             self.device.device.free_memory(self.index_buffer_memory, None);
             self.device.device.destroy_buffer(self.index_buffer, None);
 
