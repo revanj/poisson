@@ -6,8 +6,40 @@ use crate::slang::interface::{SlangByteCodeOpaque, SlangComponentListOpaque, Sla
 
 #[cxx::bridge]
 mod interface {
+    pub enum VarType {
+        Float,
+        Vec2_Float,
+        Vec3_Float,
+        Vec4_Float,
+    }
+    enum ShaderStage {
+        Vertex,
+        Fragment,
+        Compute,
+    }
+    struct SlangEntryPoint {
+        ptr: *const IEntryPoint,
+        name: String, // owning string
+        stage: ShaderStage,
+        param_descriptions: Vec<ParamDescription>,
+    }
+
+    struct SlangModule {
+        ptr: *const IModule,
+        entry_points: Vec<SlangEntryPoint>
+    }
+
+    struct ParamDescription {
+        name: String,
+        var_type: VarType
+    }
+
     unsafe extern "C++" {
         include!("rust-renderer/src/slang/slang.h");
+
+        // redeclared slang types
+        type IEntryPoint; type IModule; type IComponentType;
+
         type SlangEntryPointOpaque;
         type SlangModuleOpaque;
         type SlangByteCodeOpaque;
@@ -26,12 +58,6 @@ mod interface {
         fn get_target_code(self: &SlangComponentOpaque) -> UniquePtr<SlangByteCodeOpaque>;
         fn new_slang_component_list() -> UniquePtr<SlangComponentListOpaque>;
     }
-}
-
-pub enum Type {
-    VEC2,
-    VEC3,
-    VEC4,
 }
 
 pub struct Compiler {

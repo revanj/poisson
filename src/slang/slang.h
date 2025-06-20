@@ -11,6 +11,11 @@
 #include <vector>
 #include <cstdint>
 
+using IEntryPoint = slang::IEntryPoint;
+using IModule = slang::IModule;
+using IComponentType = slang::IComponentType;
+
+
 class SlangEntryPointOpaque {
 public:
     SlangEntryPointOpaque(Slang::ComPtr<slang::IEntryPoint> entry);
