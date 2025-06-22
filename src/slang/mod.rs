@@ -1,19 +1,25 @@
 mod shader_cursor;
 
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 use ash::Entry;
 use cxx::UniquePtr;
-use crate::slang::interface::{SlangByteCodeOpaque, SlangComponentListOpaque, SlangComponentOpaque, SlangEntryPointOpaque, SlangModuleOpaque};
+use crate::slang::interface::{ShaderStage, SlangByteCodeOpaque, SlangComponentListOpaque, SlangComponentOpaque, SlangEntryPointOpaque, SlangModuleOpaque, VarType};
 pub use interface::SlangEntryPointReflection;
 pub use interface::SlangProgramReflection;
-pub use interface::SlangParamReflection;
+pub use interface::SlangStructReflection;
+pub use interface::SlangFieldReflection;
 
 #[cxx::bridge]
 mod interface {
+
+    #[derive(Debug)]
     pub enum VarType {
+        Undefined,
         Float,
-        Vec2_Float,
-        Vec3_Float,
-        Vec4_Float,
+        Float2,
+        Float3,
+        Float4,
     }
 
     #[derive(Debug)]
@@ -23,22 +29,35 @@ mod interface {
         Fragment,
         Compute,
     }
+
+    #[derive(Debug)]
     struct SlangEntryPointReflection {
         name: String,
         stage: ShaderStage,
-        // this assumes input is a single struct of primitives
-        param_reflections: Vec<SlangParamReflection>,
+        // everything wrapped in a struct will be structs
+        struct_reflections: Vec<SlangStructReflection>,
+
+        // everything not wrapped in a struct will be in a spare, extra struct
+        misc_reflections: SlangStructReflection,
     }
 
+    #[derive(Debug)]
     struct SlangProgramReflection {
         // this also assumes uniforms are a single struct of primitives
         // which is mostly fine
-        uniform_reflections: Vec<SlangParamReflection>,
+        uniform_reflections: Vec<SlangStructReflection>,
         entry_point_reflections: Vec<SlangEntryPointReflection>
     }
 
+    #[derive(Debug)]
+    struct SlangStructReflection {
+        name: String,
+        fields: Vec<SlangFieldReflection>,
+    }
+
     // a fully general data desc recursive enum class is a bit annoying
-    struct SlangParamReflection {
+    #[derive(Debug)]
+    struct SlangFieldReflection {
         name: String,
         var_type: VarType
     }
@@ -67,6 +86,28 @@ mod interface {
         fn get_target_code(self: &SlangComponentOpaque) -> UniquePtr<SlangByteCodeOpaque>;
         fn new_slang_component_list() -> UniquePtr<SlangComponentListOpaque>;
         fn get_program_reflection(self: &SlangComponentOpaque) -> SlangProgramReflection;
+    }
+}
+
+impl fmt::Display for VarType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for SlangStructReflection {
+    fn fmt(self: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut ret_string = String::new();
+        ret_string.push_str(&self.name);
+        ret_string.push_str(": ");
+        for field in &self.fields {
+            ret_string.push_str(&field.var_type.to_string());
+            ret_string.push(' ');
+            ret_string.push_str(&field.name);
+            ret_string.push_str(", ");
+        }
+
+        write!(f, "{}", ret_string)
     }
 }
 

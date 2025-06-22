@@ -301,12 +301,15 @@ impl VulkanContext {
         let compiler = slang::Compiler::new();
         let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
 
-        // let refl = linked_program.get_reflection();
+        let refl = linked_program.get_reflection();
 
-        // println!("there are {} items in refl", refl.entry_point_reflections.len());
-        // for entry in refl.entry_point_reflections {
-        //     println!("{} is for shader stage {:?}", entry.name, entry.stage);
-        // }
+        println!("there are {} entry points in shader", refl.entry_point_reflections.len());
+        for entry in refl.entry_point_reflections {
+            println!("{:?} shader {}(), with fields", entry.stage, entry.name);
+            for s in entry.struct_reflections {
+                println!("\t{}", s);
+            }
+        }
 
         let compiled_triangle_shader = linked_program.get_bytecode();
 

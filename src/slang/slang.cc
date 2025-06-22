@@ -166,30 +166,93 @@ std::unique_ptr<SlangCompilerOpaque> new_slang_compiler() {
 //        var_type: VarType
 //    }
 
+
 SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
     SlangProgramReflection ret;
     Slang::ComPtr<slang::IBlob> diagnostics;
 
-    std::cout << "entered function" << std::endl;
-
     slang::ProgramLayout* programLayout = component->getLayout(0, diagnostics.writeRef());
+    auto uniform_struct_layout = programLayout->getGlobalParamsVarLayout()->getTypeLayout();
+
+//    // found the uniforms
+//    if (uniform_struct_layout->getKind() == slang::TypeReflection::Kind::Struct) {
+//        int paramCount = uniform_struct_layout->getFieldCount();
+//
+//        entry_refl.misc_reflections.name = rust::String("misc_params");
+//
+//        for (int j = 0; j < paramCount; j++)
+//        {
+//            auto param = input_struct_layout->getFieldByIndex(j);
+//            auto param_type_layout = param->getTypeLayout();
+//
+//            auto param_kind = param_type_layout->getKind(); // slang::TypeReflection::Kind::
+//            auto param_type = param_type_layout->getType(); // slang::TypeReflection*
+//
+//            if (param_kind != slang::TypeReflection::Kind::Struct) {
+//                std::cout << "found misc param" << std::endl;
+//                // put it into misc
+//                continue;
+//            }
+//
+//            SlangStructReflection struct_param;
+//            struct_param.name = rust::String(param->getName());
+//            auto field_count = param_type_layout->getFieldCount();
+//            for (int k = 0; k < field_count; k++) {
+//
+//                auto field = param_type_layout->getFieldByIndex(k);
+//
+//                auto field_type_layout = field->getTypeLayout();
+//                auto field_kind = field_type_layout->getKind(); // slang::TypeReflection::Kind::
+//
+//                SlangFieldReflection field_refl;
+//                field_refl.name = rust::String(field->getName());
+//                field_refl.var_type = VarType::Undefined;
+//
+//                if (field_kind == slang::TypeReflection::Kind::Struct) {
+//                    std::cout << "found overly nested struct!" << std::endl;
+//                    continue;
+//                }
+//
+//                auto field_type = field_type_layout->getType();
+//
+//                switch (field_kind) {
+//                    case slang::TypeReflection::Kind::Vector:
+//                        auto vec_length = field_type->getElementCount();
+//
+//                        auto element_scalar_type = field_type->getElementType()->getScalarType();
+//
+//                        if (element_scalar_type == slang::TypeReflection::ScalarType::Float32) {
+//                            if (vec_length == 2) {
+//                                field_refl.var_type = VarType::Float2;
+//                            } else if (vec_length == 3) {
+//                                field_refl.var_type = VarType::Float3;
+//                            } else if (vec_length == 4) {
+//                                field_refl.var_type = VarType::Float4;
+//                            }
+//                        }
+//                        break;
+//                }
+//
+//                struct_param.fields.push_back(field_refl);
+//            }
+//
+//            entry_refl.struct_reflections.push_back(struct_param);
+//        }
+//    }
+
+
 
     if (diagnostics != nullptr)
-        {
-            std::cout << (const char*)diagnostics->getBufferPointer() << std::endl;
-        }
-
-    std::cout << "got program layout" << std::endl;
-
-
+    {
+        std::cout << (const char*)diagnostics->getBufferPointer() << std::endl;
+    }
 
     int entryPointCount = programLayout->getEntryPointCount();
-
-    std::cout << "got entry point count of " << entryPointCount << std::endl;
 
     for (int i = 0; i < entryPointCount; ++i)
     {
         SlangEntryPointReflection entry_refl;
+
         slang::EntryPointReflection* entryPointLayout = programLayout->getEntryPointByIndex(i);
         SlangStage stage = entryPointLayout->getStage();
         ShaderStage ret_stage;
@@ -209,8 +272,78 @@ SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
         entry_refl.stage = ret_stage;
         entry_refl.name = rust::String(entryPointLayout->getName());
 
+        auto input_struct_layout = entryPointLayout->getVarLayout()->getTypeLayout();
+
+        // this is the normal case that we can handle
+        if (input_struct_layout->getKind() == slang::TypeReflection::Kind::Struct) {
+            int paramCount = input_struct_layout->getFieldCount();
+
+            entry_refl.misc_reflections.name = rust::String("misc_params");
+
+            for (int j = 0; j < paramCount; j++)
+            {
+                auto param = input_struct_layout->getFieldByIndex(j);
+                auto param_type_layout = param->getTypeLayout();
+
+                auto param_kind = param_type_layout->getKind(); // slang::TypeReflection::Kind::
+                auto param_type = param_type_layout->getType(); // slang::TypeReflection*
+
+                if (param_kind != slang::TypeReflection::Kind::Struct) {
+                    std::cout << "found misc param" << std::endl;
+                    // put it into misc
+                    continue;
+                }
+
+                SlangStructReflection struct_param;
+                struct_param.name = rust::String(param->getName());
+                auto field_count = param_type_layout->getFieldCount();
+                for (int k = 0; k < field_count; k++) {
+
+                    auto field = param_type_layout->getFieldByIndex(k);
+
+                    auto field_type_layout = field->getTypeLayout();
+                    auto field_kind = field_type_layout->getKind(); // slang::TypeReflection::Kind::
+
+                    SlangFieldReflection field_refl;
+                    field_refl.name = rust::String(field->getName());
+                    field_refl.var_type = VarType::Undefined;
+
+                    if (field_kind == slang::TypeReflection::Kind::Struct) {
+                        std::cout << "found overly nested struct!" << std::endl;
+                        continue;
+                    }
+
+                    auto field_type = field_type_layout->getType();
+
+                    switch (field_kind) {
+                        case slang::TypeReflection::Kind::Vector:
+                            auto vec_length = field_type->getElementCount();
+
+                            auto element_scalar_type = field_type->getElementType()->getScalarType();
+
+                            if (element_scalar_type == slang::TypeReflection::ScalarType::Float32) {
+                                if (vec_length == 2) {
+                                    field_refl.var_type = VarType::Float2;
+                                } else if (vec_length == 3) {
+                                    field_refl.var_type = VarType::Float3;
+                                } else if (vec_length == 4) {
+                                    field_refl.var_type = VarType::Float4;
+                                }
+                            }
+                            break;
+                    }
+
+                    struct_param.fields.push_back(field_refl);
+                }
+
+                entry_refl.struct_reflections.push_back(struct_param);
+            }
+        }
+
         ret.entry_point_reflections.push_back(entry_refl);
     }
+
+
 
     return ret;
 }
