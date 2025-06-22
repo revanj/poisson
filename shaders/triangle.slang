@@ -3,6 +3,12 @@
 //    float4x4 modelViewProjection;
 // }
 
+struct DummyVertex {
+    float3 dum;
+    float3 another_dum;
+    float3 third_dum;
+}
+
 struct AssembledVertex
 {
     float3	position : POSITION;
@@ -27,7 +33,7 @@ struct VertexStageOutput
 
 [shader("vertex")]
 VertexStageOutput vertexMain(
-    AssembledVertex assembledVertex)
+    AssembledVertex assembledVertex, DummyVertex dummyVertex)
 {
     VertexStageOutput output;
 

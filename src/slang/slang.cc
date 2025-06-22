@@ -287,6 +287,8 @@ SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
 
                 auto param_kind = param_type_layout->getKind(); // slang::TypeReflection::Kind::
                 auto param_type = param_type_layout->getType(); // slang::TypeReflection*
+                auto param_layout_unit = param_type_layout->getCategoryByIndex(0);
+                auto param_offset = param->getOffset(param_layout_unit);
 
                 if (param_kind != slang::TypeReflection::Kind::Struct) {
                     std::cout << "found misc param" << std::endl;
@@ -296,16 +298,23 @@ SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
 
                 SlangStructReflection struct_param;
                 struct_param.name = rust::String(param->getName());
+                struct_param.binding = j;
                 auto field_count = param_type_layout->getFieldCount();
                 for (int k = 0; k < field_count; k++) {
 
                     auto field = param_type_layout->getFieldByIndex(k);
 
                     auto field_type_layout = field->getTypeLayout();
+
+                    auto field_layout_unit = field_type_layout->getCategoryByIndex(0);
+
+                    auto field_offset = field->getOffset(field_layout_unit);
+
                     auto field_kind = field_type_layout->getKind(); // slang::TypeReflection::Kind::
 
                     SlangFieldReflection field_refl;
                     field_refl.name = rust::String(field->getName());
+                    field_refl.location = field_offset + param_offset;
                     field_refl.var_type = VarType::Undefined;
 
                     if (field_kind == slang::TypeReflection::Kind::Struct) {

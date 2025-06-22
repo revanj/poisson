@@ -52,6 +52,7 @@ mod interface {
     #[derive(Debug)]
     struct SlangStructReflection {
         name: String,
+        binding: u32,
         fields: Vec<SlangFieldReflection>,
     }
 
@@ -59,6 +60,7 @@ mod interface {
     #[derive(Debug)]
     struct SlangFieldReflection {
         name: String,
+        location: u32,
         var_type: VarType
     }
 
@@ -98,9 +100,15 @@ impl fmt::Display for VarType {
 impl fmt::Display for SlangStructReflection {
     fn fmt(self: &Self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut ret_string = String::new();
+        ret_string.push_str("binding: ");
+        ret_string.push_str(&self.binding.to_string());
+        ret_string.push_str(", ");
         ret_string.push_str(&self.name);
         ret_string.push_str(": ");
         for field in &self.fields {
+            ret_string.push_str("location: ");
+            ret_string.push_str(&field.location.to_string());
+            ret_string.push_str(", ");
             ret_string.push_str(&field.var_type.to_string());
             ret_string.push(' ');
             ret_string.push_str(&field.name);
