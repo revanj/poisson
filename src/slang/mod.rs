@@ -109,8 +109,14 @@ impl Compiler {
 
     pub fn linked_program_from_file(self: &Self, path: &str) -> LinkedProgram {
         let module = self.load_module(path);
-
-        self.link_module(module)
+        let mut to_compose = ComponentList::new();
+        for idx in 0..module.get_entry_point_count() {
+            let entry = module.get_entry_point_by_index(idx);
+            to_compose.add_entry_point(entry.unwrap());
+        }
+        to_compose.add_module(module);
+        let composed = self.compose_components(to_compose);
+        self.link_composed_program(composed)
     }
 }
 
