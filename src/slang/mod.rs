@@ -3,6 +3,9 @@ mod shader_cursor;
 use ash::Entry;
 use cxx::UniquePtr;
 use crate::slang::interface::{SlangByteCodeOpaque, SlangComponentListOpaque, SlangComponentOpaque, SlangEntryPointOpaque, SlangModuleOpaque};
+pub use interface::SlangEntryPointReflection;
+pub use interface::SlangProgramReflection;
+pub use interface::SlangParamReflection;
 
 #[cxx::bridge]
 mod interface {
@@ -12,24 +15,30 @@ mod interface {
         Vec3_Float,
         Vec4_Float,
     }
+
+    #[derive(Debug)]
     enum ShaderStage {
+        None,
         Vertex,
         Fragment,
         Compute,
     }
-    struct SlangEntryPoint {
-        ptr: *const IEntryPoint,
-        name: String, // owning string
+    struct SlangEntryPointReflection {
+        name: String,
         stage: ShaderStage,
-        param_descriptions: Vec<ParamDescription>,
+        // this assumes input is a single struct of primitives
+        param_reflections: Vec<SlangParamReflection>,
     }
 
-    struct SlangModule {
-        ptr: *const IModule,
-        entry_points: Vec<SlangEntryPoint>
+    struct SlangProgramReflection {
+        // this also assumes uniforms are a single struct of primitives
+        // which is mostly fine
+        uniform_reflections: Vec<SlangParamReflection>,
+        entry_point_reflections: Vec<SlangEntryPointReflection>
     }
 
-    struct ParamDescription {
+    // a fully general data desc recursive enum class is a bit annoying
+    struct SlangParamReflection {
         name: String,
         var_type: VarType
     }
@@ -37,15 +46,13 @@ mod interface {
     unsafe extern "C++" {
         include!("rust-renderer/src/slang/slang.h");
 
-        // redeclared slang types
-        type IEntryPoint; type IModule; type IComponentType;
-
         type SlangEntryPointOpaque;
         type SlangModuleOpaque;
         type SlangByteCodeOpaque;
         type SlangComponentListOpaque;
         type SlangComponentOpaque;
         type SlangCompilerOpaque;
+
         fn new_slang_compiler() -> UniquePtr<SlangCompilerOpaque>;
         fn load_module(self: &SlangCompilerOpaque, path_name: &str) -> UniquePtr<SlangModuleOpaque>;
         fn add_module(self: Pin<&mut SlangComponentListOpaque>, module: UniquePtr<SlangModuleOpaque>);
@@ -54,9 +61,12 @@ mod interface {
         fn link(self: &SlangCompilerOpaque, composed: UniquePtr<SlangComponentOpaque>) -> UniquePtr<SlangComponentOpaque>;
         fn link_module(self: &SlangCompilerOpaque, module: UniquePtr<SlangModuleOpaque>) -> UniquePtr<SlangComponentOpaque>;
         fn find_entry_point_by_name(self: &SlangModuleOpaque, fn_name: &str) -> UniquePtr<SlangEntryPointOpaque>;
+        fn get_entry_point_count(self: &SlangModuleOpaque) -> u32;
+        fn get_entry_point_by_index(self: &SlangModuleOpaque, idx: u32) -> UniquePtr<SlangEntryPointOpaque>;
         fn get_bytes(self: &SlangByteCodeOpaque) -> &[u32];
         fn get_target_code(self: &SlangComponentOpaque) -> UniquePtr<SlangByteCodeOpaque>;
         fn new_slang_component_list() -> UniquePtr<SlangComponentListOpaque>;
+        fn get_program_reflection(self: &SlangComponentOpaque) -> SlangProgramReflection;
     }
 }
 
@@ -103,7 +113,6 @@ impl Compiler {
         self.link_module(module)
     }
 }
-
 
 pub struct EntryPoint {
     pub entry_ptr: UniquePtr<SlangEntryPointOpaque>
@@ -152,10 +161,10 @@ impl LinkedProgram {
     pub fn get_bytecode(self: &Self) -> &[u32] {
         self.byte_code_ptr.as_ref().unwrap().get_bytes()
     }
-    // pub fn get_entry_point_params(self: &Self, entry: &str) -> Option<>
-    // {
-    //
-    // }
+
+    pub fn get_reflection(self: &Self) -> SlangProgramReflection {
+        self.linked_program_ptr.get_program_reflection()
+    }
 }
 
 
@@ -166,7 +175,24 @@ pub struct Module {
 impl Module {
     pub fn find_entry_point_by_name(self: &Self, fn_name: &str) -> Option<EntryPoint> {
         let opaque_entry = self.module_ptr.as_ref().unwrap().find_entry_point_by_name(fn_name);
-        Some(EntryPoint { entry_ptr: opaque_entry })
+        if opaque_entry.is_null() {
+            None
+        } else {
+            Some(EntryPoint { entry_ptr: opaque_entry })
+        }
+    }
+
+    pub fn get_entry_point_count(self: &Self) -> u32 {
+        self.module_ptr.as_ref().unwrap().get_entry_point_count()
+    }
+
+    pub fn get_entry_point_by_index(self: &Self, idx: u32) -> Option<EntryPoint> {
+        let opaque_entry = self.module_ptr.as_ref().unwrap().get_entry_point_by_index(idx);
+        if opaque_entry.is_null() {
+            None
+        } else {
+            Some(EntryPoint { entry_ptr: opaque_entry })
+        }
     }
 }
 

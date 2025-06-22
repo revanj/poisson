@@ -298,33 +298,21 @@ impl VulkanContext {
             .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
             .unwrap();
 
-        let mut vertex_spv_file =
-            Cursor::new(&include_bytes!("../../shaders/vert.spv")[..]);
-        let mut frag_spv_file = Cursor::new(&include_bytes!("../../shaders/frag.spv")[..]);
-
-        let vertex_code =
-            read_spv(&mut vertex_spv_file).expect("Failed to read vertex shader spv file");
-        let vertex_shader_info = vk::ShaderModuleCreateInfo::default().code(&vertex_code);
-
-        let frag_code =
-            read_spv(&mut frag_spv_file).expect("Failed to read fragment shader spv file");
-        let frag_shader_info = vk::ShaderModuleCreateInfo::default().code(&frag_code);
-
         let compiler = slang::Compiler::new();
         let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
+
+        // let refl = linked_program.get_reflection();
+
+        // println!("there are {} items in refl", refl.entry_point_reflections.len());
+        // for entry in refl.entry_point_reflections {
+        //     println!("{} is for shader stage {:?}", entry.name, entry.stage);
+        // }
+
         let compiled_triangle_shader = linked_program.get_bytecode();
 
         let triangle_shader_info = vk::ShaderModuleCreateInfo::default().code(&compiled_triangle_shader);
         let triangle_shader_module = unsafe { device.device.create_shader_module(&triangle_shader_info, None) }
             .expect("Vertex shader module error");
-
-        // let vertex_shader_module = device.device
-        //     .create_shader_module(&vertex_shader_info, None)
-        //     .expect("Vertex shader module error");
-        //
-        // let fragment_shader_module = device.device
-        //     .create_shader_module(&frag_shader_info, None)
-        //     .expect("Fragment shader module error");
 
         let layout_create_info = vk::PipelineLayoutCreateInfo::default();
 

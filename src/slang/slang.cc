@@ -4,17 +4,11 @@
 #include "rust-renderer/external/slang/include/slang-com-ptr.h"
 #include "rust-renderer/external/slang/include/slang-com-helper.h"
 
+#include "rust-renderer/src/slang/mod.rs.h"
+
 #include <iostream>
 #include <array>
 
-const char* shortestShader =
-"RWStructuredBuffer<float> result;"
-"[shader(\"compute\")]"
-"[numthreads(1,1,1)]"
-"void computeMain(uint3 threadId : SV_DispatchThreadID)"
-"{"
-"    result[threadId.x] = threadId.x;"
-"}";
 
 SlangEntryPointOpaque::SlangEntryPointOpaque(
     Slang::ComPtr<slang::IEntryPoint> entry):
@@ -24,15 +18,30 @@ SlangModuleOpaque::SlangModuleOpaque(Slang::ComPtr<slang::IModule> mod, Slang::C
     : module(mod), diagnostics_blob(blob) {}
 
 std::unique_ptr<SlangEntryPointOpaque> SlangModuleOpaque::find_entry_point_by_name(rust::Str name) const {
-     Slang::ComPtr<slang::IEntryPoint> entry;
-     module->findEntryPointByName(((std::string)name).c_str(), entry.writeRef());
+    Slang::ComPtr<slang::IEntryPoint> entry;
+    module->findEntryPointByName(((std::string)name).c_str(), entry.writeRef());
 
-     if (!entry)
-     {
+    if (!entry){
+       std::cout << "no entry point!" << std::endl;
+    }
+
+    return std::unique_ptr<SlangEntryPointOpaque>(new SlangEntryPointOpaque(entry));
+}
+
+uint32_t SlangModuleOpaque::get_entry_point_count() const {
+    return module->getDefinedEntryPointCount();
+}
+
+std::unique_ptr<SlangEntryPointOpaque> SlangModuleOpaque::get_entry_point_by_index(uint32_t idx) const {
+    Slang::ComPtr<slang::IEntryPoint> entry;
+    module->getDefinedEntryPoint(idx, entry.writeRef());
+
+    if (!entry) {
         std::cout << "no entry point!" << std::endl;
-     }
+        return std::unique_ptr<SlangEntryPointOpaque>(nullptr);
+    }
 
-     return std::unique_ptr<SlangEntryPointOpaque>(new SlangEntryPointOpaque(entry));
+    return std::unique_ptr<SlangEntryPointOpaque>(new SlangEntryPointOpaque(entry));
 }
 
 SlangByteCodeOpaque::SlangByteCodeOpaque(Slang::ComPtr<slang::IBlob> c, Slang::ComPtr<slang::IBlob> blob):
@@ -138,104 +147,70 @@ std::unique_ptr<SlangCompilerOpaque> new_slang_compiler() {
   return std::unique_ptr<SlangCompilerOpaque>(new SlangCompilerOpaque());
 }
 
-void reflection_test() {
-    auto compiler = new SlangCompilerOpaque();
-    auto module = compiler->load_module("shaders/hello-world.slang");
-    //auto linked_module = compiler.link_module(module);
-    for (auto decl : module->module->getModuleReflection()->getChildren())
-    {
-        if (auto varDecl = decl->asVariable(); varDecl &&
-                                               varDecl->findModifier(slang::Modifier::Const) &&
-                                               varDecl->findModifier(slang::Modifier::Static))
+// struct SlangEntryPointReflection {
+//        name: String,
+//        stage: ShaderStage,
+//        param_reflections: Vec<SlangParamReflection>,
+//    }
+//
+//    struct SlangProgramReflection {
+//        // this also assumes uniforms are a single struct of primitives
+//        // which is mostly fine
+//        uniform_reflections: Vec<SlangParamReflection>,
+//        entry_point_reflections: Vec<SlangEntryPointReflection>
+//    }
+//
+//    // a fully general data desc recursive enum class is a bit annoying
+//    struct SlangParamReflection {
+//        name: String,
+//        var_type: VarType
+//    }
+
+SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
+    SlangProgramReflection ret;
+    Slang::ComPtr<slang::IBlob> diagnostics;
+
+    std::cout << "entered function" << std::endl;
+
+    slang::ProgramLayout* programLayout = component->getLayout(0, diagnostics.writeRef());
+
+    if (diagnostics != nullptr)
         {
+            std::cout << (const char*)diagnostics->getBufferPointer() << std::endl;
         }
+
+    std::cout << "got program layout" << std::endl;
+
+
+
+    int entryPointCount = programLayout->getEntryPointCount();
+
+    std::cout << "got entry point count of " << entryPointCount << std::endl;
+
+    for (int i = 0; i < entryPointCount; ++i)
+    {
+        SlangEntryPointReflection entry_refl;
+        slang::EntryPointReflection* entryPointLayout = programLayout->getEntryPointByIndex(i);
+        SlangStage stage = entryPointLayout->getStage();
+        ShaderStage ret_stage;
+        switch (stage) {
+            case SLANG_STAGE_VERTEX:
+                ret_stage = ShaderStage::Vertex;
+                break;
+            case SLANG_STAGE_FRAGMENT:
+                ret_stage = ShaderStage::Fragment;
+                break;
+            case SLANG_STAGE_COMPUTE:
+                ret_stage = ShaderStage::Compute;
+                break;
+            default:
+                ret_stage = ShaderStage::None;
+        }
+        entry_refl.stage = ret_stage;
+        entry_refl.name = rust::String(entryPointLayout->getName());
+
+        ret.entry_point_reflections.push_back(entry_refl);
     }
+
+    return ret;
 }
-
-
-
-
-//void diagnoseIfNeeded(slang::IBlob* diagnosticsBlob)
-//{
-//
-//}
-
-
-//int compile() {
-//    Slang::ComPtr<slang::IModule> slangModule;
-//    {
-//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-//        slangModule = session->loadModuleFromSourceString(
-//            "shortest",                  // Module name
-//            "shortest.slang",            // Module path
-//            shortestShader,              // Shader source code
-//            diagnosticsBlob.writeRef()); // Optional diagnostic container
-//        diagnoseIfNeeded(diagnosticsBlob);
-//        if (!slangModule)
-//        {
-//            return -1;
-//        }
-//    }
-//
-//    // 4. Query Entry Points
-//    Slang::ComPtr<slang::IEntryPoint> entryPoint;
-//    {
-//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-//        slangModule->findEntryPointByName("computeMain", entryPoint.writeRef());
-//        if (!entryPoint)
-//        {
-//            std::cout << "Error getting entry point" << std::endl;
-//            return -1;
-//        }
-//    }
-//
-//    // 5. Compose Modules + Entry Points
-//    std::array<slang::IComponentType*, 2> componentTypes =
-//        {
-//            slangModule,
-//            entryPoint
-//        };
-//
-//    Slang::ComPtr<slang::IComponentType> composedProgram;
-//    {
-//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-//        SlangResult result = session->createCompositeComponentType(
-//            componentTypes.data(),
-//            componentTypes.size(),
-//            composedProgram.writeRef(),
-//            diagnosticsBlob.writeRef());
-//        diagnoseIfNeeded(diagnosticsBlob);
-//        SLANG_RETURN_ON_FAIL(result);
-//    }
-//
-//    // 6. Link
-//    Slang::ComPtr<slang::IComponentType> linkedProgram;
-//    {
-//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-//        SlangResult result = composedProgram->link(
-//            linkedProgram.writeRef(),
-//            diagnosticsBlob.writeRef());
-//        diagnoseIfNeeded(diagnosticsBlob);
-//        SLANG_RETURN_ON_FAIL(result);
-//    }
-//
-//    // 7. Get Target Kernel Code
-//    Slang::ComPtr<slang::IBlob> spirvCode;
-//    {
-//        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-//        SlangResult result = linkedProgram->getEntryPointCode(
-//            0,
-//            0,
-//            spirvCode.writeRef(),
-//            diagnosticsBlob.writeRef());
-//        diagnoseIfNeeded(diagnosticsBlob);
-//        SLANG_RETURN_ON_FAIL(result);
-//    }
-//
-//    std::cout << "Compiled " << spirvCode->getBufferSize() << " bytes of SPIR-V" << std::endl;
-//    return 0;
-//}
-
-//std::unique_ptr<BlobstoreClient> new_blobstore_client() {
-//  return std::unique_ptr<BlobstoreClient>(new BlobstoreClient());
-//}

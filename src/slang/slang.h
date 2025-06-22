@@ -11,10 +11,7 @@
 #include <vector>
 #include <cstdint>
 
-using IEntryPoint = slang::IEntryPoint;
-using IModule = slang::IModule;
-using IComponentType = slang::IComponentType;
-
+struct SlangProgramReflection;
 
 class SlangEntryPointOpaque {
 public:
@@ -26,6 +23,8 @@ class SlangModuleOpaque {
 public:
     SlangModuleOpaque(Slang::ComPtr<slang::IModule> mod, Slang::ComPtr<slang::IBlob> blob);
     std::unique_ptr<SlangEntryPointOpaque> find_entry_point_by_name(rust::Str name) const;
+    uint32_t get_entry_point_count() const;
+    std::unique_ptr<SlangEntryPointOpaque> get_entry_point_by_index(uint32_t idx) const;
     Slang::ComPtr<slang::IModule> module;
     Slang::ComPtr<slang::IBlob> diagnostics_blob;
 };
@@ -51,8 +50,10 @@ class SlangComponentOpaque {
 public:
     SlangComponentOpaque(Slang::ComPtr<slang::IComponentType> comp, Slang::ComPtr<slang::IBlob> blob);
     std::unique_ptr<SlangByteCodeOpaque> get_target_code() const;
+    SlangProgramReflection get_program_reflection() const;
     Slang::ComPtr<slang::IComponentType> component;
     Slang::ComPtr<slang::IBlob> diagnostics_blob;
+
 };
 
 class SlangCompilerOpaque {
@@ -70,4 +71,3 @@ private:
 
 std::unique_ptr<SlangComponentListOpaque> new_slang_component_list();
 std::unique_ptr<SlangCompilerOpaque> new_slang_compiler();
-void reflection_test();
