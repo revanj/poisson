@@ -8,24 +8,25 @@
 
 #include <iostream>
 #include <array>
+#include <utility>
 
 
 SlangEntryPointOpaque::SlangEntryPointOpaque(
     Slang::ComPtr<slang::IEntryPoint> entry):
-        entry_point(entry) {}
+        entry_point(std::move(entry)) {}
 
 SlangModuleOpaque::SlangModuleOpaque(Slang::ComPtr<slang::IModule> mod, Slang::ComPtr<slang::IBlob> blob)
-    : module(mod), diagnostics_blob(blob) {}
+    : module(std::move(mod)), diagnostics_blob(std::move(blob)) {}
 
 std::unique_ptr<SlangEntryPointOpaque> SlangModuleOpaque::find_entry_point_by_name(rust::Str name) const {
     Slang::ComPtr<slang::IEntryPoint> entry;
-    module->findEntryPointByName(((std::string)name).c_str(), entry.writeRef());
+    module->findEntryPointByName(static_cast<std::string>(name).c_str(), entry.writeRef());
 
     if (!entry){
        std::cout << "no entry point!" << std::endl;
     }
 
-    return std::unique_ptr<SlangEntryPointOpaque>(new SlangEntryPointOpaque(entry));
+    return std::make_unique<SlangEntryPointOpaque>(entry);
 }
 
 uint32_t SlangModuleOpaque::get_entry_point_count() const {
@@ -34,24 +35,24 @@ uint32_t SlangModuleOpaque::get_entry_point_count() const {
 
 std::unique_ptr<SlangEntryPointOpaque> SlangModuleOpaque::get_entry_point_by_index(uint32_t idx) const {
     Slang::ComPtr<slang::IEntryPoint> entry;
-    module->getDefinedEntryPoint(idx, entry.writeRef());
+    module->getDefinedEntryPoint(static_cast<SlangInt32>(idx), entry.writeRef());
 
     if (!entry) {
         std::cout << "no entry point!" << std::endl;
-        return std::unique_ptr<SlangEntryPointOpaque>(nullptr);
+        return {nullptr};
     }
 
-    return std::unique_ptr<SlangEntryPointOpaque>(new SlangEntryPointOpaque(entry));
+    return std::make_unique<SlangEntryPointOpaque>(entry);
 }
 
 SlangByteCodeOpaque::SlangByteCodeOpaque(Slang::ComPtr<slang::IBlob> c, Slang::ComPtr<slang::IBlob> blob):
-    code(c), diagnostics_blob(blob) {}
+    code(std::move(c)), diagnostics_blob(std::move(blob)) {}
 
 rust::Slice<const uint32_t> SlangByteCodeOpaque::get_bytes() const {
-    uint32_t const* buffer_start = static_cast<uint32_t const*>(code->getBufferPointer());
+    auto buffer_start = static_cast<uint32_t const*>(code->getBufferPointer());
     uint32_t buffer_size = static_cast<uint32_t>(code->getBufferSize()) / 4;
 
-    return rust::Slice<const uint32_t>(buffer_start, buffer_size);
+    return {buffer_start, buffer_size};
 }
 
 void SlangComponentListOpaque::add_module(std::unique_ptr<SlangModuleOpaque> module) {
@@ -63,13 +64,13 @@ void SlangComponentListOpaque::add_entry_point(std::unique_ptr<SlangEntryPointOp
 }
 
 SlangComponentOpaque::SlangComponentOpaque(Slang::ComPtr<slang::IComponentType> comp, Slang::ComPtr<slang::IBlob> blob):
-    component(comp), diagnostics_blob(blob) {}
+    component(std::move(comp)), diagnostics_blob(std::move(blob)) {}
 
 std::unique_ptr<SlangByteCodeOpaque> SlangComponentOpaque::get_target_code() const {
     Slang::ComPtr<slang::IBlob> code;
     Slang::ComPtr<slang::IBlob> blob;
     component->getTargetCode(0, code.writeRef(), blob.writeRef());
-    return std::unique_ptr<SlangByteCodeOpaque>(new SlangByteCodeOpaque(code, blob));
+    return std::make_unique<SlangByteCodeOpaque>(code, blob);
 }
 
 SlangCompilerOpaque::SlangCompilerOpaque() {
@@ -99,14 +100,14 @@ SlangCompilerOpaque::SlangCompilerOpaque() {
 std::unique_ptr<SlangModuleOpaque> SlangCompilerOpaque::load_module(rust::Str path_name) const {
     Slang::ComPtr<slang::IModule> mod;
     Slang::ComPtr<slang::IBlob> blob;
-    mod = session->loadModule(((std::string)path_name).c_str(), blob.writeRef());
+    mod = session->loadModule(static_cast<std::string>(path_name).c_str(), blob.writeRef());
     if (blob != nullptr)
     {
-        std::cout << (const char*)blob->getBufferPointer() << std::endl;
+        std::cout << static_cast<const char*>(blob->getBufferPointer()) << std::endl;
     } else {
         std::cout << "successfully compiled module" << std::endl;
     }
-    return std::unique_ptr<SlangModuleOpaque>(new SlangModuleOpaque(mod, blob));
+    return std::make_unique<SlangModuleOpaque>(mod, blob);
 }
 
 std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::compose(std::unique_ptr<SlangComponentListOpaque> list) const {
@@ -114,11 +115,11 @@ std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::compose(std::unique_p
     Slang::ComPtr<slang::IBlob> diagnosticsBlob;
     session->createCompositeComponentType(
         list->components.data(),
-        list->components.size(),
+        static_cast<SlangInt32>(list->components.size()),
         composedProgram.writeRef(),
         diagnosticsBlob.writeRef());
 
-    return std::unique_ptr<SlangComponentOpaque>(new SlangComponentOpaque(composedProgram, diagnosticsBlob));
+    return std::make_unique<SlangComponentOpaque>(composedProgram, diagnosticsBlob);
 }
 
 std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::link(std::unique_ptr<SlangComponentOpaque> composed) const {
@@ -127,7 +128,7 @@ std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::link(std::unique_ptr<
     composed->component->link(
         linkedProgram.writeRef(),
         diagnosticsBlob.writeRef());
-    return std::unique_ptr<SlangComponentOpaque>(new SlangComponentOpaque(linkedProgram, diagnosticsBlob));
+    return std::make_unique<SlangComponentOpaque>(linkedProgram, diagnosticsBlob);
 }
 
 std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::link_module(std::unique_ptr<SlangModuleOpaque> module) const {
@@ -136,15 +137,15 @@ std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::link_module(std::uniq
     module->module->link(
         linkedProgram.writeRef(),
         diagnosticsBlob.writeRef());
-    return std::unique_ptr<SlangComponentOpaque>(new SlangComponentOpaque(linkedProgram, diagnosticsBlob));
+    return std::make_unique<SlangComponentOpaque>(linkedProgram, diagnosticsBlob);
 }
 
 std::unique_ptr<SlangComponentListOpaque> new_slang_component_list() {
-    return std::unique_ptr<SlangComponentListOpaque>(new SlangComponentListOpaque());
+    return std::make_unique<SlangComponentListOpaque>();
 }
 
 std::unique_ptr<SlangCompilerOpaque> new_slang_compiler() {
-  return std::unique_ptr<SlangCompilerOpaque>(new SlangCompilerOpaque());
+  return std::make_unique<SlangCompilerOpaque>();
 }
 
 // struct SlangEntryPointReflection {
@@ -247,7 +248,7 @@ SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
         std::cout << (const char*)diagnostics->getBufferPointer() << std::endl;
     }
 
-    int entryPointCount = programLayout->getEntryPointCount();
+    const auto entryPointCount = programLayout->getEntryPointCount();
 
     for (int i = 0; i < entryPointCount; ++i)
     {
@@ -272,23 +273,23 @@ SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
         entry_refl.stage = ret_stage;
         entry_refl.name = rust::String(entryPointLayout->getName());
 
-        auto input_struct_layout = entryPointLayout->getVarLayout()->getTypeLayout();
+        const auto input_struct_layout = entryPointLayout->getVarLayout()->getTypeLayout();
 
         // this is the normal case that we can handle
         if (input_struct_layout->getKind() == slang::TypeReflection::Kind::Struct) {
-            int paramCount = input_struct_layout->getFieldCount();
+            const auto paramCount = input_struct_layout->getFieldCount();
 
             entry_refl.misc_reflections.name = rust::String("misc_params");
 
             for (int j = 0; j < paramCount; j++)
             {
-                auto param = input_struct_layout->getFieldByIndex(j);
-                auto param_type_layout = param->getTypeLayout();
+                const auto param = input_struct_layout->getFieldByIndex(j);
+                const auto param_type_layout = param->getTypeLayout();
 
-                auto param_kind = param_type_layout->getKind(); // slang::TypeReflection::Kind::
-                auto param_type = param_type_layout->getType(); // slang::TypeReflection*
-                auto param_layout_unit = param_type_layout->getCategoryByIndex(0);
-                auto param_offset = param->getOffset(param_layout_unit);
+                const auto param_kind = param_type_layout->getKind(); // slang::TypeReflection::Kind::
+                const auto param_type = param_type_layout->getType(); // slang::TypeReflection*
+                const auto param_layout_unit = param_type_layout->getCategoryByIndex(0);
+                const auto param_offset = param->getOffset(param_layout_unit);
 
                 if (param_kind != slang::TypeReflection::Kind::Struct) {
                     std::cout << "found misc param" << std::endl;
@@ -299,18 +300,18 @@ SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
                 SlangStructReflection struct_param;
                 struct_param.name = rust::String(param->getName());
                 struct_param.binding = j;
-                auto field_count = param_type_layout->getFieldCount();
+                const auto field_count = param_type_layout->getFieldCount();
                 for (int k = 0; k < field_count; k++) {
 
-                    auto field = param_type_layout->getFieldByIndex(k);
+                    const auto field = param_type_layout->getFieldByIndex(k);
 
-                    auto field_type_layout = field->getTypeLayout();
+                    const auto field_type_layout = field->getTypeLayout();
 
-                    auto field_layout_unit = field_type_layout->getCategoryByIndex(0);
+                    const auto field_layout_unit = field_type_layout->getCategoryByIndex(0);
 
-                    auto field_offset = field->getOffset(field_layout_unit);
+                    const auto field_offset = field->getOffset(field_layout_unit);
 
-                    auto field_kind = field_type_layout->getKind(); // slang::TypeReflection::Kind::
+                    const auto field_kind = field_type_layout->getKind(); // slang::TypeReflection::Kind::
 
                     SlangFieldReflection field_refl;
                     field_refl.name = rust::String(field->getName());
@@ -322,7 +323,7 @@ SlangProgramReflection SlangComponentOpaque::get_program_reflection() const {
                         continue;
                     }
 
-                    auto field_type = field_type_layout->getType();
+                    const auto field_type = field_type_layout->getType();
 
                     switch (field_kind) {
                         case slang::TypeReflection::Kind::Vector:
