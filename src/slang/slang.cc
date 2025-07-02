@@ -140,6 +140,7 @@ std::unique_ptr<SlangComponentOpaque> SlangCompilerOpaque::link_module(std::uniq
     return std::make_unique<SlangComponentOpaque>(linkedProgram, diagnosticsBlob);
 }
 
+
 std::unique_ptr<SlangComponentListOpaque> new_slang_component_list() {
     return std::make_unique<SlangComponentListOpaque>();
 }

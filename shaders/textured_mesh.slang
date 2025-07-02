@@ -1,19 +1,14 @@
-struct Uniform
+struct Uniforms
 {
     float4x4 model;
     float4x4 view;
     float4x4 projection;
 }
 
-struct AssembledVertex
+struct VertexInput
 {
-    float3	position : POSITION;
-    float3	color    : COLOR;
-};
-
-struct CoarseVertex
-{
-    float3 color;
+    float3	position;
+    float3	color;
 };
 
 struct Fragment
@@ -21,24 +16,22 @@ struct Fragment
     float4 color;
 };
 
-struct VertexStageOutput
+struct VertexOutput
 {
-    CoarseVertex    coarseVertex    : CoarseVertex;
+    float3          color;
     float4          sv_position     : SV_Position;
 };
 
 [shader("vertex")]
-VertexStageOutput vertexMain(
-    ParameterBlock<Uniform> uniform,
-    AssembledVertex assembledVertex)
+VertexOutput vertex_main(VertexInput input)
 {
-    VertexStageOutput output;
+    VertexOutput output;
 
     float3 position = assembledVertex.position;
     float3 color    = assembledVertex.color;
 
-    output.coarseVertex.color = color;
-    output.sv_position = mul(modelViewProjection, float4(position, 1.0));
+    output.color = color;
+    output.sv_position = float4(position, 1.0);
 
     return output;
 }

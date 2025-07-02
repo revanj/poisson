@@ -1,12 +1,8 @@
-// cbuffer Uniforms
-// {
-//    float4x4 modelViewProjection;
-// }
-
-struct DummyVertex {
-    float3 dum;
-    float3 another_dum;
-    float3 third_dum;
+struct Uniform
+{
+    float4x4 model;
+    float4x4 view;
+    float4x4 projection;
 }
 
 struct AssembledVertex
@@ -33,7 +29,8 @@ struct VertexStageOutput
 
 [shader("vertex")]
 VertexStageOutput vertexMain(
-    AssembledVertex assembledVertex, DummyVertex dummyVertex)
+    ParameterBlock<Uniform> uniform,
+    AssembledVertex assembledVertex)
 {
     VertexStageOutput output;
 
@@ -42,6 +39,7 @@ VertexStageOutput vertexMain(
 
     output.coarseVertex.color = color;
     output.sv_position = float4(position, 1.0);
+    // output.sv_position = mul(modelViewProjection, float4(position, 1.0));
 
     return output;
 }

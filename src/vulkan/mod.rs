@@ -7,7 +7,7 @@ mod command_buffer;
 mod framebuffer;
 mod render_pass;
 pub mod render_object;
-
+mod buffer;
 
 pub use instance::*;
 use std::ops::Drop;
@@ -150,8 +150,7 @@ impl VulkanContext {
         let swapchain = ManuallyDrop::new(Swapchain::new(
             &instance, &physical_surface, &*device
         ));
-
-
+        
         let draw_command_buffers =
             device.spawn_command_buffers(swapchain.images_count().try_into().unwrap());
 

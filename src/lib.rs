@@ -12,9 +12,6 @@ use winit::window::{WindowAttributes, WindowId};
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ControlFlow::Poll;
 
-
-
-
 #[allow(clippy::too_many_arguments)]
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
     device: &ash::Device,
