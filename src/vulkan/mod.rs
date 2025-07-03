@@ -8,6 +8,7 @@ mod framebuffer;
 mod render_pass;
 pub mod render_object;
 mod buffer;
+mod utils;
 
 pub use instance::*;
 use std::ops::Drop;
@@ -32,20 +33,6 @@ use crate::vulkan::swapchain::Swapchain;
 use crate::vulkan::image::Image;
 use crate::vulkan::render_pass::RenderPass;
 
-pub fn find_memorytype_index(
-    memory_req: &vk::MemoryRequirements,
-    memory_prop: &vk::PhysicalDeviceMemoryProperties,
-    flags: vk::MemoryPropertyFlags,
-) -> Option<u32> {
-    memory_prop.memory_types[..memory_prop.memory_type_count as _]
-        .iter()
-        .enumerate()
-        .find(|(index, memory_type)| {
-            (1u32 << index) & memory_req.memory_type_bits != 0
-                && memory_type.property_flags & flags == flags
-        })
-        .map(|(index, _memory_type)| index as _)
-}
 
 /// Helper function for submitting command buffers. Immediately waits for the fence before the command buffer
 /// is executed. That way we can delay the waiting for the fences by 1 frame which is good for performance.
@@ -197,7 +184,7 @@ impl VulkanContext {
 
         let index_buffer = device.device.create_buffer(&index_buffer_info, None).unwrap();
         let index_buffer_memory_req = device.device.get_buffer_memory_requirements(index_buffer);
-        let index_buffer_memory_index = find_memorytype_index(
+        let index_buffer_memory_index = utils::find_memorytype_index(
             &index_buffer_memory_req,
             &device.physical_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
@@ -245,7 +232,7 @@ impl VulkanContext {
         let vertex_input_buffer_memory_req = device.device
             .get_buffer_memory_requirements(vertex_input_buffer);
 
-        let vertex_input_buffer_memory_index = find_memorytype_index(
+        let vertex_input_buffer_memory_index = utils::find_memorytype_index(
             &vertex_input_buffer_memory_req,
             &device.physical_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,

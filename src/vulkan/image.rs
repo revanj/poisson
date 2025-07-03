@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use ash::vk;
 use ash::vk::CommandBuffer;
-use crate::vulkan::{find_memorytype_index, record_submit_commandbuffer};
+use crate::vulkan::{utils};
 use crate::vulkan::command_buffer::OneshotCommandBuffer;
 use crate::vulkan::device::Device;
 
@@ -57,7 +57,7 @@ impl Image {
             .create_image(&depth_image_create_info, None).unwrap()};
         let depth_image_memory_req = unsafe {device.device
             .get_image_memory_requirements(depth_image)};
-        let depth_image_memory_index = find_memorytype_index(
+        let depth_image_memory_index = utils::find_memorytype_index(
             &depth_image_memory_req,
             &device.physical_memory_properties,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,

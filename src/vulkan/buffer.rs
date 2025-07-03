@@ -7,6 +7,7 @@ use ash::util::Align;
 use ash::vk;
 use ash::vk::{BufferUsageFlags, DeviceSize, SharingMode};
 use crate::vulkan::device::Device;
+use crate::vulkan::utils;
 
 pub enum BufferType {
     Uniform,
@@ -23,30 +24,11 @@ pub struct GpuBuffer<T: Copy, const count: usize> {
 }
 
 
-// https://github.com/adrien-ben/vulkan-tutorial-rs/blob/3506ed0ded0cf68915b56fc3ea2a96f9aaf21f12/src/main.rs
-fn find_memory_type(
-    requirements: vk::MemoryRequirements,
-    mem_properties: vk::PhysicalDeviceMemoryProperties,
-    required_properties: vk::MemoryPropertyFlags,
-) -> u32 {
-    for i in 0..mem_properties.memory_type_count {
-        if requirements.memory_type_bits & (1 << i) != 0
-            && mem_properties.memory_types[i as usize]
-            .property_flags
-            .contains(required_properties)
-        {
-            return i;
-        }
-    }
-    panic!("Failed to find suitable memory type.")
-}
-
-
-impl<T: Copy, const count: usize> GpuBuffer<T, count> {
+impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
     const ALIGNED_ELEMENT_SIZE: DeviceSize = align_of::<T>() as DeviceSize;
-    fn create_mapped_uniform(device: &Arc<Device>) -> GpuBuffer<T, count> {
+    fn create_mapped_uniform(device: &Arc<Device>) -> GpuBuffer<T, COUNT> {
         let create_info = vk::BufferCreateInfo {
-            size: Self::ALIGNED_ELEMENT_SIZE * (count as DeviceSize),
+            size: Self::ALIGNED_ELEMENT_SIZE * (COUNT as DeviceSize),
             usage: BufferUsageFlags::UNIFORM_BUFFER,
             sharing_mode: SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -57,10 +39,10 @@ impl<T: Copy, const count: usize> GpuBuffer<T, count> {
 
         let physical_memory_properties = device.physical_memory_properties;
 
-        let memory_type = find_memory_type(
-            mem_requirements, physical_memory_properties,
+        let memory_type = utils::find_memorytype_index(
+            &mem_requirements, &physical_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE
-                | vk::MemoryPropertyFlags::HOST_COHERENT);
+                | vk::MemoryPropertyFlags::HOST_COHERENT).unwrap();
 
         let alloc_info = vk::MemoryAllocateInfo {
             memory_type_index: memory_type,
@@ -75,7 +57,7 @@ impl<T: Copy, const count: usize> GpuBuffer<T, count> {
             let ptr = device.device
                 .map_memory(mem, 0, mem_requirements.size, vk::MemoryMapFlags::empty())
                 .unwrap();
-
+            
             (mem, ptr)
         };
 
@@ -111,7 +93,7 @@ impl<T: Copy, const count: usize> GpuBuffer<T, count> {
     }
 }
 
-impl<T: Copy, const count: usize> Drop for GpuBuffer<T, count> {
+impl<T: Copy, const COUNT: usize> Drop for GpuBuffer<T, COUNT> {
     fn drop(&mut self) {
         let device = self.device.upgrade().unwrap();
         unsafe {
