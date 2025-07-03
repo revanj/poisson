@@ -61,18 +61,22 @@ impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
             (mem, ptr)
         };
 
-        let mapped_slice = unsafe { Align::new(
-            mapped_ptr, align_of::<T>() as DeviceSize,
-            mem_requirements.size
-        ) };
+        // let mapped_slice = unsafe { Align::new(
+        //     mapped_ptr, align_of::<T>() as DeviceSize,
+        //     mem_requirements.size
+        // ) };
 
-        Self {
+        let mut ret = Self {
             device: Arc::downgrade(device),
             buffer,
             allocated_size: mem_requirements.size,
             memory,
-            mapped_slice: Some(mapped_slice),
-        }
+            mapped_slice: None,
+        };
+        
+        ret.map();
+        
+        ret
     }
 
     pub fn map(self: &mut Self) {
@@ -147,14 +151,14 @@ impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
                 memory_req.size,
                 vk::MemoryMapFlags::empty())
         }.unwrap();
-
-
-
-
-
-
-
-
+        
+        Self {
+            device: Arc::downgrade(device),
+            buffer,
+            allocated_size: memory_req.size,
+            memory: buffer_memory,
+            mapped_slice: None
+        }
     }
 }
 
