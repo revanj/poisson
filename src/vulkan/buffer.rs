@@ -20,13 +20,13 @@ pub struct GpuBuffer<T: Copy, const count: usize> {
     pub buffer: vk::Buffer,
     pub allocated_size: vk::DeviceSize,
     pub memory: vk::DeviceMemory,
-    pub mapped_ptr: Option<*mut T>,
+    pub mapped_slice: Option<Align<T>>,
 }
 
 
 impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
     const ALIGNED_ELEMENT_SIZE: DeviceSize = align_of::<T>() as DeviceSize;
-    fn create_mapped_uniform(device: &Arc<Device>) -> GpuBuffer<T, COUNT> {
+    pub fn create_mapped_uniform(device: &Arc<Device>) -> GpuBuffer<T, COUNT> {
         let create_info = vk::BufferCreateInfo {
             size: Self::ALIGNED_ELEMENT_SIZE * (COUNT as DeviceSize),
             usage: BufferUsageFlags::UNIFORM_BUFFER,
@@ -57,39 +57,104 @@ impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
             let ptr = device.device
                 .map_memory(mem, 0, mem_requirements.size, vk::MemoryMapFlags::empty())
                 .unwrap();
-            
+
             (mem, ptr)
         };
+
+        let mapped_slice = unsafe { Align::new(
+            mapped_ptr, align_of::<T>() as DeviceSize,
+            mem_requirements.size
+        ) };
 
         Self {
             device: Arc::downgrade(device),
             buffer,
             allocated_size: mem_requirements.size,
             memory,
-            mapped_ptr: Some(mapped_ptr.cast()),
+            mapped_slice: Some(mapped_slice),
         }
     }
 
-    fn map(self: &Self) {
+    pub fn map(self: &mut Self) {
         let device = self.device.upgrade().unwrap();
-        unsafe {
+        let ptr = unsafe {
             device.device.map_memory(
                 self.memory, 0, self.allocated_size, vk::MemoryMapFlags::empty())
         }.unwrap();
+        
+        let slice: Align<T> = unsafe { Align::new(
+            ptr, align_of::<T>() as DeviceSize,
+            self.allocated_size
+        ) };
+        
+        self.mapped_slice = Some(slice);
     }
     
-    fn unmap(self: &Self) {
+    pub fn unmap(self: &mut Self) {
         let device = self.device.upgrade().unwrap();
         unsafe {
             device.device.unmap_memory(self.memory);
+            self.mapped_slice = None;
         }
     }
 
-    fn write(self: &Self, data: &[T]) {
-        let write_head_ptr = self.mapped_ptr.expect("Buffer not mapped!");
-        unsafe {
-            write_head_ptr.copy_from_nonoverlapping(data.as_ptr(), data.len());
+    pub fn write(self: &mut Self, data: &[T]) {
+        if let Some(slice) = self.mapped_slice.as_mut() {
+            slice.copy_from_slice(data);
+        } else {
+            panic!("writing to unmapped buffer!");
         }
+    }
+
+    fn create_buffer(
+        device: &Arc<Device>,
+        usage: vk::BufferUsageFlags,
+        memory_property: vk::MemoryPropertyFlags) -> GpuBuffer<T, COUNT>
+    {
+        let buffer_create_info = vk::BufferCreateInfo::default()
+            .size((size_of::<T>() * COUNT) as DeviceSize)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let buffer = unsafe {
+            device.device.create_buffer(&buffer_create_info, None)
+        }.unwrap();
+
+        let memory_req = unsafe {
+            device.device.get_buffer_memory_requirements(buffer)
+        };
+
+        let memory_index = utils::find_memorytype_index(
+            &memory_req,
+            &device.physical_memory_properties,
+            memory_property
+        ).expect("Unable to find suitable memory type");
+
+        let allocate_info = vk::MemoryAllocateInfo {
+            allocation_size: memory_req.size,
+            memory_type_index: memory_index,
+            ..Default::default()
+        };
+
+        let buffer_memory = unsafe {
+            device.device.allocate_memory(&allocate_info, None)
+        }.unwrap();
+
+        let ptr = unsafe {
+            device.device.map_memory(
+                buffer_memory,
+                0,
+                memory_req.size,
+                vk::MemoryMapFlags::empty())
+        }.unwrap();
+
+
+
+
+
+
+
+
     }
 }
 
