@@ -167,12 +167,12 @@ impl PoissonEngine {
                 device.cmd_bind_vertex_buffers(
                     draw_command_buffer,
                     0,
-                    &[vulkan.vertex_input_buffer],
+                    &[vulkan.vertex_buffer.buffer],
                     &[0],
                 );
                 device.cmd_bind_index_buffer(
                     draw_command_buffer,
-                    vulkan.index_buffer,
+                    vulkan.index_buffer.buffer,
                     0,
                     vk::IndexType::UINT32,
                 );

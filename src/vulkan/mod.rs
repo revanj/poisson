@@ -9,6 +9,7 @@ mod render_pass;
 pub mod render_object;
 mod buffer;
 mod utils;
+mod physical_device;
 
 pub use instance::*;
 use std::ops::Drop;
@@ -25,6 +26,7 @@ use ash_window;
 use winit::window::Window;
 use render_object::Vertex;
 use crate::slang;
+use crate::vulkan::buffer::GpuBuffer;
 use crate::vulkan::command_buffer::{CommandBuffers, OneshotCommandBuffer};
 use crate::vulkan::device::Device;
 use crate::vulkan::framebuffer::Framebuffer;
@@ -110,10 +112,9 @@ pub struct VulkanContext {
 
 
     pub graphics_pipeline: vk::Pipeline,
-    pub vertex_input_buffer: vk::Buffer,
-    pub vertex_input_buffer_memory: vk::DeviceMemory,
-    pub index_buffer: vk::Buffer,
-    pub index_buffer_memory: vk::DeviceMemory,
+
+    pub vertex_buffer: GpuBuffer<Vertex>,
+    pub index_buffer: GpuBuffer<u32>,
 
     pub triangle_shader_module: vk::ShaderModule,
     pub pipeline_layout: vk::PipelineLayout,
@@ -129,13 +130,10 @@ impl VulkanContext {
             ManuallyDrop::new(PhysicalSurface::new(&instance, window));
 
         let device =
-            ManuallyDrop::new(Arc::new(
-                Device::new(
-                    &instance, &physical_surface
-                )));
+            ManuallyDrop::new(Arc::new(Device::new(&instance, &physical_surface)));
 
         let swapchain = ManuallyDrop::new(Swapchain::new(
-            &instance, &physical_surface, &*device
+            &instance, &physical_surface, &device
         ));
         
         let draw_command_buffers =
@@ -167,7 +165,7 @@ impl VulkanContext {
         for &swapchain_image_view in swapchain.image_views.iter() {
             let framebuffer =
                 Framebuffer::new(
-                    &*device,
+                    &device,
                     &render_pass,
                     swapchain_image_view,
                     physical_surface.resolution());
@@ -177,77 +175,17 @@ impl VulkanContext {
         let framebuffers = ManuallyDrop::new(framebuffers);
 
         let index_buffer_data = [0u32, 1, 2];
-        let index_buffer_info = vk::BufferCreateInfo::default()
-            .size(size_of_val(&index_buffer_data) as u64)
-            .usage(vk::BufferUsageFlags::INDEX_BUFFER)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-        let index_buffer = device.device.create_buffer(&index_buffer_info, None).unwrap();
-        let index_buffer_memory_req = device.device.get_buffer_memory_requirements(index_buffer);
-        let index_buffer_memory_index = utils::find_memorytype_index(
-            &index_buffer_memory_req,
-            &device.physical_memory_properties,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-            .expect("Unable to find suitable memorytype for the index buffer.");
-
-        let index_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: index_buffer_memory_req.size,
-            memory_type_index: index_buffer_memory_index,
-            ..Default::default()
-        };
-        let index_buffer_memory = device.device
-            .allocate_memory(&index_allocate_info, None)
-            .unwrap();
-        let index_ptr = device.device
-            .map_memory(
-                index_buffer_memory,
-                0,
-                index_buffer_memory_req.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-        let mut index_slice = ash::util::Align::new(
-            index_ptr,
-            align_of::<u32>() as u64,
-            index_buffer_memory_req.size,
+        let mut index_buffer = GpuBuffer::<u32>::create_buffer(
+            &device,
+            vk::BufferUsageFlags::INDEX_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE 
+                | vk::MemoryPropertyFlags::HOST_COHERENT,
+            index_buffer_data.len()
         );
-        index_slice.copy_from_slice(&index_buffer_data);
-        device.device.unmap_memory(index_buffer_memory);
-        device.device
-            .bind_buffer_memory(index_buffer, index_buffer_memory, 0)
-            .unwrap();
-
-        let vertex_input_buffer_info = vk::BufferCreateInfo {
-            size: 3 * size_of::<Vertex>() as u64,
-            usage: vk::BufferUsageFlags::VERTEX_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
-
-        let vertex_input_buffer = device.device
-            .create_buffer(&vertex_input_buffer_info, None)
-            .unwrap();
-
-        let vertex_input_buffer_memory_req = device.device
-            .get_buffer_memory_requirements(vertex_input_buffer);
-
-        let vertex_input_buffer_memory_index = utils::find_memorytype_index(
-            &vertex_input_buffer_memory_req,
-            &device.physical_memory_properties,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )
-            .expect("Unable to find suitable memorytype for the vertex buffer.");
-
-        let vertex_buffer_allocate_info = vk::MemoryAllocateInfo {
-            allocation_size: vertex_input_buffer_memory_req.size,
-            memory_type_index: vertex_input_buffer_memory_index,
-            ..Default::default()
-        };
-
-        let vertex_input_buffer_memory = device.device
-            .allocate_memory(&vertex_buffer_allocate_info, None)
-            .unwrap();
+        index_buffer.map();
+        index_buffer.write(&index_buffer_data);
+        index_buffer.unmap();
 
         let vertices = [
             Vertex {
@@ -264,26 +202,16 @@ impl VulkanContext {
             },
         ];
 
-        let vert_ptr = device.device
-            .map_memory(
-                vertex_input_buffer_memory,
-                0,
-                vertex_input_buffer_memory_req.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .unwrap();
-
-        let mut vert_align = ash::util::Align::new(
-            vert_ptr,
-            align_of::<Vertex>() as u64,
-            vertex_input_buffer_memory_req.size,
-        );
-        vert_align.copy_from_slice(&vertices);
-        device.device.unmap_memory(vertex_input_buffer_memory);
-        device.device
-            .bind_buffer_memory(vertex_input_buffer, vertex_input_buffer_memory, 0)
-            .unwrap();
-
+        let mut vertex_buffer = GpuBuffer::<Vertex>::create_buffer(
+            &device,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE
+                | vk::MemoryPropertyFlags::HOST_COHERENT,
+            vertices.len());
+        vertex_buffer.map();
+        vertex_buffer.write(&vertices);
+        vertex_buffer.unmap();
+        
         let compiler = slang::Compiler::new();
         let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
 
@@ -450,10 +378,8 @@ impl VulkanContext {
             frames_in_flight_fences,
 
             graphics_pipeline,
-            vertex_input_buffer,
-            vertex_input_buffer_memory,
+            vertex_buffer,
             index_buffer,
-            index_buffer_memory,
             triangle_shader_module,
             pipeline_layout
         }
@@ -463,16 +389,17 @@ impl VulkanContext {
         self.device.device.device_wait_idle().unwrap();
 
         self.physical_surface.update_resolution(surface_size);
-
-        ManuallyDrop::drop(&mut self.framebuffers);
+        
         ManuallyDrop::drop(&mut self.swapchain);
+        ManuallyDrop::drop(&mut self.framebuffers);
+        
 
         self.swapchain = ManuallyDrop::new(Swapchain::new(
             &self.instance, &self.physical_surface, &self.device));
 
         let mut framebuffers = Vec::new();
         for &swapchain_image_view in self.swapchain.image_views.iter() {
-            let framebuffer = Framebuffer::new(&*self.device, &self.render_pass,
+            let framebuffer = Framebuffer::new(&self.device, &self.render_pass,
                 swapchain_image_view, self.physical_surface.resolution());
             framebuffers.push(framebuffer);
         }
@@ -488,11 +415,12 @@ impl Drop for VulkanContext {
 
             self.device.device.destroy_pipeline(self.graphics_pipeline, None);
             self.device.device.destroy_shader_module(self.triangle_shader_module, None);
-            self.device.device.free_memory(self.index_buffer_memory, None);
-            self.device.device.destroy_buffer(self.index_buffer, None);
 
-            self.device.device.free_memory(self.vertex_input_buffer_memory, None);
-            self.device.device.destroy_buffer(self.vertex_input_buffer, None);
+            // self.device.device.free_memory(self.index_buffer_memory, None);
+            // self.device.device.destroy_buffer(self.index_buffer, None);
+            //
+            // self.device.device.free_memory(self.vertex_input_buffer_memory, None);
+            // self.device.device.destroy_buffer(self.vertex_input_buffer, None);
 
             self.device.device.destroy_pipeline_layout(self.pipeline_layout, None);
 

@@ -15,7 +15,7 @@ pub enum BufferType {
 
 
 // a buffer on the GPU that is a list of a fixed type
-pub struct GpuBuffer<T: Copy, const count: usize> {
+pub struct GpuBuffer<T: Copy> {
     pub device: std::sync::Weak<Device>,
     pub buffer: vk::Buffer,
     pub allocated_size: vk::DeviceSize,
@@ -24,11 +24,11 @@ pub struct GpuBuffer<T: Copy, const count: usize> {
 }
 
 
-impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
+impl<T: Copy> GpuBuffer<T> {
     const ALIGNED_ELEMENT_SIZE: DeviceSize = align_of::<T>() as DeviceSize;
-    pub fn create_mapped_uniform(device: &Arc<Device>) -> GpuBuffer<T, COUNT> {
+    pub fn create_mapped_uniform(device: &Arc<Device>, count: usize) -> GpuBuffer<T> {
         let create_info = vk::BufferCreateInfo {
-            size: Self::ALIGNED_ELEMENT_SIZE * (COUNT as DeviceSize),
+            size: Self::ALIGNED_ELEMENT_SIZE * (count as DeviceSize),
             usage: BufferUsageFlags::UNIFORM_BUFFER,
             sharing_mode: SharingMode::EXCLUSIVE,
             ..Default::default()
@@ -110,13 +110,14 @@ impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
         }
     }
 
-    fn create_buffer(
+    pub fn create_buffer(
         device: &Arc<Device>,
         usage: vk::BufferUsageFlags,
-        memory_property: vk::MemoryPropertyFlags) -> GpuBuffer<T, COUNT>
+        memory_property: vk::MemoryPropertyFlags,
+        count: usize) -> GpuBuffer<T>
     {
         let buffer_create_info = vk::BufferCreateInfo::default()
-            .size((size_of::<T>() * COUNT) as DeviceSize)
+            .size((size_of::<T>() * count) as DeviceSize)
             .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
@@ -143,14 +144,10 @@ impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
         let buffer_memory = unsafe {
             device.device.allocate_memory(&allocate_info, None)
         }.unwrap();
-
-        let ptr = unsafe {
-            device.device.map_memory(
-                buffer_memory,
-                0,
-                memory_req.size,
-                vk::MemoryMapFlags::empty())
-        }.unwrap();
+        
+        unsafe {
+            device.device.bind_buffer_memory(buffer, buffer_memory, 0).unwrap();
+        }
         
         Self {
             device: Arc::downgrade(device),
@@ -162,12 +159,12 @@ impl<T: Copy, const COUNT: usize> GpuBuffer<T, COUNT> {
     }
 }
 
-impl<T: Copy, const COUNT: usize> Drop for GpuBuffer<T, COUNT> {
+impl<T: Copy> Drop for GpuBuffer<T> {
     fn drop(&mut self) {
         let device = self.device.upgrade().unwrap();
         unsafe {
+            device.device.free_memory(self.memory, None);
             device.device.destroy_buffer(self.buffer, None);
-            device.device.free_memory(self.memory, None)
         }
     }
 }
