@@ -9,15 +9,12 @@ use ash::ext::debug_utils as ash_debug_utils;
 use ash::vk::DebugUtilsMessengerEXT;
 use winit::window::Window;
 use winit::raw_window_handle::HasDisplayHandle;
-use crate::vulkan::device::Device;
 
 pub struct Instance {
     pub entry: ash::Entry,
     pub instance: ash::Instance,
     debug_utils_loader: ash_debug_utils::Instance,
     debug_callback: DebugUtilsMessengerEXT,
-    
-    pub devices: Vec<Device>
 }
 
 impl Instance {
@@ -65,20 +62,17 @@ impl Instance {
             debug_utils_loader.create_debug_utils_messenger(&debug_info, None)
             .unwrap()
         };
-        
-        let devices = Vec::new();
 
         Self {
             entry,
             instance,
             debug_utils_loader,
-            debug_callback,
-            devices,
+            debug_callback
         }
     }
 
     fn create_device(self: &mut Self) {
-        
+
     }
 
     unsafe extern "system" fn vulkan_debug_callback(

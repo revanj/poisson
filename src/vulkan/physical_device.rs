@@ -1,5 +1,6 @@
 use ash::vk;
 
-struct PhysicalDevice {
+pub struct PhysicalDevice {
     physical_device: vk::PhysicalDevice,
+    queue_family_index: u32,
 }

@@ -23,6 +23,7 @@ use std::mem::ManuallyDrop;
 use std::sync::Arc;
 use ash::util::read_spv;
 use ash_window;
+use winit::keyboard::NamedKey::MannerMode;
 use winit::window::Window;
 use render_object::Vertex;
 use crate::slang;
@@ -113,8 +114,8 @@ pub struct VulkanContext {
 
     pub graphics_pipeline: vk::Pipeline,
 
-    pub vertex_buffer: GpuBuffer<Vertex>,
-    pub index_buffer: GpuBuffer<u32>,
+    pub vertex_buffer: ManuallyDrop<GpuBuffer<Vertex>>,
+    pub index_buffer: ManuallyDrop<GpuBuffer<u32>>,
 
     pub triangle_shader_module: vk::ShaderModule,
     pub pipeline_layout: vk::PipelineLayout,
@@ -176,13 +177,14 @@ impl VulkanContext {
 
         let index_buffer_data = [0u32, 1, 2];
 
-        let mut index_buffer = GpuBuffer::<u32>::create_buffer(
+        let mut index_buffer = ManuallyDrop::new(GpuBuffer::<u32>::create_buffer(
             &device,
             vk::BufferUsageFlags::INDEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE 
                 | vk::MemoryPropertyFlags::HOST_COHERENT,
             index_buffer_data.len()
-        );
+        ));
+        
         index_buffer.map();
         index_buffer.write(&index_buffer_data);
         index_buffer.unmap();
@@ -202,12 +204,12 @@ impl VulkanContext {
             },
         ];
 
-        let mut vertex_buffer = GpuBuffer::<Vertex>::create_buffer(
+        let mut vertex_buffer = ManuallyDrop::new(GpuBuffer::<Vertex>::create_buffer(
             &device,
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE
                 | vk::MemoryPropertyFlags::HOST_COHERENT,
-            vertices.len());
+            vertices.len()));
         vertex_buffer.map();
         vertex_buffer.write(&vertices);
         vertex_buffer.unmap();
@@ -436,6 +438,8 @@ impl Drop for VulkanContext {
             ManuallyDrop::drop(&mut self.framebuffers);
             ManuallyDrop::drop(&mut self.render_pass);
             ManuallyDrop::drop(&mut self.swapchain);
+            ManuallyDrop::drop(&mut self.vertex_buffer);
+            ManuallyDrop::drop(&mut self.index_buffer);
             ManuallyDrop::drop(&mut self.device);
             ManuallyDrop::drop(&mut self.physical_surface);
             ManuallyDrop::drop(&mut self.instance);
