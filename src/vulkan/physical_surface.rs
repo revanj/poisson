@@ -4,6 +4,7 @@ use ash::vk::{PresentModeKHR, SurfaceTransformFlagsKHR};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 use crate::vulkan;
+use crate::vulkan::Destroy;
 
 pub struct PhysicalSurface {
     pub surface: vk::SurfaceKHR,
@@ -158,10 +159,9 @@ impl PhysicalSurface {
 
 }
 
-impl Drop for PhysicalSurface {
-    fn drop(&mut self) {
+impl Destroy for PhysicalSurface {
+    fn destroy(&mut self) {
         unsafe {
-            println!("destroying surface");
             self.surface_loader.destroy_surface(self.surface, None);
         }
     }

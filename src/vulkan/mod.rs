@@ -36,6 +36,9 @@ use crate::vulkan::swapchain::Swapchain;
 use crate::vulkan::image::Image;
 use crate::vulkan::render_pass::RenderPass;
 
+trait Destroy {
+    fn destroy(self: &mut Self);
+}
 
 /// Helper function for submitting command buffers. Immediately waits for the fence before the command buffer
 /// is executed. That way we can delay the waiting for the fences by 1 frame which is good for performance.
@@ -95,8 +98,8 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
 /// There will probably be a pointer of this being passed around
 
 pub struct VulkanContext {
-    pub instance: ManuallyDrop<Instance>,
-    pub physical_surface: ManuallyDrop<PhysicalSurface>,
+    pub instance: Instance,
+    pub physical_surface: PhysicalSurface,
     pub device : ManuallyDrop<Arc<Device>>,
     pub swapchain: ManuallyDrop<Swapchain>,
     pub new_swapchain_size: Option<vk::Extent2D>,
@@ -124,11 +127,9 @@ pub struct VulkanContext {
 impl VulkanContext {
 
     pub unsafe fn new(window: &Box<dyn Window>) -> Self {
-        let instance =
-            ManuallyDrop::new(Instance::new(window));
+        let instance = Instance::new(window);
 
-        let physical_surface =
-            ManuallyDrop::new(PhysicalSurface::new(&instance, window));
+        let physical_surface = PhysicalSurface::new(&instance, window);
 
         let device =
             ManuallyDrop::new(Arc::new(Device::new(&instance, &physical_surface)));
@@ -441,8 +442,9 @@ impl Drop for VulkanContext {
             ManuallyDrop::drop(&mut self.vertex_buffer);
             ManuallyDrop::drop(&mut self.index_buffer);
             ManuallyDrop::drop(&mut self.device);
-            ManuallyDrop::drop(&mut self.physical_surface);
-            ManuallyDrop::drop(&mut self.instance);
+
+            self.physical_surface.destroy();
+            self.instance.destroy();
         }
     }
 }

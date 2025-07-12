@@ -9,6 +9,7 @@ use ash::ext::debug_utils as ash_debug_utils;
 use ash::vk::DebugUtilsMessengerEXT;
 use winit::window::Window;
 use winit::raw_window_handle::HasDisplayHandle;
+use crate::vulkan::Destroy;
 
 pub struct Instance {
     pub entry: ash::Entry,
@@ -103,8 +104,8 @@ impl Instance {
     }
 }
 
-impl Drop for Instance {
-    fn drop(&mut self) {
+impl Destroy for Instance {
+    fn destroy(&mut self) {
         unsafe {
             self.debug_utils_loader.destroy_debug_utils_messenger(self.debug_callback, None);
             self.instance.destroy_instance(None);
