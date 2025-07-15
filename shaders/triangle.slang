@@ -29,16 +29,17 @@ struct VertexStageOutput
 
 [shader("vertex")]
 VertexStageOutput vertexMain(
-    ParameterBlock<Uniform> uniform,
+    ParameterBlock<Uniform> uniform_var,
     AssembledVertex assembledVertex)
 {
     VertexStageOutput output;
 
-    float3 position = assembledVertex.position;
+    // gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 0.0, 1.0);
+    float4 position = mul(float4(assembledVertex.position, 1.0), mul(uniform_var.model, mul(uniform_var.view, uniform_var.projection)));
     float3 color    = assembledVertex.color;
 
     output.coarseVertex.color = color;
-    output.sv_position = float4(position, 1.0);
+    output.sv_position = position;
     // output.sv_position = mul(modelViewProjection, float4(position, 1.0));
 
     return output;

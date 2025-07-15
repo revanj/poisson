@@ -13,7 +13,7 @@ pub struct PhysicalSurface {
     pub queue_family_index: u32,
     pub surface_format: vk::SurfaceFormatKHR,
     pub surface_capabilities: vk::SurfaceCapabilitiesKHR,
-    surface_resolution: vk::Extent2D
+    pub surface_resolution: vk::Extent2D
 
 }
 

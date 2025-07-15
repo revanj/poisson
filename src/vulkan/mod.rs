@@ -8,7 +8,7 @@ mod framebuffer;
 mod render_pass;
 pub mod render_object;
 mod buffer;
-mod utils;
+pub mod utils;
 mod physical_device;
 
 pub use instance::*;
@@ -22,7 +22,9 @@ use std::mem::ManuallyDrop;
 
 use std::sync::Arc;
 use ash::util::read_spv;
+use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
 use ash_window;
+use cgmath::num_traits::FloatConst;
 use winit::keyboard::NamedKey::MannerMode;
 use winit::window::Window;
 use render_object::Vertex;
@@ -34,6 +36,7 @@ use crate::vulkan::framebuffer::Framebuffer;
 use crate::vulkan::physical_surface::PhysicalSurface;
 use crate::vulkan::swapchain::Swapchain;
 use crate::vulkan::image::Image;
+use crate::vulkan::render_object::UniformBufferObject;
 use crate::vulkan::render_pass::RenderPass;
 
 trait Destroy {
@@ -120,8 +123,15 @@ pub struct VulkanContext {
     pub vertex_buffer: ManuallyDrop<GpuBuffer<Vertex>>,
     pub index_buffer: ManuallyDrop<GpuBuffer<u32>>,
 
+    pub uniform_buffers: ManuallyDrop<Vec<GpuBuffer<UniformBufferObject>>>,
+
     pub triangle_shader_module: vk::ShaderModule,
+
+    pub descriptor_set_layout: vk::DescriptorSetLayout,
     pub pipeline_layout: vk::PipelineLayout,
+
+    pub descriptor_pool: vk::DescriptorPool,
+    pub descriptor_sets: Vec<vk::DescriptorSet>,
 }
 
 impl VulkanContext {
@@ -137,7 +147,7 @@ impl VulkanContext {
         let swapchain = ManuallyDrop::new(Swapchain::new(
             &instance, &physical_surface, &device
         ));
-        
+
         let draw_command_buffers =
             device.spawn_command_buffers(swapchain.images_count().try_into().unwrap());
 
@@ -181,26 +191,30 @@ impl VulkanContext {
         let mut index_buffer = ManuallyDrop::new(GpuBuffer::<u32>::create_buffer(
             &device,
             vk::BufferUsageFlags::INDEX_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE 
+            vk::MemoryPropertyFlags::HOST_VISIBLE
                 | vk::MemoryPropertyFlags::HOST_COHERENT,
             index_buffer_data.len()
         ));
-        
+
         index_buffer.map();
         index_buffer.write(&index_buffer_data);
         index_buffer.unmap();
+        
+        let pi = f32::PI();
+        let angles = [0f32, pi / 3f32 * 2f32, pi/3f32 * 4f32];
+        let ver = angles.map(|angle| [angle.sin(), angle.cos(), 0f32]);
 
         let vertices = [
             Vertex {
-                pos: [-1.0, 1.0, 0.0],
-                color: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [1.0, 1.0, 0.0],
+                pos: ver[0],
                 color: [0.0, 0.0, 1.0],
             },
             Vertex {
-                pos: [0.0, -1.0, 0.0],
+                pos: ver[1],
+                color: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                pos: ver[2],
                 color: [1.0, 0.0, 0.0],
             },
         ];
@@ -214,8 +228,75 @@ impl VulkanContext {
         vertex_buffer.map();
         vertex_buffer.write(&vertices);
         vertex_buffer.unmap();
-        
-        let compiler = slang::Compiler::new();
+
+        let ubo_layout_binding = vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .descriptor_type(DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(ShaderStageFlags::VERTEX);
+
+        let bindings = [ubo_layout_binding];
+
+        let descriptor_set_layout_create_info =
+            vk::DescriptorSetLayoutCreateInfo::default()
+                .bindings(&bindings);
+
+        let descriptor_set_layout = unsafe {
+            device.device.create_descriptor_set_layout(&descriptor_set_layout_create_info, None).unwrap()
+        };
+
+        let descriptor_set_layouts = [descriptor_set_layout];
+
+        let mut uniform_buffers = Vec::new();
+        for _ in 0..framebuffers.len() {
+            let mut ubo_buffer = GpuBuffer::<UniformBufferObject>::create_buffer(
+                &device,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT,
+                1);
+
+            ubo_buffer.map();
+            uniform_buffers.push(ubo_buffer);
+        }
+
+        let uniform_buffers = ManuallyDrop::new(uniform_buffers);
+
+        let descriptor_pool_sizes = [vk::DescriptorPoolSize::default()
+            .descriptor_count(framebuffers.len() as u32)
+            .ty(DescriptorType::UNIFORM_BUFFER)];
+
+        let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
+            .pool_sizes(&descriptor_pool_sizes)
+            .max_sets(framebuffers.len() as u32);
+
+        let descriptor_pool = unsafe {
+            device.device.create_descriptor_pool(&descriptor_pool_create_info, None).unwrap()
+        };
+
+        let descriptor_set_layouts = vec![descriptor_set_layout; framebuffers.len()];
+        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::default()
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(&descriptor_set_layouts);
+
+        let descriptor_sets = unsafe {
+                device.device.allocate_descriptor_sets(&descriptor_set_alloc_info).unwrap()
+        };
+
+        for i in 0..framebuffers.len() {
+            let descriptor_buffer_info = [vk::DescriptorBufferInfo::default()
+                .buffer(uniform_buffers[i].buffer).range(size_of::<UniformBufferObject>() as DeviceSize)];
+            let descriptor_write = [vk::WriteDescriptorSet::default()
+                .descriptor_count(1).descriptor_type(DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(&descriptor_buffer_info).dst_binding(0).dst_array_element(0).dst_set(descriptor_sets[i])];
+            unsafe {
+                device.device.update_descriptor_sets(&descriptor_write, &[]);
+            }
+        }
+
+
+
+    let compiler = slang::Compiler::new();
         let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
 
         let refl = linked_program.get_reflection();
@@ -234,11 +315,12 @@ impl VulkanContext {
         let triangle_shader_module = unsafe { device.device.create_shader_module(&triangle_shader_info, None) }
             .expect("Vertex shader module error");
 
-        let layout_create_info = vk::PipelineLayoutCreateInfo::default();
+        let layout_create_info =
+            vk::PipelineLayoutCreateInfo::default().set_layouts(&descriptor_set_layouts);
 
-        let pipeline_layout = device.device
+        let pipeline_layout = unsafe { device.device
             .create_pipeline_layout(&layout_create_info, None)
-            .unwrap();
+            .unwrap() };
 
         let vertex_entry_name = c"vertexMain";
         let fragment_entry_name = c"fragmentMain";
@@ -303,6 +385,7 @@ impl VulkanContext {
             front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             line_width: 1.0,
             polygon_mode: vk::PolygonMode::FILL,
+            cull_mode: vk::CullModeFlags::FRONT,
             ..Default::default()
         };
         let multisample_state_info = vk::PipelineMultisampleStateCreateInfo {
@@ -383,8 +466,13 @@ impl VulkanContext {
             graphics_pipeline,
             vertex_buffer,
             index_buffer,
+            uniform_buffers,
+
             triangle_shader_module,
-            pipeline_layout
+            descriptor_set_layout,
+            pipeline_layout,
+            descriptor_pool,
+            descriptor_sets,
         }
     }
 
@@ -436,11 +524,17 @@ impl Drop for VulkanContext {
                 self.device.device.destroy_fence(self.frames_in_flight_fences[i], None);
             }
 
+            self.device.device.destroy_descriptor_pool(self.descriptor_pool, None);
+            self.device.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+
+
+
             ManuallyDrop::drop(&mut self.framebuffers);
             ManuallyDrop::drop(&mut self.render_pass);
             ManuallyDrop::drop(&mut self.swapchain);
             ManuallyDrop::drop(&mut self.vertex_buffer);
             ManuallyDrop::drop(&mut self.index_buffer);
+            ManuallyDrop::drop(&mut self.uniform_buffers);
             ManuallyDrop::drop(&mut self.device);
 
             self.physical_surface.destroy();

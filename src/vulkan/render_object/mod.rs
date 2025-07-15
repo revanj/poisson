@@ -27,6 +27,13 @@ pub struct Graphics<Varying: ShaderInput, Uniform: ShaderInput> {
     pub uniform: Uniform,
 }
 
+#[derive(Clone, Debug, Copy, ShaderInput)]
+pub struct UniformBufferObject {
+    pub model: cgmath::Matrix4<f32>,
+    pub view: cgmath::Matrix4<f32>,
+    pub proj: cgmath::Matrix4<f32>,
+}
+
 // impl<Varying, Uniform> Graphics<Varying, Uniform>
 //     where Varying: ShaderInput, Uniform: ShaderInput
 // {

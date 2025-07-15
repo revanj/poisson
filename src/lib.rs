@@ -1,3 +1,5 @@
+use core::time;
+use std::time::{SystemTime, UNIX_EPOCH};
 use ash::vk;
 use winit::window::Window;
 pub mod vulkan;
@@ -11,6 +13,7 @@ use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasRawWind
 use winit::window::{WindowAttributes, WindowId};
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ControlFlow::Poll;
+use crate::vulkan::render_object::UniformBufferObject;
 
 #[allow(clippy::too_many_arguments)]
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
@@ -60,7 +63,8 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
 pub struct PoissonEngine {
     window: Option<Box<dyn Window>>,
     vulkan_context: Option<VulkanContext>,
-    current_frame: usize
+    current_frame: usize,
+    init_time: std::time::SystemTime,
 }
 
 impl PoissonEngine {
@@ -68,17 +72,34 @@ impl PoissonEngine {
         Self {
             window: None,
             vulkan_context: None,
-            current_frame: 0
+            current_frame: 0,
+            init_time: SystemTime::now(),
         }
     }
     
 
     fn init(self: &mut Self) {
+        self.init_time = SystemTime::now();
         if let Some(window_value) = &self.window {
             unsafe {
                 self.vulkan_context = Some(VulkanContext::new(window_value));
             }
         }
+    }
+
+    fn update_uniform_buffer(vulkan_context: &mut VulkanContext, current_frame: usize, elapsed_time: f32) {
+        let res = vulkan_context.physical_surface.surface_resolution;
+        let aspect = res.width as f32 / res.height as f32;
+        let new_ubo = [UniformBufferObject {
+            model: cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time)),
+            view: cgmath::Matrix4::look_at(
+                cgmath::Point3::new(2.0, 2.0, 2.0),
+                cgmath::Point3::new(0.0, 0.0, 0.0),
+                cgmath::Vector3::new(0.0, 0.0, 1.0),
+            ),
+            proj: vulkan::utils::perspective(cgmath::Deg(45.0), aspect, 0.1, 10.0),
+        }];
+        vulkan_context.uniform_buffers[current_frame].write(&new_ubo);
     }
 
     fn update(self: &mut Self) {
@@ -143,6 +164,12 @@ impl PoissonEngine {
             .render_area(vulkan.physical_surface.resolution().into())
             .clear_values(&clear_values);
 
+        let elapsed_time = SystemTime::now().duration_since(self.init_time).unwrap().as_secs_f32();
+        
+        println!("elapsed time is {}", elapsed_time);
+
+        Self::update_uniform_buffer(vulkan, self.current_frame, elapsed_time);
+
         record_submit_commandbuffer(
             &vulkan.device.device,
             vulkan.draw_command_buffers.command_buffers[self.current_frame],
@@ -176,6 +203,7 @@ impl PoissonEngine {
                     0,
                     vk::IndexType::UINT32,
                 );
+                device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, vulkan.pipeline_layout, 0, vulkan.descriptor_sets[self.current_frame..self.current_frame+1].as_ref(), &[]);
                 device.cmd_draw_indexed(
                     draw_command_buffer,
                     3, // index_buffer_data.len() as u32, #TODO: change this to a variable
