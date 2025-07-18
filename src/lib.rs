@@ -60,45 +60,15 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
 }
 
 pub trait RenderBackend {
-    
+    fn new(window: &Box<dyn Window>) -> Self;
+    fn update(self: &mut Self, init_time: SystemTime, current_frame: usize);
+    fn resize(self: &mut Self, width: u32, height: u32);
 }
 
 pub struct VulkanBackend {
     pub vulkan_context: VulkanContext
 }
-
-impl RenderBackend for VulkanBackend {
-    
-}
-
-
-pub struct PoissonEngine {
-    window: Option<Box<dyn Window>>,
-    vulkan_context: Option<VulkanContext>,
-    current_frame: usize,
-    init_time: std::time::SystemTime,
-}
-
-impl PoissonEngine {
-    pub fn new() -> Self {
-        Self {
-            window: None,
-            vulkan_context: None,
-            current_frame: 0,
-            init_time: SystemTime::now(),
-        }
-    }
-    
-
-    fn init(self: &mut Self) {
-        self.init_time = SystemTime::now();
-        if let Some(window_value) = &self.window {
-            unsafe {
-                self.vulkan_context = Some(VulkanContext::new(window_value));
-            }
-        }
-    }
-
+impl VulkanBackend {
     fn update_uniform_buffer(vulkan_context: &mut VulkanContext, current_frame: usize, elapsed_time: f32) {
         let res = vulkan_context.physical_surface.surface_resolution;
         let aspect = res.width as f32 / res.height as f32;
@@ -113,12 +83,20 @@ impl PoissonEngine {
         }];
         vulkan_context.uniform_buffers[current_frame].write(&new_ubo);
     }
-
-    fn update(self: &mut Self) {
-        let vulkan = self.vulkan_context.as_mut().unwrap();
+}
+impl RenderBackend for VulkanBackend {
+    
+    fn new(window: &Box<dyn Window>) -> Self{
+        Self {
+            vulkan_context: unsafe { VulkanContext::new(window) }
+        }
+    }
+    
+    fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
+        let vulkan = &mut self.vulkan_context;
         unsafe {
             vulkan.device.device.wait_for_fences(
-                &[vulkan.frames_in_flight_fences[self.current_frame]],
+                &[vulkan.frames_in_flight_fences[current_frame]],
                 true, u64::MAX).unwrap();
         }
 
@@ -140,14 +118,14 @@ impl PoissonEngine {
         }];
         let scissors = [vulkan.physical_surface.resolution().into()];
 
-        unsafe {vulkan.device.device.reset_fences(&[vulkan.frames_in_flight_fences[self.current_frame]]).unwrap()};
-        
+        unsafe {vulkan.device.device.reset_fences(&[vulkan.frames_in_flight_fences[current_frame]]).unwrap()};
+
         let acquire_result = unsafe {vulkan
             .swapchain.swapchain_loader
             .acquire_next_image(
                 vulkan.swapchain.swapchain,
                 u64::MAX,
-                vulkan.image_available_semaphores[self.current_frame],
+                vulkan.image_available_semaphores[current_frame],
                 vk::Fence::null())};
 
         let present_index = match acquire_result {
@@ -176,19 +154,19 @@ impl PoissonEngine {
             .render_area(vulkan.physical_surface.resolution().into())
             .clear_values(&clear_values);
 
-        let elapsed_time = SystemTime::now().duration_since(self.init_time).unwrap().as_secs_f32();
-        
+        let elapsed_time = SystemTime::now().duration_since(init_time).unwrap().as_secs_f32();
+
         println!("elapsed time is {}", elapsed_time);
 
-        Self::update_uniform_buffer(vulkan, self.current_frame, elapsed_time);
+        Self::update_uniform_buffer(vulkan, current_frame, elapsed_time);
 
         record_submit_commandbuffer(
             &vulkan.device.device,
-            vulkan.draw_command_buffers.command_buffers[self.current_frame],
-            &vulkan.frames_in_flight_fences[self.current_frame],
+            vulkan.draw_command_buffers.command_buffers[current_frame],
+            &vulkan.frames_in_flight_fences[current_frame],
             vulkan.device.present_queue,
             &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-            &[vulkan.image_available_semaphores[self.current_frame]],
+            &[vulkan.image_available_semaphores[current_frame]],
             &[vulkan.rendering_complete_semaphores[present_index as usize]],
             |device, draw_command_buffer| {
                 unsafe { device.cmd_begin_render_pass(
@@ -196,37 +174,37 @@ impl PoissonEngine {
                     &render_pass_begin_info,
                     vk::SubpassContents::INLINE,
                 );
-                device.cmd_bind_pipeline(
-                    draw_command_buffer,
-                    vk::PipelineBindPoint::GRAPHICS,
-                    vulkan.graphics_pipeline,
-                );
-                device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                device.cmd_bind_vertex_buffers(
-                    draw_command_buffer,
-                    0,
-                    &[vulkan.vertex_buffer.buffer],
-                    &[0],
-                );
-                device.cmd_bind_index_buffer(
-                    draw_command_buffer,
-                    vulkan.index_buffer.buffer,
-                    0,
-                    vk::IndexType::UINT32,
-                );
-                device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, vulkan.pipeline_layout, 0, vulkan.descriptor_sets[self.current_frame..self.current_frame+1].as_ref(), &[]);
-                device.cmd_draw_indexed(
-                    draw_command_buffer,
-                    3, // index_buffer_data.len() as u32, #TODO: change this to a variable
-                    1,
-                    0,
-                    0,
-                    1,
-                );
-                // Or draw without the index buffer
-                // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-                device.cmd_end_render_pass(draw_command_buffer);}
+                    device.cmd_bind_pipeline(
+                        draw_command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        vulkan.graphics_pipeline,
+                    );
+                    device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                    device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                    device.cmd_bind_vertex_buffers(
+                        draw_command_buffer,
+                        0,
+                        &[vulkan.vertex_buffer.buffer],
+                        &[0],
+                    );
+                    device.cmd_bind_index_buffer(
+                        draw_command_buffer,
+                        vulkan.index_buffer.buffer,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+                    device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, vulkan.pipeline_layout, 0, vulkan.descriptor_sets[current_frame..current_frame+1].as_ref(), &[]);
+                    device.cmd_draw_indexed(
+                        draw_command_buffer,
+                        3, // index_buffer_data.len() as u32, #TODO: change this to a variable
+                        1,
+                        0,
+                        0,
+                        1,
+                    );
+                    // Or draw without the index buffer
+                    // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
+                    device.cmd_end_render_pass(draw_command_buffer);}
             },
         );
         let signal_semaphores = [vulkan.rendering_complete_semaphores[present_index as usize]];
@@ -238,12 +216,48 @@ impl PoissonEngine {
             .image_indices(&image_indices);
 
         unsafe {
-        vulkan.swapchain.swapchain_loader
-            .queue_present(vulkan.device.present_queue, &present_info)
-            .unwrap()};
+            vulkan.swapchain.swapchain_loader
+                .queue_present(vulkan.device.present_queue, &present_info)
+                .unwrap()};
+    }
 
+    fn resize(self: &mut Self, width: u32, height: u32) {
+        self.vulkan_context.new_swapchain_size = Some(vk::Extent2D {width, height });
+    }
+}
+
+
+pub struct PoissonEngine<Backend: RenderBackend> {
+    window: Option<Box<dyn Window>>,
+    vulkan_backend: Option<Backend>,
+    current_frame: usize,
+    init_time: std::time::SystemTime,
+}
+
+impl<Backend: RenderBackend> PoissonEngine<Backend> {
+    pub fn new() -> Self {
+        Self {
+            window: None,
+            vulkan_backend: None,
+            current_frame: 0,
+            init_time: SystemTime::now(),
+        }
+    }
+    
+
+    fn init(self: &mut Self) {
+        self.init_time = SystemTime::now();
+        if let Some(window_value) = &self.window {
+            unsafe {
+                self.vulkan_backend = Some(Backend::new(window_value));
+            }
+        }
+    }
+
+    fn update(self: &mut Self) {
+        self.vulkan_backend.as_mut().unwrap().update(self.init_time, self.current_frame);
         self.current_frame += 1;
-        self.current_frame = self.current_frame % vulkan.frames_in_flight_fences.len();
+        self.current_frame = self.current_frame % 3;
     }
 
     fn pre_present_notify(self: &mut Self) {
@@ -266,7 +280,7 @@ impl PoissonEngine {
     }
 }
 
-impl ApplicationHandler for PoissonEngine {
+impl<Backend: RenderBackend> ApplicationHandler for PoissonEngine<Backend> {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
     {
         event_loop.set_control_flow(Poll);
@@ -299,7 +313,7 @@ impl ApplicationHandler for PoissonEngine {
                 }
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
-                self.vulkan_context.as_mut().unwrap().new_swapchain_size = Some(vk::Extent2D {width, height });
+                self.vulkan_backend.as_mut().unwrap().resize(width, height);
                 self.update();
                 self.request_redraw();
             },
@@ -310,6 +324,7 @@ impl ApplicationHandler for PoissonEngine {
     // in linux the frame is driven from about_to_wait
     #[cfg(target_os = "linux")]
     fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
+        println!("about to wait");
         self.update();
     }
 }
