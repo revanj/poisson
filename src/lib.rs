@@ -31,7 +31,7 @@ impl RenderBackend for VulkanBackend {
     
     fn new(window: &Box<dyn Window>) -> Self{
         Self {
-            vulkan_context: unsafe { VulkanContext::new(window) }
+            vulkan_context: VulkanContext::new(window)
         }
     }
     
@@ -40,7 +40,7 @@ impl RenderBackend for VulkanBackend {
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {
-        self.vulkan_context.new_swapchain_size = Some(vk::Extent2D {width, height });
+        self.vulkan_context.resize(width, height);
     }
 }
 

@@ -126,6 +126,9 @@ pub struct VulkanContext {
 }
 
 impl VulkanContext {
+    pub fn resize(self: &mut Self, width: u32, height: u32) {
+        self.new_swapchain_size = Some(vk::Extent2D { width, height });
+    }
 
     fn update_uniform_buffer(vulkan_context: &mut VulkanContext, current_frame: usize, elapsed_time: f32) {
         let res = vulkan_context.physical_surface.surface_resolution;
@@ -141,7 +144,7 @@ impl VulkanContext {
         }];
         vulkan_context.uniform_buffers[current_frame].write(&new_ubo);
     }
-    
+
     pub fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
         unsafe {
             self.device.device.wait_for_fences(
@@ -270,7 +273,7 @@ impl VulkanContext {
                 .unwrap()};
     }
 
-    pub unsafe fn new(window: &Box<dyn Window>) -> Self {
+    pub fn new(window: &Box<dyn Window>) -> Self {
         let instance = Instance::new(window);
 
         let physical_surface = PhysicalSurface::new(&instance, window);
@@ -294,13 +297,15 @@ impl VulkanContext {
         let mut image_available_semaphores = Vec::new();
         let mut rendering_complete_semaphores = Vec::new();
 
-        for _ in 0..swapchain.images_count() {
-            let fence = device.device.create_fence(&fence_create_info, None).unwrap();
-            frames_in_flight_fences.push(fence);
-            let image_available_semaphore = device.device.create_semaphore(&semaphore_create_info, None).unwrap();
-            let rendering_complete_semaphore = device.device.create_semaphore(&semaphore_create_info, None).unwrap();
-            image_available_semaphores.push(image_available_semaphore);
-            rendering_complete_semaphores.push(rendering_complete_semaphore);
+        unsafe {
+            for _ in 0..swapchain.images_count() {
+                let fence = device.device.create_fence(&fence_create_info, None).unwrap();
+                frames_in_flight_fences.push(fence);
+                let image_available_semaphore = device.device.create_semaphore(&semaphore_create_info, None).unwrap();
+                let rendering_complete_semaphore = device.device.create_semaphore(&semaphore_create_info, None).unwrap();
+                image_available_semaphores.push(image_available_semaphore);
+                rendering_complete_semaphores.push(rendering_complete_semaphore);
+            }
         }
 
         let render_pass = ManuallyDrop::new(
@@ -573,9 +578,10 @@ impl VulkanContext {
             .layout(pipeline_layout)
             .render_pass(render_pass.render_pass);
 
-        let graphics_pipelines = device.device
+        let graphics_pipelines = unsafe { device.device
             .create_graphics_pipelines(vk::PipelineCache::null(), &[graphic_pipeline_info], None)
-            .expect("Unable to create graphics pipeline");
+            .expect("Unable to create graphics pipeline")
+        };
 
         let graphics_pipeline = graphics_pipelines[0];
 
