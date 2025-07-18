@@ -5,7 +5,7 @@ use winit::window::Window;
 pub mod vulkan;
 pub mod slang;
 
-use vulkan::VulkanContext;
+use vulkan::VulkanRenderBackend;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
@@ -23,26 +23,26 @@ pub trait RenderBackend {
     fn resize(self: &mut Self, width: u32, height: u32);
 }
 
-pub struct VulkanBackend {
-    pub vulkan_context: VulkanContext
-}
-
-impl RenderBackend for VulkanBackend {
-    
-    fn new(window: &Box<dyn Window>) -> Self{
-        Self {
-            vulkan_context: VulkanContext::new(window)
-        }
-    }
-    
-    fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
-        self.vulkan_context.update(init_time, current_frame);
-    }
-
-    fn resize(self: &mut Self, width: u32, height: u32) {
-        self.vulkan_context.resize(width, height);
-    }
-}
+// pub struct VulkanBackend {
+//     pub vulkan_context: VulkanRenderBackend
+// }
+// 
+// impl RenderBackend for VulkanBackend {
+//     
+//     fn new(window: &Box<dyn Window>) -> Self{
+//         Self {
+//             vulkan_context: VulkanRenderBackend::new(window)
+//         }
+//     }
+//     
+//     fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
+//         self.vulkan_context.update(init_time, current_frame);
+//     }
+// 
+//     fn resize(self: &mut Self, width: u32, height: u32) {
+//         self.vulkan_context.resize(width, height);
+//     }
+// }
 
 
 pub struct PoissonEngine<Backend: RenderBackend> {

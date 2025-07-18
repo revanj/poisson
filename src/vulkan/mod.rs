@@ -29,7 +29,7 @@ use cgmath::num_traits::FloatConst;
 use winit::keyboard::NamedKey::MannerMode;
 use winit::window::Window;
 use render_object::Vertex;
-use crate::slang;
+use crate::{slang, RenderBackend};
 use crate::vulkan::buffer::GpuBuffer;
 use crate::vulkan::command_buffer::{CommandBuffers, OneshotCommandBuffer};
 use crate::vulkan::device::Device;
@@ -91,7 +91,7 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
 
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
 /// There will probably be a pointer of this being passed around
-pub struct VulkanContext {
+pub struct VulkanRenderBackend {
     pub instance: Instance,
     pub physical_surface: PhysicalSurface,
     pub device : ManuallyDrop<Arc<Device>>,
@@ -125,12 +125,8 @@ pub struct VulkanContext {
     pub descriptor_sets: Vec<vk::DescriptorSet>,
 }
 
-impl VulkanContext {
-    pub fn resize(self: &mut Self, width: u32, height: u32) {
-        self.new_swapchain_size = Some(vk::Extent2D { width, height });
-    }
-
-    fn update_uniform_buffer(vulkan_context: &mut VulkanContext, current_frame: usize, elapsed_time: f32) {
+impl VulkanRenderBackend { 
+    fn update_uniform_buffer(vulkan_context: &mut VulkanRenderBackend, current_frame: usize, elapsed_time: f32) {
         let res = vulkan_context.physical_surface.surface_resolution;
         let aspect = res.width as f32 / res.height as f32;
         let new_ubo = [UniformBufferObject {
@@ -144,136 +140,31 @@ impl VulkanContext {
         }];
         vulkan_context.uniform_buffers[current_frame].write(&new_ubo);
     }
+    
+    pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
+        self.device.device.device_wait_idle().unwrap();
 
-    pub fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
-        unsafe {
-            self.device.device.wait_for_fences(
-                &[self.frames_in_flight_fences[current_frame]],
-                true, u64::MAX).unwrap();
+        self.physical_surface.update_resolution(surface_size);
+        
+        ManuallyDrop::drop(&mut self.swapchain);
+        ManuallyDrop::drop(&mut self.framebuffers);
+        
+
+        self.swapchain = ManuallyDrop::new(Swapchain::new(
+            &self.instance, &self.physical_surface, &self.device));
+
+        let mut framebuffers = Vec::new();
+        for &swapchain_image_view in self.swapchain.image_views.iter() {
+            let framebuffer = Framebuffer::new(&self.device, &self.render_pass,
+                swapchain_image_view, self.physical_surface.resolution());
+            framebuffers.push(framebuffer);
         }
-
-        if let Some(extent) = self.new_swapchain_size {
-            if extent.width <= 0 || extent.height <= 0 {
-                return;
-            }
-            unsafe { self.recreate_swapchain(extent)};
-            self.new_swapchain_size = None;
-        }
-
-        let viewports = [vk::Viewport {
-            x: 0.0,
-            y: 0.0,
-            width: self.physical_surface.resolution().width as f32,
-            height: self.physical_surface.resolution().height as f32,
-            min_depth: 0.0,
-            max_depth: 1.0,
-        }];
-        let scissors = [self.physical_surface.resolution().into()];
-
-        unsafe {self.device.device.reset_fences(&[self.frames_in_flight_fences[current_frame]]).unwrap()};
-
-        let acquire_result = unsafe {self
-            .swapchain.swapchain_loader
-            .acquire_next_image(
-                self.swapchain.swapchain,
-                u64::MAX,
-                self.image_available_semaphores[current_frame],
-                vk::Fence::null())};
-
-        let present_index = match acquire_result {
-            Ok((present_index, _)) => present_index,
-            _ => panic!("Failed to acquire swapchain."),
-        };
-
-
-        let clear_values = [
-            vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 0.0],
-                },
-            },
-            vk::ClearValue {
-                depth_stencil: vk::ClearDepthStencilValue {
-                    depth: 1.0,
-                    stencil: 0,
-                },
-            },
-        ];
-
-        let render_pass_begin_info = vk::RenderPassBeginInfo::default()
-            .render_pass(self.render_pass.render_pass)
-            .framebuffer(self.framebuffers[present_index as usize].framebuffer)
-            .render_area(self.physical_surface.resolution().into())
-            .clear_values(&clear_values);
-
-        let elapsed_time = SystemTime::now().duration_since(init_time).unwrap().as_secs_f32();
-
-        println!("elapsed time is {}", elapsed_time);
-
-        Self::update_uniform_buffer(self, current_frame, elapsed_time);
-
-        record_submit_commandbuffer(
-            &self.device.device,
-            self.draw_command_buffers.command_buffers[current_frame],
-            &self.frames_in_flight_fences[current_frame],
-            self.device.present_queue,
-            &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-            &[self.image_available_semaphores[current_frame]],
-            &[self.rendering_complete_semaphores[present_index as usize]],
-            |device, draw_command_buffer| {
-                unsafe { device.cmd_begin_render_pass(
-                    draw_command_buffer,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE,
-                );
-                    device.cmd_bind_pipeline(
-                        draw_command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        self.graphics_pipeline,
-                    );
-                    device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                    device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                    device.cmd_bind_vertex_buffers(
-                        draw_command_buffer,
-                        0,
-                        &[self.vertex_buffer.buffer],
-                        &[0],
-                    );
-                    device.cmd_bind_index_buffer(
-                        draw_command_buffer,
-                        self.index_buffer.buffer,
-                        0,
-                        vk::IndexType::UINT32,
-                    );
-                    device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, self.descriptor_sets[current_frame..current_frame+1].as_ref(), &[]);
-                    device.cmd_draw_indexed(
-                        draw_command_buffer,
-                        3, // index_buffer_data.len() as u32, #TODO: change this to a variable
-                        1,
-                        0,
-                        0,
-                        1,
-                    );
-                    // Or draw without the index buffer
-                    // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-                    device.cmd_end_render_pass(draw_command_buffer);}
-            },
-        );
-        let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
-        let swapchains = [self.swapchain.swapchain];
-        let image_indices = [present_index];
-        let present_info = vk::PresentInfoKHR::default()
-            .wait_semaphores(&signal_semaphores) // &base.rendering_complete_semaphore)
-            .swapchains(&swapchains)
-            .image_indices(&image_indices);
-
-        unsafe {
-            self.swapchain.swapchain_loader
-                .queue_present(self.device.present_queue, &present_info)
-                .unwrap()};
+        self.framebuffers = ManuallyDrop::new(framebuffers);
     }
+}
 
-    pub fn new(window: &Box<dyn Window>) -> Self {
+impl RenderBackend for VulkanRenderBackend {
+    fn new(window: &Box<dyn Window>) -> Self {
         let instance = Instance::new(window);
 
         let physical_surface = PhysicalSurface::new(&instance, window);
@@ -338,7 +229,7 @@ impl VulkanContext {
         index_buffer.map();
         index_buffer.write(&index_buffer_data);
         index_buffer.unmap();
-        
+
         let pi = f32::PI();
         let angles = [0f32, pi / 3f32 * 2f32, pi/3f32 * 4f32];
         let ver = angles.map(|angle| [angle.sin(), angle.cos(), 0f32]);
@@ -419,7 +310,7 @@ impl VulkanContext {
             .set_layouts(&descriptor_set_layouts);
 
         let descriptor_sets = unsafe {
-                device.device.allocate_descriptor_sets(&descriptor_set_alloc_info).unwrap()
+            device.device.allocate_descriptor_sets(&descriptor_set_alloc_info).unwrap()
         };
 
         for i in 0..framebuffers.len() {
@@ -435,7 +326,7 @@ impl VulkanContext {
 
 
 
-    let compiler = slang::Compiler::new();
+        let compiler = slang::Compiler::new();
         let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
 
         let refl = linked_program.get_reflection();
@@ -616,29 +507,141 @@ impl VulkanContext {
         }
     }
 
-    pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
-        self.device.device.device_wait_idle().unwrap();
-
-        self.physical_surface.update_resolution(surface_size);
-        
-        ManuallyDrop::drop(&mut self.swapchain);
-        ManuallyDrop::drop(&mut self.framebuffers);
-        
-
-        self.swapchain = ManuallyDrop::new(Swapchain::new(
-            &self.instance, &self.physical_surface, &self.device));
-
-        let mut framebuffers = Vec::new();
-        for &swapchain_image_view in self.swapchain.image_views.iter() {
-            let framebuffer = Framebuffer::new(&self.device, &self.render_pass,
-                swapchain_image_view, self.physical_surface.resolution());
-            framebuffers.push(framebuffer);
+    fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
+        unsafe {
+            self.device.device.wait_for_fences(
+                &[self.frames_in_flight_fences[current_frame]],
+                true, u64::MAX).unwrap();
         }
-        self.framebuffers = ManuallyDrop::new(framebuffers);
+
+        if let Some(extent) = self.new_swapchain_size {
+            if extent.width <= 0 || extent.height <= 0 {
+                return;
+            }
+            unsafe { self.recreate_swapchain(extent)};
+            self.new_swapchain_size = None;
+        }
+
+        let viewports = [vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: self.physical_surface.resolution().width as f32,
+            height: self.physical_surface.resolution().height as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        }];
+        let scissors = [self.physical_surface.resolution().into()];
+
+        unsafe {self.device.device.reset_fences(&[self.frames_in_flight_fences[current_frame]]).unwrap()};
+
+        let acquire_result = unsafe {self
+            .swapchain.swapchain_loader
+            .acquire_next_image(
+                self.swapchain.swapchain,
+                u64::MAX,
+                self.image_available_semaphores[current_frame],
+                vk::Fence::null())};
+
+        let present_index = match acquire_result {
+            Ok((present_index, _)) => present_index,
+            _ => panic!("Failed to acquire swapchain."),
+        };
+
+
+        let clear_values = [
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 0.0],
+                },
+            },
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            },
+        ];
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::default()
+            .render_pass(self.render_pass.render_pass)
+            .framebuffer(self.framebuffers[present_index as usize].framebuffer)
+            .render_area(self.physical_surface.resolution().into())
+            .clear_values(&clear_values);
+
+        let elapsed_time = SystemTime::now().duration_since(init_time).unwrap().as_secs_f32();
+
+        println!("elapsed time is {}", elapsed_time);
+
+        Self::update_uniform_buffer(self, current_frame, elapsed_time);
+
+        record_submit_commandbuffer(
+            &self.device.device,
+            self.draw_command_buffers.command_buffers[current_frame],
+            &self.frames_in_flight_fences[current_frame],
+            self.device.present_queue,
+            &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
+            &[self.image_available_semaphores[current_frame]],
+            &[self.rendering_complete_semaphores[present_index as usize]],
+            |device, draw_command_buffer| {
+                unsafe { device.cmd_begin_render_pass(
+                    draw_command_buffer,
+                    &render_pass_begin_info,
+                    vk::SubpassContents::INLINE,
+                );
+                    device.cmd_bind_pipeline(
+                        draw_command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.graphics_pipeline,
+                    );
+                    device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                    device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                    device.cmd_bind_vertex_buffers(
+                        draw_command_buffer,
+                        0,
+                        &[self.vertex_buffer.buffer],
+                        &[0],
+                    );
+                    device.cmd_bind_index_buffer(
+                        draw_command_buffer,
+                        self.index_buffer.buffer,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+                    device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, self.descriptor_sets[current_frame..current_frame+1].as_ref(), &[]);
+                    device.cmd_draw_indexed(
+                        draw_command_buffer,
+                        3, // index_buffer_data.len() as u32, #TODO: change this to a variable
+                        1,
+                        0,
+                        0,
+                        1,
+                    );
+                    // Or draw without the index buffer
+                    // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
+                    device.cmd_end_render_pass(draw_command_buffer);}
+            },
+        );
+        let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
+        let swapchains = [self.swapchain.swapchain];
+        let image_indices = [present_index];
+        let present_info = vk::PresentInfoKHR::default()
+            .wait_semaphores(&signal_semaphores) // &base.rendering_complete_semaphore)
+            .swapchains(&swapchains)
+            .image_indices(&image_indices);
+
+        unsafe {
+            self.swapchain.swapchain_loader
+                .queue_present(self.device.present_queue, &present_info)
+                .unwrap()};
     }
+
+    fn resize(self: &mut Self, width: u32, height: u32) {
+        self.new_swapchain_size = Some(vk::Extent2D { width, height });
+    }
+
 }
 
-impl Drop for VulkanContext {
+impl Drop for VulkanRenderBackend {
     fn drop(&mut self) {
         println!("Dropping application.");
         unsafe {
