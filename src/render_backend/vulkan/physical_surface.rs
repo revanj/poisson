@@ -3,8 +3,9 @@ use ash::vk;
 use ash::vk::{PresentModeKHR, SurfaceTransformFlagsKHR};
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
-use crate::vulkan;
-use crate::vulkan::Destroy;
+
+use crate::render_backend::vulkan;
+use vulkan::Destroy;
 
 pub struct PhysicalSurface {
     pub surface: vk::SurfaceKHR,

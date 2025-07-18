@@ -2,10 +2,12 @@ use std::ops::Deref;
 use std::sync::Arc;
 use ash::vk;
 use ash::vk::{Extent2D, ImageView};
-use crate::vulkan::render_pass::RenderPass;
-use crate::vulkan::device::Device;
-use crate::vulkan::image::Image;
-use crate::vulkan::swapchain::Swapchain;
+
+use crate::render_backend::vulkan;
+use vulkan::render_pass::RenderPass;
+use vulkan::device::Device;
+use vulkan::image::Image;
+use vulkan::swapchain::Swapchain;
 
 pub struct Framebuffer {
     pub device: std::sync::Weak<Device>,

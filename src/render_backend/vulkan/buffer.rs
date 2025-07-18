@@ -6,8 +6,8 @@ use std::sync::Arc;
 use ash::util::Align;
 use ash::vk;
 use ash::vk::{BufferUsageFlags, DeviceSize, SharingMode};
-use crate::vulkan::device::Device;
-use crate::vulkan::utils;
+use crate::render_backend::vulkan::device::Device;
+use crate::render_backend::vulkan::utils;
 
 pub enum BufferType {
     Uniform,

@@ -2,10 +2,10 @@ use core::time;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ash::vk;
 use winit::window::Window;
-pub mod vulkan;
+pub mod render_backend;
 pub mod slang;
 
-use vulkan::VulkanRenderBackend;
+
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
@@ -13,41 +13,14 @@ use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasRawWind
 use winit::window::{WindowAttributes, WindowId};
 use winit::dpi::PhysicalSize;
 use winit::event_loop::ControlFlow::Poll;
-use crate::vulkan::render_object::UniformBufferObject;
 
+use crate::render_backend::RenderBackend;
 
-
-pub trait RenderBackend {
-    fn new(window: &Box<dyn Window>) -> Self;
-    fn update(self: &mut Self, init_time: SystemTime, current_frame: usize);
-    fn resize(self: &mut Self, width: u32, height: u32);
-}
-
-// pub struct VulkanBackend {
-//     pub vulkan_context: VulkanRenderBackend
-// }
-// 
-// impl RenderBackend for VulkanBackend {
-//     
-//     fn new(window: &Box<dyn Window>) -> Self{
-//         Self {
-//             vulkan_context: VulkanRenderBackend::new(window)
-//         }
-//     }
-//     
-//     fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
-//         self.vulkan_context.update(init_time, current_frame);
-//     }
-// 
-//     fn resize(self: &mut Self, width: u32, height: u32) {
-//         self.vulkan_context.resize(width, height);
-//     }
-// }
 
 
 pub struct PoissonEngine<Backend: RenderBackend> {
     window: Option<Box<dyn Window>>,
-    vulkan_backend: Option<Backend>,
+    render_backend: Option<Backend>,
     current_frame: usize,
     init_time: std::time::SystemTime,
 }
@@ -56,7 +29,7 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
     pub fn new() -> Self {
         Self {
             window: None,
-            vulkan_backend: None,
+            render_backend: None,
             current_frame: 0,
             init_time: SystemTime::now(),
         }
@@ -67,13 +40,13 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
         self.init_time = SystemTime::now();
         if let Some(window_value) = &self.window {
             unsafe {
-                self.vulkan_backend = Some(Backend::new(window_value));
+                self.render_backend = Some(Backend::new(window_value));
             }
         }
     }
 
     fn update(self: &mut Self) {
-        self.vulkan_backend.as_mut().unwrap().update(self.init_time, self.current_frame);
+        self.render_backend.as_mut().unwrap().update(self.init_time, self.current_frame);
         self.current_frame += 1;
         self.current_frame = self.current_frame % 3;
     }
@@ -131,7 +104,7 @@ impl<Backend: RenderBackend> ApplicationHandler for PoissonEngine<Backend> {
                 }
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
-                self.vulkan_backend.as_mut().unwrap().resize(width, height);
+                self.render_backend.as_mut().unwrap().resize(width, height);
                 self.update();
                 self.request_redraw();
             },

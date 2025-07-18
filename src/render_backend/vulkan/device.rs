@@ -1,8 +1,8 @@
 use ash::vk;
-use crate::vulkan::Instance;
-use crate::vulkan::physical_surface::PhysicalSurface;
+use crate::render_backend::vulkan::Instance;
+use crate::render_backend::vulkan::physical_surface::PhysicalSurface;
 use ash::khr::{swapchain as ash_swapchain};
-use crate::vulkan::command_buffer::{CommandBuffers};
+use crate::render_backend::vulkan::command_buffer::{CommandBuffers};
 
 pub struct Device {
     pub device: ash::Device,

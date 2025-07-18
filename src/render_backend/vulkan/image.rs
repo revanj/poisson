@@ -1,9 +1,12 @@
 use std::sync::Arc;
 use ash::vk;
 use ash::vk::CommandBuffer;
-use crate::vulkan::{utils};
-use crate::vulkan::command_buffer::OneshotCommandBuffer;
-use crate::vulkan::device::Device;
+
+
+use crate::render_backend::vulkan;
+use vulkan::{utils};
+use vulkan::command_buffer::OneshotCommandBuffer;
+use vulkan::device::Device;
 
 pub struct Image {
     pub device: std::sync::Weak<Device>,

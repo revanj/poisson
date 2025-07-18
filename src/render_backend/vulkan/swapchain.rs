@@ -2,9 +2,12 @@ use std::sync;
 use std::sync::Arc;
 use ash::vk;
 use ash::vk::Extent2D;
-use crate::vulkan::device::Device;
-use crate::vulkan::Instance;
-use crate::vulkan::physical_surface::PhysicalSurface;
+
+use crate::render_backend::vulkan;
+
+use vulkan::device::Device;
+use vulkan::Instance;
+use vulkan::physical_surface::PhysicalSurface;
 
 pub struct Swapchain {
     pub device: sync::Weak<Device>,

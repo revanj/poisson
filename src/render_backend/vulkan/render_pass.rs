@@ -1,7 +1,10 @@
 use std::sync::{Arc, Weak};
 use ash::vk;
-use crate::vulkan::device::Device;
-use crate::vulkan::physical_surface::PhysicalSurface;
+
+use crate::render_backend::vulkan;
+
+use vulkan::device::Device;
+use vulkan::physical_surface::PhysicalSurface;
 
 pub struct RenderPass {
     pub device: Weak<Device>,

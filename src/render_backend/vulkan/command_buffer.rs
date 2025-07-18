@@ -1,6 +1,6 @@
 use std::ptr::null;
 use ash::vk;
-use crate::vulkan::Device;
+use crate::render_backend::vulkan::Device;
 
 pub struct OneshotCommandBuffer {
     pub command_buffer: vk::CommandBuffer,

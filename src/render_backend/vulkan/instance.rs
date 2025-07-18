@@ -9,7 +9,8 @@ use ash::ext::debug_utils as ash_debug_utils;
 use ash::vk::DebugUtilsMessengerEXT;
 use winit::window::Window;
 use winit::raw_window_handle::HasDisplayHandle;
-use crate::vulkan::Destroy;
+
+use crate::render_backend::vulkan::Destroy;
 
 pub struct Instance {
     pub entry: ash::Entry,
