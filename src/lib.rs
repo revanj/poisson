@@ -15,49 +15,7 @@ use winit::dpi::PhysicalSize;
 use winit::event_loop::ControlFlow::Poll;
 use crate::vulkan::render_object::UniformBufferObject;
 
-#[allow(clippy::too_many_arguments)]
-pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
-    device: &ash::Device,
-    command_buffer: vk::CommandBuffer,
-    in_flight_fence: &vk::Fence,
-    submit_queue: vk::Queue,
-    wait_mask: &[vk::PipelineStageFlags],
-    wait_semaphores: &[vk::Semaphore],
-    signal_semaphores: &[vk::Semaphore],
-    f: F,
-) {
-    unsafe {
-        device
-            .reset_command_buffer(
-                command_buffer,
-                vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-            )
-            .expect("Reset command buffer failed.");
 
-        let command_buffer_begin_info = vk::CommandBufferBeginInfo::default()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-        device
-            .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-            .expect("Begin commandbuffer");
-        f(device, command_buffer);
-        device
-            .end_command_buffer(command_buffer)
-            .expect("End commandbuffer");
-
-        let command_buffers = vec![command_buffer];
-
-        let submit_info = vk::SubmitInfo::default()
-            .wait_semaphores(wait_semaphores)
-            .wait_dst_stage_mask(wait_mask)
-            .command_buffers(&command_buffers)
-            .signal_semaphores(signal_semaphores);
-
-        device
-            .queue_submit(submit_queue, &[submit_info], *in_flight_fence)
-            .expect("queue submit failed.");
-    }
-}
 
 pub trait RenderBackend {
     fn new(window: &Box<dyn Window>) -> Self;
@@ -78,7 +36,7 @@ impl RenderBackend for VulkanBackend {
     }
     
     fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
-        
+        self.vulkan_context.update(init_time, current_frame);
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {

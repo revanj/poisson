@@ -44,14 +44,11 @@ trait Destroy {
     fn destroy(self: &mut Self);
 }
 
-/// Helper function for submitting command buffers. Immediately waits for the fence before the command buffer
-/// is executed. That way we can delay the waiting for the fences by 1 frame which is good for performance.
-/// Make sure to create the fence in a signaled state on the first use.
 #[allow(clippy::too_many_arguments)]
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
     device: &ash::Device,
     command_buffer: vk::CommandBuffer,
-    command_buffer_reuse_fence: vk::Fence,
+    in_flight_fence: &vk::Fence,
     submit_queue: vk::Queue,
     wait_mask: &[vk::PipelineStageFlags],
     wait_semaphores: &[vk::Semaphore],
@@ -59,14 +56,6 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
     f: F,
 ) {
     unsafe {
-        device
-            .wait_for_fences(&[command_buffer_reuse_fence], true, u64::MAX)
-            .expect("Wait for fence failed.");
-
-        device
-            .reset_fences(&[command_buffer_reuse_fence])
-            .expect("Reset fences failed.");
-
         device
             .reset_command_buffer(
                 command_buffer,
@@ -94,13 +83,14 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
             .signal_semaphores(signal_semaphores);
 
         device
-            .queue_submit(submit_queue, &[submit_info], command_buffer_reuse_fence)
+            .queue_submit(submit_queue, &[submit_info], *in_flight_fence)
             .expect("queue submit failed.");
     }
 }
+
+
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
 /// There will probably be a pointer of this being passed around
-
 pub struct VulkanContext {
     pub instance: Instance,
     pub physical_surface: PhysicalSurface,
@@ -243,16 +233,16 @@ impl VulkanContext {
                     device.cmd_bind_vertex_buffers(
                         draw_command_buffer,
                         0,
-                        &[vulkan.vertex_buffer.buffer],
+                        &[self.vertex_buffer.buffer],
                         &[0],
                     );
                     device.cmd_bind_index_buffer(
                         draw_command_buffer,
-                        vulkan.index_buffer.buffer,
+                        self.index_buffer.buffer,
                         0,
                         vk::IndexType::UINT32,
                     );
-                    device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, vulkan.pipeline_layout, 0, vulkan.descriptor_sets[current_frame..current_frame+1].as_ref(), &[]);
+                    device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, self.descriptor_sets[current_frame..current_frame+1].as_ref(), &[]);
                     device.cmd_draw_indexed(
                         draw_command_buffer,
                         3, // index_buffer_data.len() as u32, #TODO: change this to a variable
@@ -266,8 +256,8 @@ impl VulkanContext {
                     device.cmd_end_render_pass(draw_command_buffer);}
             },
         );
-        let signal_semaphores = [vulkan.rendering_complete_semaphores[present_index as usize]];
-        let swapchains = [vulkan.swapchain.swapchain];
+        let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
+        let swapchains = [self.swapchain.swapchain];
         let image_indices = [present_index];
         let present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(&signal_semaphores) // &base.rendering_complete_semaphore)
@@ -275,8 +265,8 @@ impl VulkanContext {
             .image_indices(&image_indices);
 
         unsafe {
-            vulkan.swapchain.swapchain_loader
-                .queue_present(vulkan.device.present_queue, &present_info)
+            self.swapchain.swapchain_loader
+                .queue_present(self.device.present_queue, &present_info)
                 .unwrap()};
     }
 
