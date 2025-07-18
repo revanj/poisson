@@ -68,22 +68,7 @@ pub trait RenderBackend {
 pub struct VulkanBackend {
     pub vulkan_context: VulkanContext
 }
-impl VulkanBackend {
-    fn update_uniform_buffer(vulkan_context: &mut VulkanContext, current_frame: usize, elapsed_time: f32) {
-        let res = vulkan_context.physical_surface.surface_resolution;
-        let aspect = res.width as f32 / res.height as f32;
-        let new_ubo = [UniformBufferObject {
-            model: cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time)),
-            view: cgmath::Matrix4::look_at(
-                cgmath::Point3::new(2.0, 2.0, 2.0),
-                cgmath::Point3::new(0.0, 0.0, 0.0),
-                cgmath::Vector3::new(0.0, 0.0, 1.0),
-            ),
-            proj: vulkan::utils::perspective(cgmath::Deg(45.0), aspect, 0.1, 10.0),
-        }];
-        vulkan_context.uniform_buffers[current_frame].write(&new_ubo);
-    }
-}
+
 impl RenderBackend for VulkanBackend {
     
     fn new(window: &Box<dyn Window>) -> Self{
@@ -93,132 +78,7 @@ impl RenderBackend for VulkanBackend {
     }
     
     fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
-        let vulkan = &mut self.vulkan_context;
-        unsafe {
-            vulkan.device.device.wait_for_fences(
-                &[vulkan.frames_in_flight_fences[current_frame]],
-                true, u64::MAX).unwrap();
-        }
-
-        if let Some(extent) = vulkan.new_swapchain_size {
-            if extent.width <= 0 || extent.height <= 0 {
-                return;
-            }
-            unsafe { vulkan.recreate_swapchain(extent)};
-            vulkan.new_swapchain_size = None;
-        }
-
-        let viewports = [vk::Viewport {
-            x: 0.0,
-            y: 0.0,
-            width: vulkan.physical_surface.resolution().width as f32,
-            height: vulkan.physical_surface.resolution().height as f32,
-            min_depth: 0.0,
-            max_depth: 1.0,
-        }];
-        let scissors = [vulkan.physical_surface.resolution().into()];
-
-        unsafe {vulkan.device.device.reset_fences(&[vulkan.frames_in_flight_fences[current_frame]]).unwrap()};
-
-        let acquire_result = unsafe {vulkan
-            .swapchain.swapchain_loader
-            .acquire_next_image(
-                vulkan.swapchain.swapchain,
-                u64::MAX,
-                vulkan.image_available_semaphores[current_frame],
-                vk::Fence::null())};
-
-        let present_index = match acquire_result {
-            Ok((present_index, _)) => present_index,
-            _ => panic!("Failed to acquire swapchain."),
-        };
-
-
-        let clear_values = [
-            vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 0.0],
-                },
-            },
-            vk::ClearValue {
-                depth_stencil: vk::ClearDepthStencilValue {
-                    depth: 1.0,
-                    stencil: 0,
-                },
-            },
-        ];
-
-        let render_pass_begin_info = vk::RenderPassBeginInfo::default()
-            .render_pass(vulkan.render_pass.render_pass)
-            .framebuffer(vulkan.framebuffers[present_index as usize].framebuffer)
-            .render_area(vulkan.physical_surface.resolution().into())
-            .clear_values(&clear_values);
-
-        let elapsed_time = SystemTime::now().duration_since(init_time).unwrap().as_secs_f32();
-
-        println!("elapsed time is {}", elapsed_time);
-
-        Self::update_uniform_buffer(vulkan, current_frame, elapsed_time);
-
-        record_submit_commandbuffer(
-            &vulkan.device.device,
-            vulkan.draw_command_buffers.command_buffers[current_frame],
-            &vulkan.frames_in_flight_fences[current_frame],
-            vulkan.device.present_queue,
-            &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-            &[vulkan.image_available_semaphores[current_frame]],
-            &[vulkan.rendering_complete_semaphores[present_index as usize]],
-            |device, draw_command_buffer| {
-                unsafe { device.cmd_begin_render_pass(
-                    draw_command_buffer,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE,
-                );
-                    device.cmd_bind_pipeline(
-                        draw_command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        vulkan.graphics_pipeline,
-                    );
-                    device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                    device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                    device.cmd_bind_vertex_buffers(
-                        draw_command_buffer,
-                        0,
-                        &[vulkan.vertex_buffer.buffer],
-                        &[0],
-                    );
-                    device.cmd_bind_index_buffer(
-                        draw_command_buffer,
-                        vulkan.index_buffer.buffer,
-                        0,
-                        vk::IndexType::UINT32,
-                    );
-                    device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, vulkan.pipeline_layout, 0, vulkan.descriptor_sets[current_frame..current_frame+1].as_ref(), &[]);
-                    device.cmd_draw_indexed(
-                        draw_command_buffer,
-                        3, // index_buffer_data.len() as u32, #TODO: change this to a variable
-                        1,
-                        0,
-                        0,
-                        1,
-                    );
-                    // Or draw without the index buffer
-                    // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-                    device.cmd_end_render_pass(draw_command_buffer);}
-            },
-        );
-        let signal_semaphores = [vulkan.rendering_complete_semaphores[present_index as usize]];
-        let swapchains = [vulkan.swapchain.swapchain];
-        let image_indices = [present_index];
-        let present_info = vk::PresentInfoKHR::default()
-            .wait_semaphores(&signal_semaphores) // &base.rendering_complete_semaphore)
-            .swapchains(&swapchains)
-            .image_indices(&image_indices);
-
-        unsafe {
-            vulkan.swapchain.swapchain_loader
-                .queue_present(vulkan.device.present_queue, &present_info)
-                .unwrap()};
+        
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {
