@@ -59,6 +59,18 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
     }
 }
 
+pub trait RenderBackend {
+    
+}
+
+pub struct VulkanBackend {
+    pub vulkan_context: VulkanContext
+}
+
+impl RenderBackend for VulkanBackend {
+    
+}
+
 
 pub struct PoissonEngine {
     window: Option<Box<dyn Window>>,
