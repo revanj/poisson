@@ -10,6 +10,9 @@ pub use interface::SlangProgramReflection;
 pub use interface::SlangStructReflection;
 pub use interface::SlangFieldReflection;
 
+
+
+#[cfg(target_arch = "x86_64")]
 #[cxx::bridge]
 mod interface {
 

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::ffi;
 use std::ffi::c_char;
-
+use std::sync::Arc;
 use ash;
 use ash::vk;
 use ash_window;
@@ -20,7 +20,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(window: &Box<dyn Window>) -> Self {
+    pub fn new(window: &Arc<dyn Window>) -> Self {
         println!("Creating Vulkan context");
         let entry = unsafe { ash::Entry::load().unwrap() };
         let app_info = vk::ApplicationInfo {

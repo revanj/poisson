@@ -5,10 +5,6 @@ use rust_renderer::slang;
 
 use rust_renderer::render_backend::vulkan::VulkanRenderBackend;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    
-    let event_loop = EventLoop::new()?;
-    let _ = event_loop.run_app(PoissonEngine::<VulkanRenderBackend>::new());
-
-    Ok(())
+fn main() -> Result<(), impl Error> {
+    rust_renderer::run_wgpu()
 }

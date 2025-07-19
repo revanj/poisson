@@ -23,7 +23,7 @@ use std::mem::ManuallyDrop;
 use std::sync::Arc;
 use std::time::SystemTime;
 use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
-
+use async_trait::async_trait;
 use cgmath::num_traits::FloatConst;
 
 use winit::window::Window;
@@ -166,8 +166,8 @@ impl VulkanRenderBackend {
     }
 }
 
-impl RenderBackend for VulkanRenderBackend {
-    fn new(window: &Box<dyn Window>) -> Self {
+impl VulkanRenderBackend {
+    pub(crate) fn new(window: &Arc<dyn Window>) -> Self {
         let instance = Instance::new(window);
 
         let physical_surface = PhysicalSurface::new(&instance, window);
@@ -509,8 +509,11 @@ impl RenderBackend for VulkanRenderBackend {
             descriptor_sets,
         }
     }
+}
 
-    fn update(self: &mut Self, init_time: SystemTime, current_frame: usize) {
+impl RenderBackend for VulkanRenderBackend {
+
+    fn update(self: &mut Self, current_frame: usize) {
         unsafe {
             self.device.device.wait_for_fences(
                 &[self.frames_in_flight_fences[current_frame]],
@@ -571,9 +574,7 @@ impl RenderBackend for VulkanRenderBackend {
             .render_area(self.physical_surface.resolution().into())
             .clear_values(&clear_values);
 
-        let elapsed_time = SystemTime::now().duration_since(init_time).unwrap().as_secs_f32();
-
-        println!("elapsed time is {}", elapsed_time);
+        let elapsed_time = SystemTime::now().duration_since(SystemTime::now()).unwrap().as_secs_f32();
 
         Self::update_uniform_buffer(self, current_frame, elapsed_time);
 

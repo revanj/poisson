@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use ash::khr::surface;
 use ash::vk;
 use ash::vk::{PresentModeKHR, SurfaceTransformFlagsKHR};
@@ -19,7 +20,7 @@ pub struct PhysicalSurface {
 }
 
 impl PhysicalSurface {
-    pub fn new(instance: &vulkan::Instance, window: &Box<dyn Window>) -> Self {
+    pub fn new(instance: &vulkan::Instance, window: &Arc<dyn Window>) -> Self {
         let surface = unsafe {
             ash_window::create_surface(
                 &instance.entry, &instance.instance,
