@@ -1395,7 +1395,6 @@ dependencies = [
  "cmake",
  "console_error_panic_hook",
  "console_log",
- "cxx",
  "cxx-build",
  "env_logger",
  "fern",
@@ -1403,6 +1402,7 @@ dependencies = [
  "parking_lot",
  "poisson_macros",
  "pollster",
+ "slang_refl",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -1680,6 +1680,12 @@ checksum = "04dc19736151f35336d325007ac991178d504a119863a2fcb3758cdb5e52c50d"
 [[package]]
 name = "slang_refl"
 version = "0.1.0"
+dependencies = [
+ "build-print",
+ "cmake",
+ "cxx",
+ "cxx-build",
+]
 
 [[package]]
 name = "slotmap"

@@ -29,7 +29,7 @@ use parking_lot::Mutex;
 use winit::window::Window;
 use render_object::Vertex;
 
-use crate::slang;
+use slang_refl;
 
 use crate::render_backend;
 use render_backend::RenderBackend;
@@ -326,10 +326,8 @@ impl VulkanRenderBackend {
                 device.device.update_descriptor_sets(&descriptor_write, &[]);
             }
         }
-
-
-
-        let compiler = slang::Compiler::new();
+        
+        let compiler = slang_refl::Compiler::new();
         let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
 
         let refl = linked_program.get_reflection();
@@ -577,7 +575,8 @@ impl RenderBackend for VulkanRenderBackend {
             .render_area(self.physical_surface.resolution().into())
             .clear_values(&clear_values);
 
-        let elapsed_time = SystemTime::now().duration_since(SystemTime::now()).unwrap().as_secs_f32();
+        //let elapsed_time = SystemTime::now().duration_since(SystemTime::now()).unwrap().as_secs_f32();
+        let elapsed_time = current_frame as f32 * 0.02;
 
         Self::update_uniform_buffer(self, current_frame, elapsed_time);
 

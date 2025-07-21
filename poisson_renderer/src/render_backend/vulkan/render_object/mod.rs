@@ -1,5 +1,4 @@
 use poisson_macros::ShaderInput;
-use crate::slang;
 
 pub trait ShaderInput{
     fn reflect() -> Vec<(&'static str, &'static str)>;

@@ -2,17 +2,19 @@ mod shader_cursor;
 
 use std::fmt;
 use std::fmt::{Debug, Formatter};
-use ash::Entry;
 use cxx::UniquePtr;
-use crate::slang::interface::{ShaderStage, SlangByteCodeOpaque, SlangComponentListOpaque, SlangComponentOpaque, SlangEntryPointOpaque, SlangModuleOpaque, VarType};
+use interface::{
+    SlangByteCodeOpaque, 
+    SlangComponentListOpaque, 
+    SlangComponentOpaque, 
+    SlangEntryPointOpaque, 
+    SlangModuleOpaque, 
+    VarType };
 pub use interface::SlangEntryPointReflection;
 pub use interface::SlangProgramReflection;
 pub use interface::SlangStructReflection;
 pub use interface::SlangFieldReflection;
 
-
-
-#[cfg(target_arch = "x86_64")]
 #[cxx::bridge]
 mod interface {
 
@@ -68,7 +70,7 @@ mod interface {
     }
 
     unsafe extern "C++" {
-        include!("poisson_renderer/src/slang/slang.h");
+        include!("slang_refl/src/slang.h");
 
         type SlangEntryPointOpaque;
         type SlangModuleOpaque;

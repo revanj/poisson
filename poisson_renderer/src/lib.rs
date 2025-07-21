@@ -10,10 +10,6 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 pub mod render_backend;
 
-#[cfg(not(target_arch = "wasm32"))]
-pub mod slang;
-
-
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -27,8 +23,6 @@ use fern;
 use console_log;
 use console_error_panic_hook;
 use log::logger;
-// #[cfg(not(target_arch = "wasm32"))]
-// use pollster;
 
 use wgpu::Face::Back;
 use crate::render_backend::RenderBackend;
@@ -48,33 +42,20 @@ pub struct PoissonEngine<Backend: RenderBackend> {
     #[allow(dead_code)]
     missed_resize: Arc<Mutex<Option<PhysicalSize<u32>>>>,
     current_frame: usize,
-    #[cfg(not(target_arch = "wasm32"))]
-    init_time: std::time::SystemTime,
 }
 
 
 impl<Backend: RenderBackend> PoissonEngine<Backend> {
     pub fn new() -> Self {
-        cfg_if::cfg_if! {
-            if #[cfg(not(target_arch = "wasm32"))] {
-                Self {
-                    window: None,
-                    render_backend: Default::default(),
-                    current_frame: 0,
-                    init_time: SystemTime::now(),
-                    missed_resize: Default::default(),
-                }
-            } else {
-                Self {
-                    window: None,
-                    render_backend: Default::default(),
-                    current_frame: 0,
-                    missed_resize: Default::default(),
-                }
-            }
+        Self {
+            window: None,
+            render_backend: Default::default(),
+            current_frame: 0,
+            missed_resize: Default::default(),
         }
-
     }
+
+    
 
     fn update(self: &mut Self) {
         if let Some(render_backend) = self.render_backend.lock().as_mut() {
@@ -104,11 +85,6 @@ impl ApplicationHandler for PoissonEngine<WgpuRenderBackend> {
                 return;
             },
         };
-
-        #[cfg(not(target_arch = "wasm32"))] {
-            self.init_time = SystemTime::now();
-        }
-        
         
         log::info!("after creating window!");
         if let Some(window_value) = &self.window {
@@ -224,8 +200,7 @@ impl ApplicationHandler for PoissonEngine<VulkanRenderBackend> {
                 return;
             },
         };
-
-        self.init_time = SystemTime::now();
+        
         if let Some(window_value) = &self.window {
 
             let render_backend = VulkanRenderBackend::new(window_value);
@@ -281,16 +256,13 @@ pub fn run_wgpu() -> Result<(), impl std::error::Error> {
 pub fn init_logger() {
     cfg_if::cfg_if! {
         if #[cfg(any(target_arch = "wasm32"))] {
-            // 使用查询字符串来获取日志级别。
             let query_string = web_sys::window().unwrap().location().search().unwrap();
             let query_level: Option<log::LevelFilter> = parse_url_query_string(&query_string, "RUST_LOG")
                 .and_then(|x| x.parse().ok());
-
-            // 我们将 wgpu 日志级别保持在错误级别，因为 Info 级别的日志输出非常多。
+            
             let base_level = query_level.unwrap_or(log::LevelFilter::Info);
             let wgpu_level = query_level.unwrap_or(log::LevelFilter::Error);
-
-            // 在 web 上，我们使用 fern，因为 console_log 没有按模块级别过滤功能。
+            
             fern::Dispatch::new()
                 .level(base_level)
                 .level_for("wgpu_core", wgpu_level)
@@ -301,14 +273,12 @@ pub fn init_logger() {
                 .unwrap();
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         } else if #[cfg(target_os = "android")] {
-            // 添加 Android 平台的日志初始化
             android_logger::init_once(
                 android_logger::Config::default()
                     .with_max_level(log::LevelFilter::Info)
             );
             log_panics::init();
         } else {
-            // parse_default_env 会读取 RUST_LOG 环境变量，并在这些默认过滤器之上应用它。
             env_logger::builder()
                 .filter_level(log::LevelFilter::Info)
                 .filter_module("wgpu_core", log::LevelFilter::Info)
@@ -333,7 +303,6 @@ fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a st
             return Some(value);
         }
     }
-
     None
 }
 

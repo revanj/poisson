@@ -1,9 +1,9 @@
 
 #pragma once
 
-#include "rust-renderer/external/slang/include/slang.h"
-#include "rust-renderer/external/slang/include/slang-com-ptr.h"
-#include "rust-renderer/external/slang/include/slang-com-helper.h"
+#include "slang_refl/external/slang/include/slang.h"
+#include "slang_refl/external/slang/include/slang-com-ptr.h"
+#include "slang_refl/external/slang/include/slang-com-helper.h"
 #include "rust/cxx.h"
 
 #include <memory>

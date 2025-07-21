@@ -1,10 +1,10 @@
-#include "rust-renderer/src/slang/slang.h"
+#include "slang_refl/src/slang.h"
 
-#include "rust-renderer/external/slang/include/slang.h"
-#include "rust-renderer/external/slang/include/slang-com-ptr.h"
-#include "rust-renderer/external/slang/include/slang-com-helper.h"
+#include "slang_refl/external/slang/include/slang.h"
+#include "slang_refl/external/slang/include/slang-com-ptr.h"
+#include "slang_refl/external/slang/include/slang-com-helper.h"
 
-#include "rust-renderer/src/slang/mod.rs.h"
+#include "slang_refl/src/lib.rs.h"
 
 #include <iostream>
 #include <array>
