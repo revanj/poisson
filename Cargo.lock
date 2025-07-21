@@ -1383,6 +1383,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "poisson_renderer"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "ash-window",
+ "async-trait",
+ "build-print",
+ "cfg-if",
+ "cgmath",
+ "cmake",
+ "console_error_panic_hook",
+ "console_log",
+ "cxx",
+ "cxx-build",
+ "env_logger",
+ "fern",
+ "log",
+ "parking_lot",
+ "poisson_macros",
+ "pollster",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "polling"
 version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1538,34 +1566,6 @@ name = "renderdoc-sys"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
-
-[[package]]
-name = "rust-renderer"
-version = "0.1.0"
-dependencies = [
- "ash",
- "ash-window",
- "async-trait",
- "build-print",
- "cfg-if",
- "cgmath",
- "cmake",
- "console_error_panic_hook",
- "console_log",
- "cxx",
- "cxx-build",
- "env_logger",
- "fern",
- "log",
- "parking_lot",
- "poisson_macros",
- "pollster",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "winit",
-]
 
 [[package]]
 name = "rustc-hash"
