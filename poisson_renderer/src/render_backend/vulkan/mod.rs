@@ -25,7 +25,7 @@ use std::time::SystemTime;
 use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
 use async_trait::async_trait;
 use cgmath::num_traits::FloatConst;
-
+use parking_lot::Mutex;
 use winit::window::Window;
 use render_object::Vertex;
 
@@ -512,6 +512,9 @@ impl VulkanRenderBackend {
 }
 
 impl RenderBackend for VulkanRenderBackend {
+    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: &Arc<dyn Window>) {
+        
+    }
 
     fn update(self: &mut Self, current_frame: usize) {
         unsafe {

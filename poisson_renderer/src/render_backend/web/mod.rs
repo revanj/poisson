@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use winit::window::Window;
 use crate::render_backend::RenderBackend;
 use wgpu;
@@ -22,6 +23,11 @@ pub struct WgpuRenderBackend {
 
 
 impl RenderBackend for WgpuRenderBackend {
+    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: &Arc<dyn Window>) where Self: Sized
+    {
+        todo!()
+    }
+
     fn update(self: &mut Self, current_frame: usize) {
         if self.size.width == 0 || self.size.height == 0 {
             return;

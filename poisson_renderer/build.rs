@@ -8,7 +8,7 @@ fn main() {
     //     cxx_build::bridge("src/slang/mod.rs")
     //         .file("src/slang/slang.cc")
     //         .std("c++14")
-    //         .compile("rust-renderer");
+    //         .compile("poisson_renderer");
     //
     //     let mut dst = cmake::build("external/slang");
     //     dst.push("lib");

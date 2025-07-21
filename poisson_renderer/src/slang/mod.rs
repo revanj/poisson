@@ -68,7 +68,7 @@ mod interface {
     }
 
     unsafe extern "C++" {
-        include!("rust-renderer/src/slang/slang.h");
+        include!("poisson_renderer/src/slang/slang.h");
 
         type SlangEntryPointOpaque;
         type SlangModuleOpaque;
