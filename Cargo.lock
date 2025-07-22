@@ -1794,6 +1794,7 @@ dependencies = [
 name = "poisson_renderer"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "ash",
  "ash-window",
  "async-trait",
