@@ -6,9 +6,51 @@ use winit::window::Window;
 use crate::render_backend::RenderBackend;
 use wgpu;
 use winit::dpi::PhysicalSize;
-
+use bytemuck;
+use wgpu::util::DeviceExt;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWeb;
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+// lib.rs
+impl Vertex {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                }
+            ]
+        }
+    }
+}
+
+
+// lib.rs
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
+    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+];
+
+
+
+
 
 pub struct WgpuRenderBackend {
     surface: wgpu::Surface<'static>,
@@ -20,6 +62,7 @@ pub struct WgpuRenderBackend {
     size_changed: bool,
     max_size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
 }
 
 
@@ -67,7 +110,8 @@ impl RenderBackend for WgpuRenderBackend {
                 ..Default::default()
             });
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..VERTICES.len() as u32, 0..1);
         }
 
         self.queue.submit(Some(encoder.finish()));
@@ -191,7 +235,7 @@ impl WgpuRenderBackend {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"), // 1.
-                buffers: &[], // 2.
+                buffers: &[Vertex::desc(),], // 2.
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState { // 3.
@@ -226,6 +270,14 @@ impl WgpuRenderBackend {
             cache: None, // 6.
         });
 
+        let vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(VERTICES),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
 
         Self {
             surface,
@@ -237,6 +289,7 @@ impl WgpuRenderBackend {
             size_changed: false,
             max_size: PhysicalSize {width: 800, height: 600},
             render_pipeline,
+            vertex_buffer,
         }
     }
 }

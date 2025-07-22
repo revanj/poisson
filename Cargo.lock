@@ -1390,6 +1390,7 @@ dependencies = [
  "ash-window",
  "async-trait",
  "build-print",
+ "bytemuck",
  "cfg-if",
  "cgmath",
  "cmake",
