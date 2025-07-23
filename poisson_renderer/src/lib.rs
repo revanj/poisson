@@ -16,7 +16,6 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::{WindowAttributes, WindowId};
 use winit::dpi::PhysicalSize;
-use winit::event_loop::ControlFlow::Poll;
 
 use parking_lot::Mutex;
 use fern;
@@ -74,8 +73,6 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
 
 impl ApplicationHandler for PoissonEngine<WgpuRenderBackend> {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
-        log::info!("can_create_surfaces!!");
-        event_loop.set_control_flow(Poll);
         let window_attributes = WindowAttributes::default().with_resizable(true);
         self.window = match event_loop.create_window(window_attributes) {
             Ok(window) => Some(Arc::from(window)),
@@ -185,7 +182,6 @@ impl ApplicationHandler for PoissonEngine<WgpuRenderBackend> {
 impl ApplicationHandler for PoissonEngine<VulkanRenderBackend> {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
     {
-        event_loop.set_control_flow(Poll);
         let window_attributes = WindowAttributes::default().with_resizable(true);
 
         self.window = match event_loop.create_window(window_attributes) {
