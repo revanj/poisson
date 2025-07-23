@@ -154,19 +154,22 @@ impl ApplicationHandler for PoissonEngine<WgpuRenderBackend> {
     // }
 
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        
+        if let Some(backend) = self.render_backend.lock().as_mut() {
+            backend.process_event(event.clone());
+        }
+        
         match event {
             // those two should push event to a queue to be resolved before render loop
-            WindowEvent::KeyboardInput { .. } => {},
+            WindowEvent::KeyboardInput { .. } => {
+            },
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested { .. } => {
-                #[cfg(any(target_arch = "wasm32", target_os = "windows"))]
-                {
-                    self.window.as_ref().unwrap().pre_present_notify();
-                    self.update();
-                    self.request_redraw();
-                }
+                self.window.as_ref().unwrap().pre_present_notify();
+                self.update();
+                self.request_redraw();
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
                 self.render_backend.lock().as_mut().unwrap().resize(width, height);
@@ -175,13 +178,6 @@ impl ApplicationHandler for PoissonEngine<WgpuRenderBackend> {
             },
             _ => (),
         }
-    }
-
-    // in linux the frame is driven from about_to_wait
-    // #[cfg(target_os = "linux")]
-    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
-        self.window.as_ref().unwrap().pre_present_notify();
-        self.update();
     }
 }
 
@@ -212,17 +208,16 @@ impl ApplicationHandler for PoissonEngine<VulkanRenderBackend> {
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
         match event {
             // those two should push event to a queue to be resolved before render loop
-            WindowEvent::KeyboardInput { .. } => {},
+            WindowEvent::KeyboardInput { .. } => {
+                self.render_backend.lock().as_mut().unwrap().process_event(event);
+            },
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested { .. } => {
-                #[cfg(any(target_arch = "wasm32", target_os = "windows"))]
-                {
-                    self.window.as_ref().unwrap().pre_present_notify();
-                    self.update();
-                    self.request_redraw();
-                }
+                self.window.as_ref().unwrap().pre_present_notify();
+                self.update();
+                self.request_redraw();
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
                 self.render_backend.lock().as_mut().unwrap().resize(width, height);
@@ -234,11 +229,11 @@ impl ApplicationHandler for PoissonEngine<VulkanRenderBackend> {
     }
 
     // in linux the frame is driven from about_to_wait
-    #[cfg(target_os = "linux")]
-    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
-        self.window.as_ref().unwrap().pre_present_notify();
-        self.update();
-    }
+    // #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
+    // fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
+    //     self.window.as_ref().unwrap().pre_present_notify();
+    //     self.update();
+    // }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

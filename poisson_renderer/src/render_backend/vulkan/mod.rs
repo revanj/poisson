@@ -26,6 +26,7 @@ use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
 use async_trait::async_trait;
 use cgmath::num_traits::FloatConst;
 use parking_lot::Mutex;
+use winit::event::WindowEvent;
 use winit::window::Window;
 use render_object::Vertex;
 
@@ -639,6 +640,10 @@ impl RenderBackend for VulkanRenderBackend {
             self.swapchain.swapchain_loader
                 .queue_present(self.device.present_queue, &present_info)
                 .unwrap()};
+    }
+
+    fn process_event(self: &mut Self, event: WindowEvent) {
+        todo!()
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {
