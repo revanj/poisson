@@ -6,7 +6,7 @@ use ash::vk::{Extent2D, ImageView};
 use crate::render_backend::vulkan;
 use vulkan::render_pass::RenderPass;
 use vulkan::device::Device;
-use vulkan::image::Image;
+use vulkan::img::Image;
 use vulkan::swapchain::Swapchain;
 
 pub struct Framebuffer {

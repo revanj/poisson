@@ -1,4 +1,4 @@
-mod image;
+mod img;
 mod instance;
 mod physical_surface;
 mod device;
@@ -40,10 +40,12 @@ use render_backend::vulkan::device::Device;
 use render_backend::vulkan::framebuffer::Framebuffer;
 use render_backend::vulkan::physical_surface::PhysicalSurface;
 use render_backend::vulkan::swapchain::Swapchain;
-use render_backend::vulkan::image::Image;
 use render_backend::vulkan::render_object::UniformBufferObject;
 use render_backend::vulkan::render_pass::RenderPass;
 
+use image;
+use wgpu::MemoryHints::Manual;
+use crate::render_backend::vulkan::img::Image;
 
 #[allow(clippy::too_many_arguments)]
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
@@ -114,6 +116,7 @@ pub struct VulkanRenderBackend {
 
     pub vertex_buffer: ManuallyDrop<GpuBuffer<Vertex>>,
     pub index_buffer: ManuallyDrop<GpuBuffer<u32>>,
+    pub texture: ManuallyDrop<Image>,
 
     pub uniform_buffers: ManuallyDrop<Vec<GpuBuffer<UniformBufferObject>>>,
 
@@ -166,10 +169,10 @@ impl VulkanRenderBackend {
 
 impl VulkanRenderBackend {
     pub(crate) fn new(window: &Arc<dyn Window>) -> Self {
-        let instance = 
+        let instance =
             ManuallyDrop::new(Instance::new(window));
-        
-        let physical_surface = 
+
+        let physical_surface =
             ManuallyDrop::new(PhysicalSurface::new(&instance, window));
 
         let device =
@@ -262,6 +265,35 @@ impl VulkanRenderBackend {
         vertex_buffer.write(&vertices);
         vertex_buffer.unmap();
 
+        let diffuse_bytes = include_bytes!("../../../../textures/happy-tree.png");
+        let img = image::load_from_memory(diffuse_bytes).unwrap().to_rgb8();
+        let image_extents = img.dimensions();
+        let image_raw = img.as_raw();
+        let image_slice = image_raw.as_slice();
+        
+        let mut texture_buffer = GpuBuffer::<u8>::create_buffer(
+            &device,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+            (image_extents.0 * image_extents.1 * 4) as usize);
+        texture_buffer.map();
+        texture_buffer.write(image_slice);
+        texture_buffer.unmap();
+
+        let texture_image = img::Image::create_image(
+            &device,
+            &texture_buffer.buffer,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            vk::Extent2D { width: image_extents.0, height: image_extents.1 }
+        );
+        
+        let texture_image = ManuallyDrop::new(texture_image);
+
+        drop(texture_buffer);
+
         let ubo_layout_binding = vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(DescriptorType::UNIFORM_BUFFER)
@@ -277,8 +309,6 @@ impl VulkanRenderBackend {
         let descriptor_set_layout = unsafe {
             device.device.create_descriptor_set_layout(&descriptor_set_layout_create_info, None).unwrap()
         };
-
-        let descriptor_set_layouts = [descriptor_set_layout];
 
         let mut uniform_buffers = Vec::new();
         for _ in 0..framebuffers.len() {
@@ -499,6 +529,7 @@ impl VulkanRenderBackend {
             vertex_buffer,
             index_buffer,
             uniform_buffers,
+            texture: texture_image,
 
             triangle_shader_module,
             descriptor_set_layout,
@@ -636,6 +667,7 @@ impl RenderBackend for VulkanRenderBackend {
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 
+
         unsafe {
             self.swapchain.swapchain_loader
                 .queue_present(self.device.present_queue, &present_info)
@@ -662,7 +694,7 @@ impl Drop for VulkanRenderBackend {
             self.device.device.destroy_shader_module(self.triangle_shader_module, None);
 
             self.device.device.destroy_pipeline_layout(self.pipeline_layout, None);
-            
+
             for i in 0..self.framebuffers.len() {
                 self.device.device.destroy_semaphore(self.image_available_semaphores[i], None);
                 self.device.device.destroy_semaphore(self.rendering_complete_semaphores[i], None);
@@ -672,16 +704,18 @@ impl Drop for VulkanRenderBackend {
 
             self.device.device.destroy_descriptor_pool(self.descriptor_pool, None);
             self.device.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
-            
+
             ManuallyDrop::drop(&mut self.framebuffers);
             ManuallyDrop::drop(&mut self.render_pass);
             ManuallyDrop::drop(&mut self.swapchain);
             ManuallyDrop::drop(&mut self.vertex_buffer);
             ManuallyDrop::drop(&mut self.index_buffer);
             ManuallyDrop::drop(&mut self.uniform_buffers);
+            ManuallyDrop::drop(&mut self.texture);
             ManuallyDrop::drop(&mut self.device);
             ManuallyDrop::drop(&mut self.physical_surface);
             ManuallyDrop::drop(&mut self.instance);
         }
     }
 }
+    
