@@ -237,9 +237,20 @@ pub struct WgpuRenderBackend {
 
 
 impl RenderBackend for WgpuRenderBackend {
-    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: &Arc<dyn Window>) where Self: Sized
+    fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
     {
-        todo!()
+        cfg_if::cfg_if! {
+            if #[cfg(any(target_arch="wasm32", target_platform="linux"))] {
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let new_backend = WgpuRenderBackend::new(&window).await;
+                        let mut locked_backend = backend_to_init.lock();
+                        *locked_backend = Some(new_backend);
+                    });
+            } else {
+                let render_backend = pollster::block_on(WgpuRenderBackend::new(&window));
+                backend_to_init.lock().replace(render_backend);
+            }
+        }
     }
 
     fn update(self: &mut Self, current_frame: usize) {

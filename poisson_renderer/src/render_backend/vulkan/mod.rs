@@ -511,8 +511,9 @@ impl VulkanRenderBackend {
 }
 
 impl RenderBackend for VulkanRenderBackend {
-    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: &Arc<dyn Window>) {
-        
+    fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) {
+        let render_backend = VulkanRenderBackend::new(&window);
+        backend_to_init.lock().replace(render_backend);
     }
 
     fn update(self: &mut Self, current_frame: usize) {

@@ -71,115 +71,7 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
 
 }
 
-impl ApplicationHandler for PoissonEngine<WgpuRenderBackend> {
-    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
-        let window_attributes = WindowAttributes::default().with_resizable(true);
-        self.window = match event_loop.create_window(window_attributes) {
-            Ok(window) => Some(Arc::from(window)),
-            Err(err) => {
-                eprintln!("error creating window: {err}");
-                event_loop.exit();
-                return;
-            },
-        };
-        
-        log::info!("after creating window!");
-        if let Some(window_value) = &self.window {
-            cfg_if::cfg_if! {
-                if #[cfg(target_arch = "wasm32")] {
-                    let backend = self.render_backend.clone();
-                    let missed_resize = self.missed_resize.clone();
-                    let window_cloned = window_value.clone();
-                    wasm_bindgen_futures::spawn_local(async move {
-                        let new_backend = WgpuRenderBackend::new(&window_cloned).await;
-                        let mut locked_backend = backend.lock();
-                        *locked_backend = Some(new_backend);
-
-                        if let Some(PhysicalSize{width, height}) = *missed_resize.lock() {
-                            locked_backend.as_mut().unwrap().resize(width, height);
-                            window_cloned.request_redraw();
-                        }
-                    });
-                } else {
-                    let render_backend = pollster::block_on(WgpuRenderBackend::new(window_value));
-                    self.render_backend.lock().replace(render_backend);
-                }
-            }
-        }
-    }
-
-    // fn resumed(&mut self, event_loop: &dyn ActiveEventLoop) {
-    //     log::info!("resumed!!");
-    //     if self.render_backend.as_ref().lock().is_some() {
-    //         return;
-    //     }
-    //
-    //     // event_loop.set_control_flow(Poll);
-    //     let window_attributes = WindowAttributes::default().with_resizable(true);
-    //     self.window = match event_loop.create_window(window_attributes) {
-    //         Ok(window) => Some(Arc::from(window)),
-    //         Err(err) => {
-    //             eprintln!("error creating window: {err}");
-    //             event_loop.exit();
-    //             return;
-    //         },
-    //     };
-    //
-    //     self.init_time = SystemTime::now();
-    //     if let Some(window_value) = &self.window {
-    //         cfg_if::cfg_if! {
-    //             if #[cfg(target_arch = "wasm32")] {
-    //                 let backend = self.render_backend.clone();
-    //                 let missed_resize = self.missed_resize.clone();
-    //                 let window_cloned = window_value.clone();
-    //                 wasm_bindgen_futures::spawn_local(async move {
-    //                     let new_backend = WgpuRenderBackend::new(&window_cloned).await;
-    //                     let mut locked_backend = backend.lock();
-    //                     *locked_backend = Some(new_backend);
-    //
-    //                     if let Some(PhysicalSize{width, height}) = *missed_resize.lock() {
-    //                         locked_backend.as_mut().unwrap().resize(width, height);
-    //                         window_cloned.request_redraw();
-    //                     }
-    //                 });
-    //             } else {
-    //                 let render_backend = pollster::block_on(WgpuRenderBackend::new(window_value));
-    //                 self.render_backend.lock().replace(render_backend);
-    //             }
-    //         }
-    //     }
-    // }
-
-    fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        
-        if let Some(backend) = self.render_backend.lock().as_mut() {
-            backend.process_event(event.clone());
-        }
-        
-        match event {
-            // those two should push event to a queue to be resolved before render loop
-            WindowEvent::KeyboardInput { .. } => {
-            },
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            },
-            WindowEvent::RedrawRequested { .. } => {
-                self.window.as_ref().unwrap().pre_present_notify();
-                self.update();
-                self.request_redraw();
-            },
-            WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
-                self.render_backend.lock().as_mut().unwrap().resize(width, height);
-                self.update();
-                self.request_redraw();
-            },
-            _ => (),
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl ApplicationHandler for PoissonEngine<VulkanRenderBackend> {
+impl<Backend: RenderBackend> ApplicationHandler for PoissonEngine<Backend> {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
     {
         let window_attributes = WindowAttributes::default().with_resizable(true);
@@ -193,11 +85,8 @@ impl ApplicationHandler for PoissonEngine<VulkanRenderBackend> {
             },
         };
         
-        if let Some(window_value) = &self.window {
-
-            let render_backend = VulkanRenderBackend::new(window_value);
-            self.render_backend.lock().replace(render_backend);
-
+        if let Some(window_value) = self.window.clone() {
+            Backend::init(self.render_backend.clone(), window_value);
         }
     }
 
