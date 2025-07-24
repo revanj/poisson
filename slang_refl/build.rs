@@ -13,6 +13,6 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-lib=dylib=slang");
     
-    println!("cargo:rerun-if-changed=src/slang.cpp");
+    println!("cargo:rerun-if-changed=src/slang.cc");
     println!("cargo:rerun-if-changed=src/slang.h");
 }
