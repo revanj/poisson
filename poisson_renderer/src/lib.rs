@@ -53,9 +53,7 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
             missed_resize: Default::default(),
         }
     }
-
     
-
     fn update(self: &mut Self) {
         if let Some(render_backend) = self.render_backend.lock().as_mut() {
             render_backend.update(self.current_frame);
