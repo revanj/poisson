@@ -6,7 +6,6 @@ use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 
 use crate::render_backend::vulkan;
-use vulkan::Destroy;
 
 pub struct PhysicalSurface {
     pub surface: vk::SurfaceKHR,
@@ -161,8 +160,8 @@ impl PhysicalSurface {
 
 }
 
-impl Destroy for PhysicalSurface {
-    fn destroy(&mut self) {
+impl Drop for PhysicalSurface {
+    fn drop(&mut self) {
         unsafe {
             self.surface_loader.destroy_surface(self.surface, None);
         }

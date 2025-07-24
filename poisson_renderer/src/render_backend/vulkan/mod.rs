@@ -44,9 +44,6 @@ use render_backend::vulkan::image::Image;
 use render_backend::vulkan::render_object::UniformBufferObject;
 use render_backend::vulkan::render_pass::RenderPass;
 
-trait Destroy {
-    fn destroy(self: &mut Self);
-}
 
 #[allow(clippy::too_many_arguments)]
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
@@ -96,8 +93,8 @@ pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
 /// There will probably be a pointer of this being passed around
 pub struct VulkanRenderBackend {
-    pub instance: Instance,
-    pub physical_surface: PhysicalSurface,
+    pub instance: ManuallyDrop<Instance>,
+    pub physical_surface: ManuallyDrop<PhysicalSurface>,
     pub device : ManuallyDrop<Arc<Device>>,
     pub swapchain: ManuallyDrop<Swapchain>,
     pub new_swapchain_size: Option<vk::Extent2D>,
@@ -169,9 +166,11 @@ impl VulkanRenderBackend {
 
 impl VulkanRenderBackend {
     pub(crate) fn new(window: &Arc<dyn Window>) -> Self {
-        let instance = Instance::new(window);
-
-        let physical_surface = PhysicalSurface::new(&instance, window);
+        let instance = 
+            ManuallyDrop::new(Instance::new(window));
+        
+        let physical_surface = 
+            ManuallyDrop::new(PhysicalSurface::new(&instance, window));
 
         let device =
             ManuallyDrop::new(Arc::new(Device::new(&instance, &physical_surface)));
@@ -644,7 +643,7 @@ impl RenderBackend for VulkanRenderBackend {
     }
 
     fn process_event(self: &mut Self, event: WindowEvent) {
-        todo!()
+        println!("process event");
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {
@@ -662,16 +661,8 @@ impl Drop for VulkanRenderBackend {
             self.device.device.destroy_pipeline(self.graphics_pipeline, None);
             self.device.device.destroy_shader_module(self.triangle_shader_module, None);
 
-            // self.device.device.free_memory(self.index_buffer_memory, None);
-            // self.device.device.destroy_buffer(self.index_buffer, None);
-            //
-            // self.device.device.free_memory(self.vertex_input_buffer_memory, None);
-            // self.device.device.destroy_buffer(self.vertex_input_buffer, None);
-
             self.device.device.destroy_pipeline_layout(self.pipeline_layout, None);
-
-
-
+            
             for i in 0..self.framebuffers.len() {
                 self.device.device.destroy_semaphore(self.image_available_semaphores[i], None);
                 self.device.device.destroy_semaphore(self.rendering_complete_semaphores[i], None);
@@ -681,9 +672,7 @@ impl Drop for VulkanRenderBackend {
 
             self.device.device.destroy_descriptor_pool(self.descriptor_pool, None);
             self.device.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
-
-
-
+            
             ManuallyDrop::drop(&mut self.framebuffers);
             ManuallyDrop::drop(&mut self.render_pass);
             ManuallyDrop::drop(&mut self.swapchain);
@@ -691,9 +680,8 @@ impl Drop for VulkanRenderBackend {
             ManuallyDrop::drop(&mut self.index_buffer);
             ManuallyDrop::drop(&mut self.uniform_buffers);
             ManuallyDrop::drop(&mut self.device);
-
-            self.physical_surface.destroy();
-            self.instance.destroy();
+            ManuallyDrop::drop(&mut self.physical_surface);
+            ManuallyDrop::drop(&mut self.instance);
         }
     }
 }
