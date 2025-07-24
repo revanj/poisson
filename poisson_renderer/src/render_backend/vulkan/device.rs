@@ -9,6 +9,7 @@ pub struct Device {
     pub present_queue: vk::Queue,
     pub command_pool: vk::CommandPool,
     pub physical_memory_properties: vk::PhysicalDeviceMemoryProperties,
+    pub physical_device_properties: vk::PhysicalDeviceProperties,
 }
 
 impl Device {
@@ -19,6 +20,7 @@ impl Device {
 
         let features = vk::PhysicalDeviceFeatures {
             shader_clip_distance: 1,
+            sampler_anisotropy: vk::TRUE,
             ..Default::default()
         };
         let priorities = [1.0];
@@ -31,8 +33,7 @@ impl Device {
             .queue_create_infos(std::slice::from_ref(&queue_info))
             .enabled_extension_names(&device_extension_names_raw)
             .enabled_features(&features);
-        
-        
+
         let device: ash::Device = unsafe {
             instance.instance
                 .create_device(physical_surface.physical_device, &device_create_info, None)
@@ -49,16 +50,22 @@ impl Device {
 
         let command_pool = unsafe {device.create_command_pool(&pool_create_info, None).unwrap()};
 
-        let memory_properties = unsafe {
+        let physical_memory_properties = unsafe {
             instance.instance.get_physical_device_memory_properties(
                 physical_surface.physical_device)
+        };
+        
+        let physical_device_properties = unsafe {
+            instance.instance
+                .get_physical_device_properties(physical_surface.physical_device)
         };
 
         Self {
             device,
             present_queue,
             command_pool,
-            physical_memory_properties: memory_properties
+            physical_memory_properties,
+            physical_device_properties
         }
     }
 

@@ -41,16 +41,17 @@ impl Image {
                 &[region]
             )
         }
+        cmd_buffer.submit(device);
     }
 
     fn transition_image_layout(
         device: &Device,
-        command_buffer: CommandBuffer,
         image: vk::Image,
         format: vk::Format,
         old_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout)
     {
+        let cmd_buffer = OneshotCommandBuffer::new(device);
         let mut layout_transition_barrier =
             vk::ImageMemoryBarrier::default()
                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
@@ -89,7 +90,7 @@ impl Image {
 
         unsafe {
             device.device.cmd_pipeline_barrier(
-                command_buffer,
+                cmd_buffer.command_buffer,
                 src_stage,
                 dst_stage,
                 vk::DependencyFlags::empty(),
@@ -98,6 +99,7 @@ impl Image {
                 &[layout_transition_barrier],
             );
         }
+        cmd_buffer.submit(device);
     }
 
     unsafe fn transition_depth_layout(
@@ -195,11 +197,9 @@ impl Image {
         unsafe { device.device
             .bind_image_memory(image, memory, 0)
             .expect("Unable to bind image memory"); }
-
-        let setup_cmd_buffer = OneshotCommandBuffer::new(&device);
+        
         Self::transition_image_layout(
             device,
-            setup_cmd_buffer.command_buffer,
             image,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageLayout::UNDEFINED,
@@ -211,11 +211,10 @@ impl Image {
             &image,
             extent);
         Self::transition_image_layout(
-            device, setup_cmd_buffer.command_buffer,
+            device,
             image, vk::Format::R8G8B8A8_SRGB,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-        setup_cmd_buffer.submit(&device);
         
         let view = 
             Self::create_image_view(

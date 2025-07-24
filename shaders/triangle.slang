@@ -5,15 +5,21 @@ struct Uniform
     float4x4 projection;
 }
 
+[[vk::binding(0)]] Uniform uniform_var;
+[[vk::binding(1)]] Sampler2D sampler;
+
+
 struct AssembledVertex
 {
-    float3	position : POSITION;
-    float3	color    : COLOR;
+    float3 position : POSITION;
+    float3 color    : COLOR;
+    float2 tex_coord: TEX_COORD;
 };
 
 struct CoarseVertex
 {
     float3 color;
+    float2 tex_coord;
 };
 
 struct Fragment
@@ -29,16 +35,15 @@ struct VertexStageOutput
 
 [shader("vertex")]
 VertexStageOutput vertexMain(
-    ParameterBlock<Uniform> uniform_var,
     AssembledVertex assembledVertex)
 {
     VertexStageOutput output;
 
     // gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 0.0, 1.0);
     float4 position = mul(float4(assembledVertex.position, 1.0), mul(uniform_var.model, mul(uniform_var.view, uniform_var.projection)));
-    float3 color    = assembledVertex.color;
 
-    output.coarseVertex.color = color;
+    output.coarseVertex.tex_coord = assembledVertex.tex_coord;
+    output.coarseVertex.color = assembledVertex.color;
     output.sv_position = position;
     // output.sv_position = mul(modelViewProjection, float4(position, 1.0));
 
@@ -49,9 +54,7 @@ VertexStageOutput vertexMain(
 Fragment fragmentMain(
     CoarseVertex coarseVertex : CoarseVertex) : SV_Target
 {
-    float3 color = coarseVertex.color;
-
     Fragment output;
-    output.color = float4(color, 1.0);
+    output.color = sampler.Sample(coarseVertex.tex_coord);
     return output;
 }

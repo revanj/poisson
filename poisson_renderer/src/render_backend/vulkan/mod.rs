@@ -10,6 +10,7 @@ pub mod render_object;
 mod buffer;
 pub mod utils;
 mod physical_device;
+mod texture;
 
 pub use instance::*;
 use std::ops::Drop;
@@ -46,6 +47,7 @@ use render_backend::vulkan::render_pass::RenderPass;
 use image;
 use wgpu::MemoryHints::Manual;
 use crate::render_backend::vulkan::img::Image;
+use crate::render_backend::vulkan::texture::Texture;
 
 #[allow(clippy::too_many_arguments)]
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
@@ -116,7 +118,7 @@ pub struct VulkanRenderBackend {
 
     pub vertex_buffer: ManuallyDrop<GpuBuffer<Vertex>>,
     pub index_buffer: ManuallyDrop<GpuBuffer<u32>>,
-    pub texture: ManuallyDrop<Image>,
+    pub texture: ManuallyDrop<Texture>,
 
     pub uniform_buffers: ManuallyDrop<Vec<GpuBuffer<UniformBufferObject>>>,
 
@@ -222,7 +224,7 @@ impl VulkanRenderBackend {
 
         let framebuffers = ManuallyDrop::new(framebuffers);
 
-        let index_buffer_data = [0u32, 1, 2];
+        let index_buffer_data = [0u32, 1, 2, 2, 3, 0];
 
         let mut index_buffer = ManuallyDrop::new(GpuBuffer::<u32>::create_buffer(
             &device,
@@ -236,24 +238,12 @@ impl VulkanRenderBackend {
         index_buffer.write(&index_buffer_data);
         index_buffer.unmap();
 
-        let pi = f32::PI();
-        let angles = [0f32, pi / 3f32 * 2f32, pi/3f32 * 4f32];
-        let ver = angles.map(|angle| [angle.sin(), angle.cos(), 0f32]);
-
-        let vertices = [
-            Vertex {
-                pos: ver[0],
-                color: [0.0, 0.0, 1.0],
-            },
-            Vertex {
-                pos: ver[1],
-                color: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: ver[2],
-                color: [1.0, 0.0, 0.0],
-            },
-        ];
+        let vertices = vec!{
+            Vertex {pos: [-0.5f32, -0.5f32, 0.0f32],  color: [1.0f32, 0.0f32, 0.0f32], tex_coord: [1.0f32, 0.0f32]},
+            Vertex {pos: [0.5f32, -0.5f32, 0.0f32],  color: [0.0f32, 1.0f32, 0.0f32], tex_coord: [0.0f32, 0.0f32]},
+            Vertex {pos: [0.5f32, 0.5f32, 0.0f32],  color: [0.0f32, 0.0f32, 1.0f32], tex_coord: [0.0f32, 1.0f32]},
+            Vertex {pos: [-0.5f32, 0.5f32, 0.0f32],  color: [1.0f32, 1.0f32, 1.0f32], tex_coord: [1.0f32, 1.0f32]},
+        };
 
         let mut vertex_buffer = ManuallyDrop::new(GpuBuffer::<Vertex>::create_buffer(
             &device,
@@ -266,41 +256,24 @@ impl VulkanRenderBackend {
         vertex_buffer.unmap();
 
         let diffuse_bytes = include_bytes!("../../../../textures/happy-tree.png");
-        let img = image::load_from_memory(diffuse_bytes).unwrap().to_rgb8();
-        let image_extents = img.dimensions();
-        let image_raw = img.as_raw();
-        let image_slice = image_raw.as_slice();
-        
-        let mut texture_buffer = GpuBuffer::<u8>::create_buffer(
-            &device,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-            (image_extents.0 * image_extents.1 * 4) as usize);
-        texture_buffer.map();
-        texture_buffer.write(image_slice);
-        texture_buffer.unmap();
+        let img = image::load_from_memory(diffuse_bytes).unwrap();
 
-        let texture_image = img::Image::create_image(
-            &device,
-            &texture_buffer.buffer,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            vk::Extent2D { width: image_extents.0, height: image_extents.1 }
-        );
-        
+        let texture_image = Texture::from_image(&device, img.to_rgba8());
         let texture_image = ManuallyDrop::new(texture_image);
-
-        drop(texture_buffer);
 
         let ubo_layout_binding = vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
             .stage_flags(ShaderStageFlags::VERTEX);
+        let sampler_layout_binding = vk::DescriptorSetLayoutBinding::default()
+            .binding(1)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT);
 
-        let bindings = [ubo_layout_binding];
+        let bindings = [
+            ubo_layout_binding, sampler_layout_binding];
 
         let descriptor_set_layout_create_info =
             vk::DescriptorSetLayoutCreateInfo::default()
@@ -325,9 +298,13 @@ impl VulkanRenderBackend {
 
         let uniform_buffers = ManuallyDrop::new(uniform_buffers);
 
-        let descriptor_pool_sizes = [vk::DescriptorPoolSize::default()
-            .descriptor_count(framebuffers.len() as u32)
-            .ty(DescriptorType::UNIFORM_BUFFER)];
+        let descriptor_pool_sizes = [
+            vk::DescriptorPoolSize::default()
+                .descriptor_count(framebuffers.len() as u32)
+                .ty(DescriptorType::UNIFORM_BUFFER),
+            vk::DescriptorPoolSize::default()
+                .descriptor_count(framebuffers.len() as u32)
+                .ty(DescriptorType::COMBINED_IMAGE_SAMPLER)];
 
         let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
             .pool_sizes(&descriptor_pool_sizes)
@@ -349,9 +326,26 @@ impl VulkanRenderBackend {
         for i in 0..framebuffers.len() {
             let descriptor_buffer_info = [vk::DescriptorBufferInfo::default()
                 .buffer(uniform_buffers[i].buffer).range(size_of::<UniformBufferObject>() as DeviceSize)];
-            let descriptor_write = [vk::WriteDescriptorSet::default()
-                .descriptor_count(1).descriptor_type(DescriptorType::UNIFORM_BUFFER)
-                .buffer_info(&descriptor_buffer_info).dst_binding(0).dst_array_element(0).dst_set(descriptor_sets[i])];
+            let descriptor_image_info = [vk::DescriptorImageInfo::default()
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .image_view(texture_image.image.view)
+                .sampler(texture_image.sampler)];
+            let descriptor_write = [
+                vk::WriteDescriptorSet::default()
+                    .descriptor_count(1)
+                    .descriptor_type(DescriptorType::UNIFORM_BUFFER)
+                    .buffer_info(&descriptor_buffer_info)
+                    .dst_binding(0)
+                    .dst_array_element(0)
+                    .dst_set(descriptor_sets[i]),
+                vk::WriteDescriptorSet::default()
+                    .descriptor_count(1)
+                    .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER)
+                    .image_info(&descriptor_image_info)
+                    .dst_binding(1)
+                    .dst_array_element(0)
+                    .dst_set(descriptor_sets[i])
+            ];
             unsafe {
                 device.device.update_descriptor_sets(&descriptor_write, &[]);
             }
@@ -418,6 +412,12 @@ impl VulkanRenderBackend {
                 format: vk::Format::R32G32B32_SFLOAT,
                 offset: std::mem::offset_of!(Vertex, color) as u32,
             },
+            vk::VertexInputAttributeDescription {
+                location: 2,
+                binding: 0,
+                format: vk::Format::R32G32_SFLOAT,
+                offset: std::mem::offset_of!(Vertex, tex_coord) as u32,
+            },
         ];
 
         let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::default()
@@ -446,7 +446,7 @@ impl VulkanRenderBackend {
             front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             line_width: 1.0,
             polygon_mode: vk::PolygonMode::FILL,
-            cull_mode: vk::CullModeFlags::FRONT,
+            cull_mode: vk::CullModeFlags::BACK,
             ..Default::default()
         };
         let multisample_state_info = vk::PipelineMultisampleStateCreateInfo {
@@ -645,10 +645,15 @@ impl RenderBackend for VulkanRenderBackend {
                         0,
                         vk::IndexType::UINT32,
                     );
-                    device.cmd_bind_descriptor_sets(draw_command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, self.descriptor_sets[current_frame..current_frame+1].as_ref(), &[]);
+                    device.cmd_bind_descriptor_sets(
+                        draw_command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.pipeline_layout,
+                        0, self.descriptor_sets[current_frame..current_frame+1].as_ref(), 
+                        &[]);
                     device.cmd_draw_indexed(
                         draw_command_buffer,
-                        3, // index_buffer_data.len() as u32, #TODO: change this to a variable
+                        6,
                         1,
                         0,
                         0,
@@ -718,4 +723,3 @@ impl Drop for VulkanRenderBackend {
         }
     }
 }
-    

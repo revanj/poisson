@@ -19,6 +19,7 @@ pub trait GraphicsShaderValidate {
 pub struct Vertex {
     pub pos: [f32; 3],
     pub color: [f32; 3],
+    pub tex_coord: [f32; 2]
 }
 
 pub struct Graphics<Varying: ShaderInput, Uniform: ShaderInput> {
