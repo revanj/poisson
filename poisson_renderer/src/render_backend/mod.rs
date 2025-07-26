@@ -9,7 +9,7 @@ use crate::PoissonEngine;
 pub trait RenderBackend { 
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized;
     fn render(self: &mut Self);
-    fn process_event(self: &mut Self, event: WindowEvent);
+    fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
 }
 

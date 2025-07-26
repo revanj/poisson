@@ -305,8 +305,8 @@ impl RenderBackend for WgpuRenderBackend {
         output.present();
     }
 
-    fn process_event(self: &mut Self, event: WindowEvent) {
-        self.camera_controller.process_events(&event);
+    fn process_event(self: &mut Self, event: &WindowEvent) {
+        self.camera_controller.process_events(event);
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {

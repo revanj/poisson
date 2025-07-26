@@ -684,7 +684,7 @@ impl RenderBackend for VulkanRenderBackend {
         self.current_frame = self.current_frame % 3;
     }
 
-    fn process_event(self: &mut Self, event: WindowEvent) {
+    fn process_event(self: &mut Self, event: &WindowEvent) {
         println!("process event");
     }
 

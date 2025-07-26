@@ -9,6 +9,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 
 pub mod render_backend;
+mod windowing;
+mod input;
 
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -32,11 +34,12 @@ use crate::render_backend::vulkan::VulkanRenderBackend;
 
 #[cfg(target_arch = "wasm32")]
 use web_sys;
-
+use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::render_backend::web::WgpuRenderBackend;
 
 pub struct PoissonEngine<Backend: RenderBackend> {
     window: Option<Arc<dyn Window>>,
+    input: input::Input,
     render_backend: Arc<Mutex<Option<Backend>>>,
 }
 
@@ -45,14 +48,23 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
     pub fn new() -> Self {
         Self {
             window: None,
+            input: input::Input::new(),
             render_backend: Default::default(),
         }
+    }
+    
+    fn init(self: &mut Self) {
+        self.input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
     }
     
     fn update(self: &mut Self) {
         
         if let Some(render_backend) = self.render_backend.lock().as_mut() {
             render_backend.render();
+        }
+        
+        if self.input.is_pressed("up") {
+            println!("pressing up!");
         }
     }
 
@@ -63,55 +75,6 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
 
 }
 
-impl<Backend: RenderBackend> ApplicationHandler for PoissonEngine<Backend> {
-    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
-    {
-        let window_attributes = WindowAttributes::default().with_resizable(true);
-
-        self.window = match event_loop.create_window(window_attributes) {
-            Ok(window) => Some(Arc::from(window)),
-            Err(err) => {
-                eprintln!("error creating window: {err}");
-                event_loop.exit();
-                return;
-            },
-        };
-        
-        if let Some(window_value) = self.window.clone() {
-            Backend::init(self.render_backend.clone(), window_value);
-        }
-    }
-
-    fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        match event {
-            // those two should push event to a queue to be resolved before render loop
-            WindowEvent::KeyboardInput { .. } => {
-                self.render_backend.lock().as_mut().unwrap().process_event(event);
-            },
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            },
-            WindowEvent::RedrawRequested { .. } => {
-                self.window.as_ref().unwrap().pre_present_notify();
-                self.update();
-                self.request_redraw();
-            },
-            WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
-                self.render_backend.lock().as_mut().unwrap().resize(width, height);
-                self.update();
-                self.request_redraw();
-            },
-            _ => (),
-        }
-    }
-
-    // in linux the frame is driven from about_to_wait
-    // #[cfg(all(target_os = "linux", not(target_arch = "wasm32")))]
-    // fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
-    //     self.window.as_ref().unwrap().pre_present_notify();
-    //     self.update();
-    // }
-}
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run_vulkan() -> Result<(), impl std::error::Error> {
