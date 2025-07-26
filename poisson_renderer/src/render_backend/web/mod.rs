@@ -253,15 +253,12 @@ impl RenderBackend for WgpuRenderBackend {
         }
     }
 
-    fn update(self: &mut Self, current_frame: usize) {
-
+    fn render(self: &mut Self) {
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
-
         if self.size.width == 0 || self.size.height == 0 {
             return;
         }
         self.resize_surface_if_needed();
-
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);
 

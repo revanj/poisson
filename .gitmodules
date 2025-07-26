@@ -1,3 +1,6 @@
 [submodule "slang_refl/external/slang"]
 	path = slang_refl/external/slang
 	url = https://github.com/shader-slang/slang
+[submodule "rj"]
+	path = rj
+	url = git@github.com:revanj/rj_rust.git

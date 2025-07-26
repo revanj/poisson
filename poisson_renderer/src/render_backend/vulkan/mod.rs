@@ -129,6 +129,7 @@ pub struct VulkanRenderBackend {
 
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub current_frame: usize,
 }
 
 impl VulkanRenderBackend { 
@@ -536,6 +537,7 @@ impl VulkanRenderBackend {
             pipeline_layout,
             descriptor_pool,
             descriptor_sets,
+            current_frame: 0
         }
     }
 }
@@ -546,10 +548,10 @@ impl RenderBackend for VulkanRenderBackend {
         backend_to_init.lock().replace(render_backend);
     }
 
-    fn update(self: &mut Self, current_frame: usize) {
+    fn render(self: &mut Self) {
         unsafe {
             self.device.device.wait_for_fences(
-                &[self.frames_in_flight_fences[current_frame]],
+                &[self.frames_in_flight_fences[self.current_frame]],
                 true, u64::MAX).unwrap();
         }
 
@@ -571,14 +573,14 @@ impl RenderBackend for VulkanRenderBackend {
         }];
         let scissors = [self.physical_surface.resolution().into()];
 
-        unsafe {self.device.device.reset_fences(&[self.frames_in_flight_fences[current_frame]]).unwrap()};
+        unsafe {self.device.device.reset_fences(&[self.frames_in_flight_fences[self.current_frame]]).unwrap()};
 
         let acquire_result = unsafe {self
             .swapchain.swapchain_loader
             .acquire_next_image(
                 self.swapchain.swapchain,
                 u64::MAX,
-                self.image_available_semaphores[current_frame],
+                self.image_available_semaphores[self.current_frame],
                 vk::Fence::null())};
 
         let present_index = match acquire_result {
@@ -608,17 +610,17 @@ impl RenderBackend for VulkanRenderBackend {
             .clear_values(&clear_values);
 
         //let elapsed_time = SystemTime::now().duration_since(SystemTime::now()).unwrap().as_secs_f32();
-        let elapsed_time = current_frame as f32 * 0.02;
+        let elapsed_time = self.current_frame as f32 * 0.02;
 
-        Self::update_uniform_buffer(self, current_frame, elapsed_time);
+        Self::update_uniform_buffer(self, self.current_frame, elapsed_time);
 
         record_submit_commandbuffer(
             &self.device.device,
-            self.draw_command_buffers.command_buffers[current_frame],
-            &self.frames_in_flight_fences[current_frame],
+            self.draw_command_buffers.command_buffers[self.current_frame],
+            &self.frames_in_flight_fences[self.current_frame],
             self.device.present_queue,
             &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-            &[self.image_available_semaphores[current_frame]],
+            &[self.image_available_semaphores[self.current_frame]],
             &[self.rendering_complete_semaphores[present_index as usize]],
             |device, draw_command_buffer| {
                 unsafe { device.cmd_begin_render_pass(
@@ -649,7 +651,7 @@ impl RenderBackend for VulkanRenderBackend {
                         draw_command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
                         self.pipeline_layout,
-                        0, self.descriptor_sets[current_frame..current_frame+1].as_ref(), 
+                        0, self.descriptor_sets[self.current_frame..self.current_frame+1].as_ref(), 
                         &[]);
                     device.cmd_draw_indexed(
                         draw_command_buffer,
@@ -677,6 +679,9 @@ impl RenderBackend for VulkanRenderBackend {
             self.swapchain.swapchain_loader
                 .queue_present(self.device.present_queue, &present_info)
                 .unwrap()};
+        
+        self.current_frame += 1;
+        self.current_frame = self.current_frame % 3;
     }
 
     fn process_event(self: &mut Self, event: WindowEvent) {

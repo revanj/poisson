@@ -38,9 +38,6 @@ use crate::render_backend::web::WgpuRenderBackend;
 pub struct PoissonEngine<Backend: RenderBackend> {
     window: Option<Arc<dyn Window>>,
     render_backend: Arc<Mutex<Option<Backend>>>,
-    #[allow(dead_code)]
-    missed_resize: Arc<Mutex<Option<PhysicalSize<u32>>>>,
-    current_frame: usize,
 }
 
 
@@ -49,16 +46,13 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
         Self {
             window: None,
             render_backend: Default::default(),
-            current_frame: 0,
-            missed_resize: Default::default(),
         }
     }
     
     fn update(self: &mut Self) {
+        
         if let Some(render_backend) = self.render_backend.lock().as_mut() {
-            render_backend.update(self.current_frame);
-            self.current_frame += 1;
-            self.current_frame = self.current_frame % 3;
+            render_backend.render();
         }
     }
 
