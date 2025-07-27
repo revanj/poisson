@@ -1,4 +1,5 @@
 mod texture;
+mod textured_mesh;
 
 use std::sync::Arc;
 use std::time::SystemTime;

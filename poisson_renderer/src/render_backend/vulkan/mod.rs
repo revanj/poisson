@@ -11,25 +11,24 @@ mod buffer;
 pub mod utils;
 mod physical_device;
 mod texture;
+mod pipeline;
 
 pub use instance::*;
 use std::ops::Drop;
 use ash::vk;
 use ash::khr::{swapchain as ash_swapchain};
 
-use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasWindowHandle};
+use winit::raw_window_handle::{HasWindowHandle};
 use std::io::Cursor;
 use std::mem::ManuallyDrop;
 
 use std::sync::Arc;
-use std::time::SystemTime;
+
 use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
-use async_trait::async_trait;
-use cgmath::num_traits::FloatConst;
+
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use winit::window::Window;
-use render_object::Vertex;
 
 use slang_refl;
 
@@ -41,11 +40,11 @@ use render_backend::vulkan::device::Device;
 use render_backend::vulkan::framebuffer::Framebuffer;
 use render_backend::vulkan::physical_surface::PhysicalSurface;
 use render_backend::vulkan::swapchain::Swapchain;
-use render_backend::vulkan::render_object::UniformBufferObject;
 use render_backend::vulkan::render_pass::RenderPass;
 
 use image;
 use wgpu::MemoryHints::Manual;
+use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
 use crate::render_backend::vulkan::img::Image;
 use crate::render_backend::vulkan::texture::Texture;
 
@@ -181,6 +180,9 @@ impl VulkanRenderBackend {
         let device =
             ManuallyDrop::new(Arc::new(Device::new(&instance, &physical_surface)));
 
+        let render_pass = ManuallyDrop::new(
+            RenderPass::new(&physical_surface, &device));
+
         let swapchain = ManuallyDrop::new(Swapchain::new(
             &instance, &physical_surface, &device
         ));
@@ -208,8 +210,6 @@ impl VulkanRenderBackend {
             }
         }
 
-        let render_pass = ManuallyDrop::new(
-            RenderPass::new(&physical_surface, &device));
 
 
         let mut framebuffers = Vec::new();
@@ -623,15 +623,16 @@ impl RenderBackend for VulkanRenderBackend {
             &[self.image_available_semaphores[self.current_frame]],
             &[self.rendering_complete_semaphores[present_index as usize]],
             |device, draw_command_buffer| {
-                unsafe { device.cmd_begin_render_pass(
-                    draw_command_buffer,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE,
-                );
+                unsafe {
                     device.cmd_bind_pipeline(
                         draw_command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
                         self.graphics_pipeline,
+                    );
+                    device.cmd_begin_render_pass(
+                        draw_command_buffer,
+                        &render_pass_begin_info,
+                        vk::SubpassContents::INLINE,
                     );
                     device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
                     device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
@@ -702,7 +703,6 @@ impl Drop for VulkanRenderBackend {
 
             self.device.device.destroy_pipeline(self.graphics_pipeline, None);
             self.device.device.destroy_shader_module(self.triangle_shader_module, None);
-
             self.device.device.destroy_pipeline_layout(self.pipeline_layout, None);
 
             for i in 0..self.framebuffers.len() {
