@@ -14,7 +14,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn from_image(device: &Arc<Device>, img: RgbaImage) -> Self {
+    pub fn from_image(device: &Arc<Device>, img: &RgbaImage) -> Self {
         let image_extents = img.dimensions();
         let image_raw = img.as_raw();
         let image_slice = image_raw.as_slice();
