@@ -46,7 +46,7 @@ use image;
 use wgpu::MemoryHints::Manual;
 use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
 use crate::render_backend::vulkan::img::Image;
-use crate::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshPipeline};
+use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMesh, TexturedMeshPipeline};
 use crate::render_backend::vulkan::texture::Texture;
 
 #[allow(clippy::too_many_arguments)]
@@ -112,7 +112,7 @@ pub struct VulkanRenderBackend {
     pub rendering_complete_semaphores: Vec<vk::Semaphore>,
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
-    pub pipelines: ManuallyDrop<HashMap<PipelineID, TexturedMeshPipeline>>,
+    pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn Bind>>>,
 
     pub current_frame: usize,
 }
@@ -241,7 +241,7 @@ impl VulkanRenderBackend {
         let compiled_triangle_shader = linked_program.get_bytecode();
 
 
-        let mut pipelines = HashMap::new();
+        let mut pipelines: HashMap<PipelineID, Box<dyn Bind>> = HashMap::new();
         
         let mut textured_mesh_pipeline = TexturedMeshPipeline::new(
             &*device, &*render_pass, compiled_triangle_shader,
@@ -251,7 +251,7 @@ impl VulkanRenderBackend {
             img
         );
         
-        pipelines.insert(Self::get_pipeline_id(), textured_mesh_pipeline);
+        pipelines.insert(Self::get_pipeline_id(), Box::new(textured_mesh_pipeline));
 
 
         Self {
@@ -342,14 +342,14 @@ impl RenderBackend for VulkanRenderBackend {
             .framebuffer(self.framebuffers[present_index as usize].framebuffer)
             .render_area(self.physical_surface.resolution().into())
             .clear_values(&clear_values);
-
-        //let elapsed_time = SystemTime::now().duration_since(SystemTime::now()).unwrap().as_secs_f32();
-        let elapsed_time = self.current_frame as f32 * 0.02;
         
-        for (_, pipeline) in self.pipelines.iter_mut() {
-            pipeline.instances[0].update_uniform_buffer(self.current_frame, elapsed_time);
-        }
+        let elapsed_time = self.current_frame as f32 * 0.02;
 
+        for (_, p) in self.pipelines.iter_mut() {
+            for x in p.get_instances_mut() {
+                x.update_uniform_buffer(self.current_frame, elapsed_time);
+            }
+        }
         record_submit_commandbuffer(
             &self.device.device,
             self.draw_command_buffers.command_buffers[self.current_frame],
@@ -359,50 +359,29 @@ impl RenderBackend for VulkanRenderBackend {
             &[self.image_available_semaphores[self.current_frame]],
             &[self.rendering_complete_semaphores[present_index as usize]],
             |device, draw_command_buffer| {
-                for (_, pipeline) in self.pipelines.iter() {
-                    unsafe {
-                        device.cmd_bind_pipeline(
-                            draw_command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.pipeline,
-                        );
+                unsafe {
+                    for (_, pipeline) in self.pipelines.iter() {
                         device.cmd_begin_render_pass(
                             draw_command_buffer,
                             &render_pass_begin_info,
                             vk::SubpassContents::INLINE,
                         );
-                        device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                        device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                        device.cmd_bind_vertex_buffers(
-                            draw_command_buffer,
-                            0,
-                            &[pipeline.instances[0].vertex_buffer.buffer],
-                            &[0],
-                        );
-                        device.cmd_bind_index_buffer(
-                            draw_command_buffer,
-                            pipeline.instances[0].index_buffer.buffer,
-                            0,
-                            vk::IndexType::UINT32,
-                        );
-                        device.cmd_bind_descriptor_sets(
+                        device.cmd_bind_pipeline(
                             draw_command_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.pipeline_layout,
-                            0, pipeline.instances[0].descriptor_sets[self.current_frame..self.current_frame + 1].as_ref(),
-                            &[]);
-                        device.cmd_draw_indexed(
-                            draw_command_buffer,
-                            6,
-                            1,
-                            0,
-                            0,
-                            1,
+                            pipeline.get_pipeline(),
                         );
-                        // Or draw without the index buffer
-                        // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-                        device.cmd_end_render_pass(draw_command_buffer);
+                        device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                        device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                        for x in pipeline.get_instances() {
+                            x.draw(
+                                draw_command_buffer,
+                                self.current_frame,
+                                pipeline.get_pipeline_layout()
+                            )
+                        }
                     }
+                    device.cmd_end_render_pass(draw_command_buffer);
                 }
             },
         );
@@ -439,10 +418,6 @@ impl Drop for VulkanRenderBackend {
         println!("Dropping application.");
         unsafe {
             self.device.device.device_wait_idle().unwrap();
-
-            // self.device.device.destroy_pipeline(self.graphics_pipeline, None);
-            // self.device.device.destroy_shader_module(self.triangle_shader_module, None);
-            // self.device.device.destroy_pipeline_layout(self.pipeline_layout, None);
 
             for i in 0..self.framebuffers.len() {
                 self.device.device.destroy_semaphore(self.image_available_semaphores[i], None);

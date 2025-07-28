@@ -1,7 +1,9 @@
+use std::slice::{Iter, IterMut};
 use std::sync::{Arc, Weak};
 use ash::vk;
-use ash::vk::{DescriptorSetLayout, DescriptorType, DeviceSize, ShaderStageFlags};
+use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Pipeline, ShaderStageFlags};
 use image::RgbaImage;
+use vk::PipelineLayout;
 use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
@@ -9,6 +11,17 @@ use crate::render_backend::vulkan::render_pass::RenderPass;
 use crate::render_backend::vulkan::texture::Texture;
 use crate::render_backend::vulkan::utils;
 
+pub trait Bind {
+    fn get_pipeline(self: &Self) -> vk::Pipeline;
+    fn get_pipeline_layout(self: &Self) -> vk::PipelineLayout;
+    fn get_instances(self: &Self) -> Iter<Box<dyn Draw>>;
+    fn get_instances_mut(self: &mut Self) -> IterMut<Box<dyn Draw>>;
+}
+
+pub trait Draw {
+    fn draw(self: &Self, command_buffer: vk::CommandBuffer, current_frame: usize, pipeline_layout: PipelineLayout);
+    fn update_uniform_buffer(self: &mut Self, current_frame: usize, elapsed_time: f32);
+}
 pub struct TexturedMeshPipeline {
     device: Weak<Device>,
     pub pipeline: vk::Pipeline,
@@ -17,7 +30,7 @@ pub struct TexturedMeshPipeline {
     descriptor_set_layout: DescriptorSetLayout,
     resolution: vk::Extent2D,
     n_framebuffers: usize,
-    pub instances: Vec<TexturedMesh>,
+    pub instances: Vec<Box<dyn Draw>>,
 }
 
 impl TexturedMeshPipeline {
@@ -212,14 +225,30 @@ impl TexturedMeshPipeline {
         vertex_data: &[Vertex],
         texture_data: &RgbaImage)
     {
-        self.instances.push(TexturedMesh::new(
+        self.instances.push(Box::new(TexturedMesh::new(
             &self.device.upgrade().unwrap(),
             index_data,
             vertex_data,
             texture_data,
             self.descriptor_set_layout,
             self.n_framebuffers,
-            self.resolution));
+            self.resolution,
+            self.pipeline_layout)));
+    }
+}
+
+impl Bind for TexturedMeshPipeline {
+    fn get_pipeline(self: &Self) -> Pipeline {
+        self.pipeline
+    }
+    fn get_pipeline_layout(self: &Self) -> vk::PipelineLayout {
+        self.pipeline_layout
+    }
+    fn get_instances(self: &Self) -> Iter<'_, Box<dyn Draw>> {
+        self.instances.iter()
+    }
+    fn get_instances_mut(self: &mut Self) -> IterMut<Box<dyn Draw>> {
+        self.instances.iter_mut()
     }
 }
 
@@ -244,6 +273,7 @@ pub struct TexturedMesh {
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub uniform_buffers: Vec<GpuBuffer<UniformBufferObject>>,
     pub resolution: vk::Extent2D,
+    pub pipeline_layout: PipelineLayout,
 }
 
 impl TexturedMesh {
@@ -254,7 +284,8 @@ impl TexturedMesh {
         texture_data: &RgbaImage,
         descriptor_set_layout: DescriptorSetLayout,
         n_framebuffers: usize,
-        resolution: vk::Extent2D) -> Self
+        resolution: vk::Extent2D,
+        pipeline_layout: PipelineLayout) -> Self
     {
         let mut index_buffer = GpuBuffer::<u32>::create_buffer(
             &device,
@@ -353,10 +384,45 @@ impl TexturedMesh {
             descriptor_pool,
             descriptor_sets,
             resolution,
+            pipeline_layout
+        }
+    }
+}
+
+impl Draw for TexturedMesh {
+    fn draw(self: &Self, command_buffer: CommandBuffer, current_frame: usize, pipeline_layout: PipelineLayout) {
+        let device = self.device.upgrade().unwrap();
+        unsafe {
+            device.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[self.vertex_buffer.buffer],
+                &[0],
+            );
+            device.device.cmd_bind_index_buffer(
+                command_buffer,
+                self.index_buffer.buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+            device.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline_layout,
+                0, self.descriptor_sets[current_frame..current_frame + 1].as_ref(),
+                &[]);
+            device.device.cmd_draw_indexed(
+                command_buffer,
+                6,
+                1,
+                0,
+                0,
+                1,
+            );
         }
     }
 
-    pub(crate) fn update_uniform_buffer(self: &mut Self, current_frame: usize, elapsed_time: f32) {
+    fn update_uniform_buffer(self: &mut Self, current_frame: usize, elapsed_time: f32) {
         let res = self.resolution;
         let aspect = res.width as f32 / res.height as f32;
         let new_ubo = [UniformBufferObject {
@@ -370,16 +436,13 @@ impl TexturedMesh {
         }];
         self.uniform_buffers[current_frame].write(&new_ubo);
     }
-
-    pub fn draw() {
-
-    }
 }
+
 
 impl Drop for TexturedMesh {
     fn drop(&mut self) {
         let device = self.device.upgrade().unwrap();
-        unsafe { 
+        unsafe {
             device.device.destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
