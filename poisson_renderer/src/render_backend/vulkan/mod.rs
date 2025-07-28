@@ -46,7 +46,7 @@ use image;
 use wgpu::MemoryHints::Manual;
 use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
 use crate::render_backend::vulkan::img::Image;
-use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMesh, TexturedMeshPipeline};
+use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMeshPipeline};
 use crate::render_backend::vulkan::texture::Texture;
 
 #[allow(clippy::too_many_arguments)]
@@ -112,7 +112,7 @@ pub struct VulkanRenderBackend {
     pub rendering_complete_semaphores: Vec<vk::Semaphore>,
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
-    pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn Bind>>>,
+    pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn Bind<InstanceType=dyn Draw>>>>,
 
     pub current_frame: usize,
 }
@@ -241,19 +241,19 @@ impl VulkanRenderBackend {
         let compiled_triangle_shader = linked_program.get_bytecode();
 
 
-        let mut pipelines: HashMap<PipelineID, Box<dyn Bind>> = HashMap::new();
+        let mut pipelines: HashMap<PipelineID, Box<dyn Bind<InstanceType=dyn Draw>>> = HashMap::new();
         
         let mut textured_mesh_pipeline = TexturedMeshPipeline::new(
             &*device, &*render_pass, compiled_triangle_shader,
             physical_surface.resolution(), framebuffers.len());
+        
         textured_mesh_pipeline.instance(
             &index_buffer_data, &vertices,
             img
         );
         
         pipelines.insert(Self::get_pipeline_id(), Box::new(textured_mesh_pipeline));
-
-
+        
         Self {
             instance,
             physical_surface,

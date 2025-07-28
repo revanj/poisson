@@ -12,10 +12,11 @@ use crate::render_backend::vulkan::texture::Texture;
 use crate::render_backend::vulkan::utils;
 
 pub trait Bind {
+    type InstanceType: Draw + ?Sized;
     fn get_pipeline(self: &Self) -> vk::Pipeline;
     fn get_pipeline_layout(self: &Self) -> vk::PipelineLayout;
-    fn get_instances(self: &Self) -> Iter<Box<dyn Draw>>;
-    fn get_instances_mut(self: &mut Self) -> IterMut<Box<dyn Draw>>;
+    fn get_instances(self: &Self) -> Iter<Box<Self::InstanceType>>;
+    fn get_instances_mut(self: &mut Self) -> IterMut<Box<Self::InstanceType>>;
 }
 
 pub trait Draw {
@@ -238,6 +239,7 @@ impl TexturedMeshPipeline {
 }
 
 impl Bind for TexturedMeshPipeline {
+    type InstanceType = dyn Draw;
     fn get_pipeline(self: &Self) -> Pipeline {
         self.pipeline
     }

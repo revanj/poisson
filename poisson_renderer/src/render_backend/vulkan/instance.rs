@@ -71,11 +71,7 @@ impl Instance {
             debug_callback
         }
     }
-
-    fn create_device(self: &mut Self) {
-
-    }
-
+    
     unsafe extern "system" fn vulkan_debug_callback(
         message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
         message_type: vk::DebugUtilsMessageTypeFlagsEXT,
