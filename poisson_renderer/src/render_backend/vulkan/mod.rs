@@ -23,7 +23,7 @@ use std::io::Cursor;
 use std::mem::ManuallyDrop;
 
 use std::sync::Arc;
-
+use std::sync::atomic::{AtomicUsize, Ordering};
 use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
 
 use parking_lot::Mutex;
@@ -112,12 +112,26 @@ pub struct VulkanRenderBackend {
     pub rendering_complete_semaphores: Vec<vk::Semaphore>,
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
-    pub pipelines: Vec<TexturedMeshPipeline>,
+    pub pipelines: ManuallyDrop<Vec<TexturedMeshPipeline>>,
 
     pub current_frame: usize,
 }
 
-impl VulkanRenderBackend { 
+pub struct PipelineID(usize);
+pub struct DrawID(usize);
+
+impl VulkanRenderBackend {
+    fn get_pipeline_id() -> PipelineID {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER:AtomicUsize = AtomicUsize::new(1);
+        PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+
+    fn get_draw_id() -> DrawID {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER:AtomicUsize = AtomicUsize::new(1);
+        DrawID(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
 
     pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
         self.device.device.device_wait_idle().unwrap();
@@ -251,8 +265,7 @@ impl VulkanRenderBackend {
             rendering_complete_semaphores,
             frames_in_flight_fences,
 
-            pipelines,
-
+            pipelines: ManuallyDrop::new(pipelines),
             current_frame: 0
         }
     }
@@ -368,7 +381,7 @@ impl RenderBackend for VulkanRenderBackend {
                         draw_command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
                         self.pipelines[0].pipeline_layout,
-                        0, self.pipelines[0].instances[0].descriptor_sets[self.current_frame..self.current_frame+1].as_ref(), 
+                        0, self.pipelines[0].instances[0].descriptor_sets[self.current_frame..self.current_frame+1].as_ref(),
                         &[]);
                     device.cmd_draw_indexed(
                         draw_command_buffer,
@@ -428,16 +441,12 @@ impl Drop for VulkanRenderBackend {
                 self.device.device.destroy_fence(self.frames_in_flight_fences[i], None);
             }
 
-            // self.device.device.destroy_descriptor_pool(self.descriptor_pool, None);
-            // self.device.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
-
             ManuallyDrop::drop(&mut self.framebuffers);
+
+            ManuallyDrop::drop(&mut self.pipelines);
             ManuallyDrop::drop(&mut self.render_pass);
             ManuallyDrop::drop(&mut self.swapchain);
-            // ManuallyDrop::drop(&mut self.vertex_buffer);
-            // ManuallyDrop::drop(&mut self.index_buffer);
-            // ManuallyDrop::drop(&mut self.uniform_buffers);
-            // ManuallyDrop::drop(&mut self.texture);
+
             ManuallyDrop::drop(&mut self.device);
             ManuallyDrop::drop(&mut self.physical_surface);
             ManuallyDrop::drop(&mut self.instance);

@@ -11,9 +11,9 @@ use crate::render_backend::vulkan::utils;
 
 pub struct TexturedMeshPipeline {
     device: Weak<Device>,
-    pub(crate) pipeline: vk::Pipeline,
+    pub pipeline: vk::Pipeline,
     shader_module: vk::ShaderModule,
-    pub(crate) pipeline_layout: vk::PipelineLayout,
+    pub pipeline_layout: vk::PipelineLayout,
     descriptor_set_layout: DescriptorSetLayout,
     resolution: vk::Extent2D,
     n_framebuffers: usize,
@@ -223,6 +223,18 @@ impl TexturedMeshPipeline {
     }
 }
 
+impl Drop for TexturedMeshPipeline {
+    fn drop(&mut self) {
+        let device = self.device.upgrade().unwrap();
+        unsafe {
+            device.device.destroy_pipeline(self.pipeline, None);
+            device.device.destroy_shader_module(self.shader_module, None);
+            device.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            device.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+        }
+    }
+}
+
 pub struct TexturedMesh {
     pub device: Weak<Device>,
     pub index_buffer: GpuBuffer<u32>,
@@ -361,5 +373,14 @@ impl TexturedMesh {
 
     pub fn draw() {
 
+    }
+}
+
+impl Drop for TexturedMesh {
+    fn drop(&mut self) {
+        let device = self.device.upgrade().unwrap();
+        unsafe { 
+            device.device.destroy_descriptor_pool(self.descriptor_pool, None);
+        }
     }
 }
