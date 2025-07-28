@@ -12,11 +12,11 @@ use crate::render_backend::vulkan::texture::Texture;
 use crate::render_backend::vulkan::utils;
 
 pub trait Bind {
-    type InstanceType: Draw + ?Sized;
     fn get_pipeline(self: &Self) -> vk::Pipeline;
     fn get_pipeline_layout(self: &Self) -> vk::PipelineLayout;
-    fn get_instances(self: &Self) -> Iter<Box<Self::InstanceType>>;
-    fn get_instances_mut(self: &mut Self) -> IterMut<Box<Self::InstanceType>>;
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item = &dyn Draw> + '_>;
+    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item = &mut dyn Draw> + '_>;
+
 }
 
 pub trait Draw {
@@ -31,7 +31,7 @@ pub struct TexturedMeshPipeline {
     descriptor_set_layout: DescriptorSetLayout,
     resolution: vk::Extent2D,
     n_framebuffers: usize,
-    pub instances: Vec<Box<dyn Draw>>,
+    pub instances: Vec<TexturedMesh>,
 }
 
 impl TexturedMeshPipeline {
@@ -226,7 +226,7 @@ impl TexturedMeshPipeline {
         vertex_data: &[Vertex],
         texture_data: &RgbaImage)
     {
-        self.instances.push(Box::new(TexturedMesh::new(
+        self.instances.push(TexturedMesh::new(
             &self.device.upgrade().unwrap(),
             index_data,
             vertex_data,
@@ -234,23 +234,23 @@ impl TexturedMeshPipeline {
             self.descriptor_set_layout,
             self.n_framebuffers,
             self.resolution,
-            self.pipeline_layout)));
+            self.pipeline_layout));
     }
 }
 
 impl Bind for TexturedMeshPipeline {
-    type InstanceType = dyn Draw;
     fn get_pipeline(self: &Self) -> Pipeline {
         self.pipeline
     }
     fn get_pipeline_layout(self: &Self) -> vk::PipelineLayout {
         self.pipeline_layout
     }
-    fn get_instances(self: &Self) -> Iter<'_, Box<dyn Draw>> {
-        self.instances.iter()
+    
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item = &dyn Draw> + '_> {
+        Box::new(self.instances.iter().map(|x| x as &dyn Draw))
     }
-    fn get_instances_mut(self: &mut Self) -> IterMut<Box<dyn Draw>> {
-        self.instances.iter_mut()
+    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item = &mut dyn Draw> + '_> {
+        Box::new(self.instances.iter_mut().map(|x| x as &mut dyn Draw))
     }
 }
 
@@ -265,7 +265,7 @@ impl Drop for TexturedMeshPipeline {
         }
     }
 }
-
+ 
 pub struct TexturedMesh {
     pub device: Weak<Device>,
     pub index_buffer: GpuBuffer<u32>,

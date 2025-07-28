@@ -112,7 +112,7 @@ pub struct VulkanRenderBackend {
     pub rendering_complete_semaphores: Vec<vk::Semaphore>,
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
-    pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn Bind<InstanceType=dyn Draw>>>>,
+    pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn Bind>>>,
 
     pub current_frame: usize,
 }
@@ -241,7 +241,7 @@ impl VulkanRenderBackend {
         let compiled_triangle_shader = linked_program.get_bytecode();
 
 
-        let mut pipelines: HashMap<PipelineID, Box<dyn Bind<InstanceType=dyn Draw>>> = HashMap::new();
+        let mut pipelines: HashMap<PipelineID, Box<dyn Bind>> = HashMap::new();
         
         let mut textured_mesh_pipeline = TexturedMeshPipeline::new(
             &*device, &*render_pass, compiled_triangle_shader,
