@@ -13,6 +13,7 @@ mod physical_device;
 mod texture;
 mod pipeline;
 
+use std::collections::HashMap;
 pub use instance::*;
 use std::ops::Drop;
 use ash::vk;
@@ -25,7 +26,6 @@ use std::mem::ManuallyDrop;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
-
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use winit::window::Window;
@@ -112,12 +112,15 @@ pub struct VulkanRenderBackend {
     pub rendering_complete_semaphores: Vec<vk::Semaphore>,
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
-    pub pipelines: ManuallyDrop<Vec<TexturedMeshPipeline>>,
+    pub pipelines: ManuallyDrop<HashMap<PipelineID, TexturedMeshPipeline>>,
 
     pub current_frame: usize,
 }
 
+#[derive(Hash, PartialEq, Eq)]
 pub struct PipelineID(usize);
+
+#[derive(Hash, PartialEq, Eq)]
 pub struct DrawID(usize);
 
 impl VulkanRenderBackend {
@@ -238,7 +241,8 @@ impl VulkanRenderBackend {
         let compiled_triangle_shader = linked_program.get_bytecode();
 
 
-        let mut pipelines = Vec::new();
+        let mut pipelines = HashMap::new();
+        
         let mut textured_mesh_pipeline = TexturedMeshPipeline::new(
             &*device, &*render_pass, compiled_triangle_shader,
             physical_surface.resolution(), framebuffers.len());
@@ -246,7 +250,8 @@ impl VulkanRenderBackend {
             &index_buffer_data, &vertices,
             img
         );
-        pipelines.push(textured_mesh_pipeline);
+        
+        pipelines.insert(Self::get_pipeline_id(), textured_mesh_pipeline);
 
 
         Self {
@@ -340,8 +345,10 @@ impl RenderBackend for VulkanRenderBackend {
 
         //let elapsed_time = SystemTime::now().duration_since(SystemTime::now()).unwrap().as_secs_f32();
         let elapsed_time = self.current_frame as f32 * 0.02;
-
-        self.pipelines[0].instances[0].update_uniform_buffer(self.current_frame, elapsed_time);
+        
+        for (_, pipeline) in self.pipelines.iter_mut() {
+            pipeline.instances[0].update_uniform_buffer(self.current_frame, elapsed_time);
+        }
 
         record_submit_commandbuffer(
             &self.device.device,
@@ -352,48 +359,51 @@ impl RenderBackend for VulkanRenderBackend {
             &[self.image_available_semaphores[self.current_frame]],
             &[self.rendering_complete_semaphores[present_index as usize]],
             |device, draw_command_buffer| {
-                unsafe {
-                    device.cmd_bind_pipeline(
-                        draw_command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        self.pipelines[0].pipeline,
-                    );
-                    device.cmd_begin_render_pass(
-                        draw_command_buffer,
-                        &render_pass_begin_info,
-                        vk::SubpassContents::INLINE,
-                    );
-                    device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                    device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                    device.cmd_bind_vertex_buffers(
-                        draw_command_buffer,
-                        0,
-                        &[self.pipelines[0].instances[0].vertex_buffer.buffer],
-                        &[0],
-                    );
-                    device.cmd_bind_index_buffer(
-                        draw_command_buffer,
-                        self.pipelines[0].instances[0].index_buffer.buffer,
-                        0,
-                        vk::IndexType::UINT32,
-                    );
-                    device.cmd_bind_descriptor_sets(
-                        draw_command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        self.pipelines[0].pipeline_layout,
-                        0, self.pipelines[0].instances[0].descriptor_sets[self.current_frame..self.current_frame+1].as_ref(),
-                        &[]);
-                    device.cmd_draw_indexed(
-                        draw_command_buffer,
-                        6,
-                        1,
-                        0,
-                        0,
-                        1,
-                    );
-                    // Or draw without the index buffer
-                    // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
-                    device.cmd_end_render_pass(draw_command_buffer);}
+                for (_, pipeline) in self.pipelines.iter() {
+                    unsafe {
+                        device.cmd_bind_pipeline(
+                            draw_command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.pipeline,
+                        );
+                        device.cmd_begin_render_pass(
+                            draw_command_buffer,
+                            &render_pass_begin_info,
+                            vk::SubpassContents::INLINE,
+                        );
+                        device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                        device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                        device.cmd_bind_vertex_buffers(
+                            draw_command_buffer,
+                            0,
+                            &[pipeline.instances[0].vertex_buffer.buffer],
+                            &[0],
+                        );
+                        device.cmd_bind_index_buffer(
+                            draw_command_buffer,
+                            pipeline.instances[0].index_buffer.buffer,
+                            0,
+                            vk::IndexType::UINT32,
+                        );
+                        device.cmd_bind_descriptor_sets(
+                            draw_command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.pipeline_layout,
+                            0, pipeline.instances[0].descriptor_sets[self.current_frame..self.current_frame + 1].as_ref(),
+                            &[]);
+                        device.cmd_draw_indexed(
+                            draw_command_buffer,
+                            6,
+                            1,
+                            0,
+                            0,
+                            1,
+                        );
+                        // Or draw without the index buffer
+                        // device.cmd_draw(draw_command_buffer, 3, 1, 0, 0);
+                        device.cmd_end_render_pass(draw_command_buffer);
+                    }
+                }
             },
         );
         let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
