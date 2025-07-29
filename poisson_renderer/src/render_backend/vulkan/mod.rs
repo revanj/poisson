@@ -23,7 +23,7 @@ use winit::raw_window_handle::{HasWindowHandle};
 use std::io::Cursor;
 use std::mem::ManuallyDrop;
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
 use parking_lot::Mutex;
@@ -45,9 +45,11 @@ use render_backend::vulkan::render_pass::RenderPass;
 use image;
 use wgpu::MemoryHints::Manual;
 use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
+use crate::render_backend::{PipelineID, DrawletID, Render};
 use crate::render_backend::vulkan::img::Image;
 use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMeshPipeline};
 use crate::render_backend::vulkan::texture::Texture;
+
 
 #[allow(clippy::too_many_arguments)]
 pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
@@ -115,13 +117,10 @@ pub struct VulkanRenderBackend {
     pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn Bind>>>,
 
     pub current_frame: usize,
+    pub render_state: hecs::World,
 }
 
-#[derive(Hash, PartialEq, Eq)]
-pub struct PipelineID(usize);
 
-#[derive(Hash, PartialEq, Eq)]
-pub struct DrawID(usize);
 
 impl VulkanRenderBackend {
     fn get_pipeline_id() -> PipelineID {
@@ -130,10 +129,10 @@ impl VulkanRenderBackend {
         PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
-    fn get_draw_id() -> DrawID {
+    fn get_draw_id() -> DrawletID {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
-        DrawID(COUNTER.fetch_add(1, Ordering::Relaxed))
+        DrawletID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
     pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
@@ -271,7 +270,8 @@ impl VulkanRenderBackend {
             frames_in_flight_fences,
 
             pipelines: ManuallyDrop::new(pipelines),
-            current_frame: 0
+            current_frame: 0,
+            render_state: hecs::World::new(),
         }
     }
 }
@@ -411,6 +411,13 @@ impl RenderBackend for VulkanRenderBackend {
         self.new_swapchain_size = Some(vk::Extent2D { width, height });
     }
 
+    fn create_pipeline<PipelineType: render_backend::Bind>() -> PipelineID {
+        todo!()
+    }
+
+    fn create_drawlet<DrawletType: Render>(self: &mut Self) -> Weak<DrawletType> {
+        todo!()
+    }
 }
 
 impl Drop for VulkanRenderBackend {

@@ -27,7 +27,7 @@ bytemuck = { version = "1.23.1", features = ["derive"] }
 image = {version = "0.25.6", features = ["png"]}
 anyhow = "1.0.98"
 instant = { version = "0.1.13", features = ["wasm-bindgen"] }
-
+hecs = { version = "0.10.5" }
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

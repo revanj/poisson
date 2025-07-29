@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::slice::{Iter, IterMut};
 use std::sync::{Arc, Weak};
 use ash::vk;

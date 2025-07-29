@@ -1,12 +1,12 @@
 mod texture;
 mod textured_mesh;
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::SystemTime;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::window::Window;
-use crate::render_backend::RenderBackend;
+use crate::render_backend::{Bind, PipelineID, Render, RenderBackend};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -322,6 +322,14 @@ impl RenderBackend for WgpuRenderBackend {
 
         self.size = new_size;
         self.size_changed = true;
+    }
+
+    fn create_pipeline<PipelineType: Bind>() -> PipelineID {
+        todo!()
+    }
+
+    fn create_drawlet<DrawletType: Render>(self: &mut Self) -> Weak<DrawletType> {
+        todo!()
     }
 }
 
