@@ -1,13 +1,16 @@
 use std::any::{Any, TypeId};
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::ops::Deref;
 use std::slice::{Iter, IterMut};
 use std::sync::{Arc, Weak};
 use ash::vk;
 use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Pipeline, ShaderStageFlags};
-use image::RgbaImage;
+
+use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
 use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
-use crate::render_backend::{PipelineHandle, PipelineID};
+use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
 use crate::render_backend::vulkan::render_pass::RenderPass;
@@ -22,31 +25,40 @@ pub trait Bind {
     fn get_pipeline_layout(self: &Self) -> vk::PipelineLayout;
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item = &dyn Draw> + '_>;
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item = &mut dyn Draw> + '_>;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 
 impl Bind for TexturedMeshPipeline {
 
     fn get_pipeline(self: &Self) -> Pipeline {
-        todo!()
+        Inst::get_pipeline(self)
     }
 
     fn get_pipeline_layout(self: &Self) -> PipelineLayout {
-        todo!()
+        Inst::get_pipeline_layout(self)
     }
 
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn Draw> + '_> {
-        todo!()
+        Inst::get_instances(self)
     }
 
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn Draw> + '_> {
-        todo!()
+        Inst::get_instances_mut(self)
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
-pub trait TypedBind {
+pub trait DrawletData {}
+
+pub trait Inst {
     type DrawletType: Draw;
     type PipelineHandleType: PipelineHandle;
+    type DrawletDataType: DrawletData;
+    type DrawletHandleType: DrawletHandle;
     fn get_pipeline(self: &Self) -> vk::Pipeline;
     fn get_pipeline_layout(self: &Self) -> vk::PipelineLayout;
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item = &dyn Draw> + '_>;
@@ -57,8 +69,14 @@ pub trait TypedBind {
            resolution: vk::Extent2D,
            n_framebuffers: usize,
     ) -> Self;
-
     fn new_handle(&self, pipeline_id: PipelineID) -> Self::PipelineHandleType;
+    fn instantiate(&mut self, init_data: &Self::DrawletDataType) -> Self::DrawletHandleType;
+
+    fn get_draw_id() -> DrawletID {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER:AtomicUsize = AtomicUsize::new(1);
+        DrawletID(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
 }
 
 pub trait Draw {
@@ -74,19 +92,18 @@ pub struct TexturedMeshPipeline {
     descriptor_set_layout: DescriptorSetLayout,
     resolution: vk::Extent2D,
     n_framebuffers: usize,
-    pub instances: Vec<TexturedMesh>,
+    pub instances: HashMap<DrawletID, TexturedMesh>,
 }
 
 impl TexturedMeshPipeline {
-
-
     pub fn instance(
         self: &mut Self,
+        drawlet_id: DrawletID,
         index_data: &[u32],
         vertex_data: &[Vertex],
         texture_data: &RgbaImage)
     {
-        self.instances.push(TexturedMesh::new(
+        self.instances.insert(drawlet_id, TexturedMesh::new(
             &self.device.upgrade().unwrap(),
             index_data,
             vertex_data,
@@ -115,9 +132,11 @@ impl TexturedMeshPipeline {
     }
 }
 
-impl TypedBind for TexturedMeshPipeline {
+impl Inst for TexturedMeshPipeline {
     type DrawletType = TexturedMesh;
     type PipelineHandleType = TexturedMeshPipelineHandle;
+    type DrawletDataType = TexturedMeshDrawletData;
+    type DrawletHandleType = TexturedMeshDrawletHandle;
 
     fn get_pipeline(self: &Self) -> Pipeline {
         self.pipeline
@@ -127,11 +146,11 @@ impl TypedBind for TexturedMeshPipeline {
         self.pipeline_layout
     }
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item = &dyn Draw> + '_> {
-        Box::new(self.instances.iter().map(|x| x as &dyn Draw))
+        Box::new(self.instances.iter().map(|(_, x)| x as &dyn Draw))
     }
 
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item = &mut dyn Draw> + '_> {
-        Box::new(self.instances.iter_mut().map(|x| x as &mut dyn Draw))
+        Box::new(self.instances.iter_mut().map(|(_, x)| x as &mut dyn Draw))
     }
 
     fn new(device: &Arc<Device>,
@@ -304,7 +323,7 @@ impl TypedBind for TexturedMeshPipeline {
             .expect("Unable to create graphics pipeline")
         };
 
-        let instances = Vec::new();
+        let instances = HashMap::new();
 
         TexturedMeshPipeline {
             device: Arc::downgrade(device),
@@ -322,6 +341,16 @@ impl TypedBind for TexturedMeshPipeline {
     fn new_handle(&self, pipeline_id: PipelineID) -> Self::PipelineHandleType {
         TexturedMeshPipelineHandle {
             pipeline_id
+        }
+    }
+
+    fn instantiate(&mut self, init_data: &Self::DrawletDataType) -> TexturedMeshDrawletHandle {
+        let drawlet_id = Self::get_draw_id();
+
+        self.instance(drawlet_id, &init_data.index_data, &init_data.vertex_data, init_data.texture_data.as_rgba8().unwrap());
+
+        TexturedMeshDrawletHandle {
+            drawlet_id
         }
     }
 }
@@ -528,10 +557,30 @@ pub struct TexturedMeshHandle {
 }
 
 pub struct TexturedMeshPipelineHandle {
-    pipeline_id: PipelineID
+    pub pipeline_id: PipelineID
 }
 
 impl PipelineHandle for TexturedMeshPipelineHandle {
     type PipelineType = TexturedMeshPipeline;
+    type DrawletType = TexturedMesh;
+
+    fn get_id(self: &Self) -> PipelineID {
+        self.pipeline_id
+    }
+}
+
+pub struct TexturedMeshDrawletData {
+    pub index_data: Vec<u32>,
+    pub vertex_data: Vec<Vertex>,
+    pub texture_data: DynamicImage
+}
+
+impl DrawletData for TexturedMeshDrawletData {}
+
+pub struct TexturedMeshDrawletHandle {
+    pub drawlet_id: DrawletID
+}
+
+impl DrawletHandle for TexturedMeshDrawletHandle {
     type DrawletType = TexturedMesh;
 }

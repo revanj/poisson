@@ -44,10 +44,10 @@ use render_backend::vulkan::render_pass::RenderPass;
 
 use image;
 use wgpu::MemoryHints::Manual;
-use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
+
 use crate::render_backend::{PipelineID, DrawletID, DrawletHandle, PipelineHandle};
 use crate::render_backend::vulkan::img::Image;
-use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMeshPipeline, TypedBind};
+use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMeshPipeline, Inst};
 use crate::render_backend::vulkan::texture::Texture;
 
 
@@ -129,11 +129,7 @@ impl VulkanRenderBackend {
         PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
-    fn get_draw_id() -> DrawletID {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static COUNTER:AtomicUsize = AtomicUsize::new(1);
-        DrawletID(COUNTER.fetch_add(1, Ordering::Relaxed))
-    }
+    
     
     pub fn spawn_drawlet<Handle: DrawletHandle>(self: &mut Self, pipeline_id: PipelineID) {
         
@@ -215,16 +211,7 @@ impl VulkanRenderBackend {
 
         let framebuffers = ManuallyDrop::new(framebuffers);
 
-        let index_buffer_data = [0u32, 1, 2, 2, 3, 0];
         
-        let vertices = vec!{
-            Vertex {pos: [-0.5f32, -0.5f32, 0.0f32],  color: [1.0f32, 0.0f32, 0.0f32], tex_coord: [1.0f32, 0.0f32]},
-            Vertex {pos: [0.5f32, -0.5f32, 0.0f32],  color: [0.0f32, 1.0f32, 0.0f32], tex_coord: [0.0f32, 0.0f32]},
-            Vertex {pos: [0.5f32, 0.5f32, 0.0f32],  color: [0.0f32, 0.0f32, 1.0f32], tex_coord: [0.0f32, 1.0f32]},
-            Vertex {pos: [-0.5f32, 0.5f32, 0.0f32],  color: [1.0f32, 1.0f32, 1.0f32], tex_coord: [1.0f32, 1.0f32]},
-        };
-
-
 
         // let refl = linked_program.get_reflection();
         //
@@ -402,12 +389,8 @@ impl RenderBackend for VulkanRenderBackend {
         self.new_swapchain_size = Some(vk::Extent2D { width, height });
     }
 
-    fn create_pipeline<PipelineType: TypedBind + Bind + 'static>(self: &mut Self) -> impl PipelineHandle
+    fn create_pipeline<PipelineType: Inst + Bind + 'static>(self: &mut Self) -> impl PipelineHandle
     {
-        let diffuse_bytes = include_bytes!("../../../../textures/happy-tree.png");
-        let binding = image::load_from_memory(diffuse_bytes).unwrap();
-        let img = binding.as_rgba8().unwrap();
-
         let compiler = slang_refl::Compiler::new();
         let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
 
@@ -425,8 +408,12 @@ impl RenderBackend for VulkanRenderBackend {
         ret
     }
 
-    fn create_drawlet<DrawletHdl: DrawletHandle>(self: &mut Self, pipeline_id: PipelineID) -> DrawletHdl {
-        todo!()
+    fn create_drawlet<InstType: Inst + 'static>(self: &mut Self, pipeline_id: PipelineID, init_data: &InstType::DrawletDataType) -> InstType::DrawletHandleType {
+        let pipeline= self.pipelines.get_mut(&pipeline_id).unwrap();
+        let inst = pipeline.as_any_mut().downcast_mut::<InstType>().unwrap();
+        let ret = inst.instantiate(init_data);
+        
+        ret
     }
 }
 

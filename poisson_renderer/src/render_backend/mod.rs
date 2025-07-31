@@ -5,16 +5,20 @@ use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use crate::PoissonEngine;
-use crate::render_backend::vulkan::render_object::{Bind, Draw, TypedBind};
+use crate::render_backend::vulkan::render_object::{Bind, Draw, Inst};
 
 pub trait DrawletHandle {
-
+    type DrawletType: Draw;
 }
 
 pub trait PipelineHandle {
-    type PipelineType: TypedBind;
+    type PipelineType: Inst;
     type DrawletType: Draw;
+    
+    fn get_id(self: &Self) -> PipelineID;
 }
+
+
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct PipelineID(usize);
@@ -28,11 +32,11 @@ pub trait RenderBackend{
     fn render(self: &mut Self);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
-    fn create_pipeline<PipelineType: TypedBind + Bind + 'static>(self: &mut Self) -> impl PipelineHandle;
-    fn create_drawlet<DrawletHdl: DrawletHandle>(self: &mut Self, pipeline_id: PipelineID) -> DrawletHdl;
+    fn create_pipeline<PipelineType: Inst + Bind + 'static>(self: &mut Self) -> impl PipelineHandle;
+    fn create_drawlet<InstType: Inst + 'static>(self: &mut Self, pipeline_id: PipelineID, init_data: &InstType::DrawletDataType) -> InstType::DrawletHandleType;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod vulkan;
 pub mod web;
-mod draw;
+pub(crate) mod draw;

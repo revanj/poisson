@@ -1,3 +1,4 @@
+use crate::render_backend::PipelineHandle;
 use core::time;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -6,6 +7,7 @@ use winit::window::Window;
 use env_logger;
 
 use wasm_bindgen::prelude::wasm_bindgen;
+use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
 
 
 pub mod render_backend;
@@ -35,7 +37,7 @@ use crate::render_backend::vulkan::VulkanRenderBackend;
 #[cfg(target_arch = "wasm32")]
 use web_sys;
 use winit::keyboard::{KeyCode, PhysicalKey};
-use crate::render_backend::vulkan::render_object::TexturedMeshPipeline;
+use crate::render_backend::vulkan::render_object::{TexturedMeshDrawletData, TexturedMeshDrawletHandle, TexturedMeshPipeline};
 use crate::render_backend::web::WgpuRenderBackend;
 
 pub struct GameWorld {
@@ -68,11 +70,35 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
     fn init(self: &mut Self) {
         self.input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
         if let Some(backend) = self.render_backend.lock().as_mut() {
-            let pipeline_handle = backend.create_pipeline::<TexturedMeshPipeline>();
+            
+            let index_buffer_data = vec![0u32, 1, 2, 2, 3, 0];
+            
+            let vertices = vec!{
+                Vertex {pos: [-0.5f32, -0.5f32, 0.0f32],  color: [1.0f32, 0.0f32, 0.0f32], tex_coord: [1.0f32, 0.0f32]},
+                Vertex {pos: [0.5f32, -0.5f32, 0.0f32],  color: [0.0f32, 1.0f32, 0.0f32], tex_coord: [0.0f32, 0.0f32]},
+                Vertex {pos: [0.5f32, 0.5f32, 0.0f32],  color: [0.0f32, 0.0f32, 1.0f32], tex_coord: [0.0f32, 1.0f32]},
+                Vertex {pos: [-0.5f32, 0.5f32, 0.0f32],  color: [1.0f32, 1.0f32, 1.0f32], tex_coord: [1.0f32, 1.0f32]},
+            };
+            
+            let diffuse_bytes = include_bytes!("../../textures/happy-tree.png");
+            let binding = image::load_from_memory(diffuse_bytes).unwrap();
+
+            let textured_mesh_data = TexturedMeshDrawletData {
+                index_data: index_buffer_data,
+                vertex_data: vertices,
+                texture_data: binding,
+            };
+
+            let pipeline_id = {
+                backend.create_pipeline::<TexturedMeshPipeline>().get_id()
+            };
+            let mesh_handle 
+                = backend.create_drawlet::<TexturedMeshPipeline>(pipeline_id, &textured_mesh_data);
+            
         }
         
        
-        // let mesh_handle1 = self.pipeline_handle.spawn(model, texture);
+        // let mesh_handle1 p= self.pipeline_handle.spawn(model, texture);
         // 
         // mesh_handle.set_uniform(value);
         
