@@ -3,10 +3,11 @@ mod textured_mesh;
 
 use std::sync::{Arc, Weak};
 use std::time::SystemTime;
+use ash::vk::{CommandBuffer, Extent2D, Pipeline, PipelineLayout};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::window::Window;
-use crate::render_backend::{Bind, PipelineID, Render, RenderBackend};
+use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -16,6 +17,7 @@ use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWeb;
+use crate::render_backend::vulkan::render_object::{Bind, Draw, TypedBind};
 
 struct CameraController {
     speed: f32,
@@ -214,6 +216,76 @@ impl Camera {
     }
 }
 
+struct DummyPipelineHandle {
+
+}
+
+impl PipelineHandle for DummyPipelineHandle {
+    type PipelineType = DummyBind;
+    type DrawletType = DummyDraw;
+}
+
+struct DummyDraw {
+
+}
+
+impl Draw for DummyDraw {
+    fn draw(self: &Self, command_buffer: CommandBuffer, current_frame: usize, pipeline_layout: PipelineLayout) {
+        todo!()
+    }
+
+    fn update_uniform_buffer(self: &mut Self, current_frame: usize, elapsed_time: f32) {
+        todo!()
+    }
+}
+
+struct DummyBind {}
+impl Bind for DummyBind {
+    fn get_pipeline(self: &Self) -> Pipeline {
+        todo!()
+    }
+
+    fn get_pipeline_layout(self: &Self) -> PipelineLayout {
+        todo!()
+    }
+
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn Draw> + '_> {
+        todo!()
+    }
+
+    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn Draw> + '_> {
+        todo!()
+    }
+}
+
+impl TypedBind for DummyBind {
+    type DrawletType = DummyDraw;
+    type PipelineHandleType = DummyPipelineHandle;
+
+    fn get_pipeline(self: &Self) -> Pipeline {
+        todo!()
+    }
+
+    fn get_pipeline_layout(self: &Self) -> PipelineLayout {
+        todo!()
+    }
+
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn Draw> + '_> {
+        todo!()
+    }
+
+    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn Draw> + '_> {
+        todo!()
+    }
+
+    fn new(device: &Arc<crate::render_backend::vulkan::device::Device>, render_pass: &crate::render_backend::vulkan::render_pass::RenderPass, shader_bytecode: &[u32], resolution: Extent2D, n_framebuffers: usize) -> Self {
+        todo!()
+    }
+
+    fn new_handle(&self, pipeline_id: PipelineID) -> Self::PipelineHandleType {
+        todo!()
+    }
+}
 
 pub struct WgpuRenderBackend {
     surface: wgpu::Surface<'static>,
@@ -324,11 +396,12 @@ impl RenderBackend for WgpuRenderBackend {
         self.size_changed = true;
     }
 
-    fn create_pipeline<PipelineType: Bind>() -> PipelineID {
-        todo!()
+    fn create_pipeline<PipelineType: TypedBind + Bind + 'static>(self: &mut Self) -> impl PipelineHandle {
+        DummyPipelineHandle {}
     }
 
-    fn create_drawlet<DrawletType: Render>(self: &mut Self) -> Weak<DrawletType> {
+
+    fn create_drawlet<DrawletHdl: DrawletHandle>(self: &mut Self, pipeline_id: PipelineID) -> DrawletHdl {
         todo!()
     }
 }

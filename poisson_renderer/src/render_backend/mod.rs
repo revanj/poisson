@@ -5,29 +5,31 @@ use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use crate::PoissonEngine;
-use crate::render_backend::draw::Draw;
+use crate::render_backend::vulkan::render_object::{Bind, Draw, TypedBind};
 
-#[derive(Hash, PartialEq, Eq)]
+pub trait DrawletHandle {
+
+}
+
+pub trait PipelineHandle {
+    type PipelineType: TypedBind;
+    type DrawletType: Draw;
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct PipelineID(usize);
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct DrawletID(usize);
 
-pub trait Bind {
-    
-}
-
-pub trait Render {
-    
-}
 
 pub trait RenderBackend{
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized;
     fn render(self: &mut Self);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
-    fn create_pipeline<PipelineType: Bind>() -> PipelineID;
-    fn create_drawlet<DrawletType: Render>(self: &mut Self) -> Weak<DrawletType>;
+    fn create_pipeline<PipelineType: TypedBind + Bind + 'static>(self: &mut Self) -> impl PipelineHandle;
+    fn create_drawlet<DrawletHdl: DrawletHandle>(self: &mut Self, pipeline_id: PipelineID) -> DrawletHdl;
 }
 
 #[cfg(not(target_arch = "wasm32"))]

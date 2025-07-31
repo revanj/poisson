@@ -1,11 +1,11 @@
 mod img;
 mod instance;
 mod physical_surface;
-mod device;
+pub(crate) mod device;
 mod swapchain;
 mod command_buffer;
 mod framebuffer;
-mod render_pass;
+pub(crate) mod render_pass;
 pub mod render_object;
 mod buffer;
 pub mod utils;
@@ -45,9 +45,9 @@ use render_backend::vulkan::render_pass::RenderPass;
 use image;
 use wgpu::MemoryHints::Manual;
 use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
-use crate::render_backend::{PipelineID, DrawletID, Render};
+use crate::render_backend::{PipelineID, DrawletID, DrawletHandle, PipelineHandle};
 use crate::render_backend::vulkan::img::Image;
-use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMeshPipeline};
+use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMeshPipeline, TypedBind};
 use crate::render_backend::vulkan::texture::Texture;
 
 
@@ -115,9 +115,9 @@ pub struct VulkanRenderBackend {
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
     pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn Bind>>>,
-
+    pub drawlets: ManuallyDrop<HashMap<DrawletID, Box<dyn Draw>>>,
+    
     pub current_frame: usize,
-    pub render_state: hecs::World,
 }
 
 
@@ -133,6 +133,10 @@ impl VulkanRenderBackend {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
         DrawletID(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+    
+    pub fn spawn_drawlet<Handle: DrawletHandle>(self: &mut Self, pipeline_id: PipelineID) {
+        
     }
 
     pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
@@ -220,38 +224,24 @@ impl VulkanRenderBackend {
             Vertex {pos: [-0.5f32, 0.5f32, 0.0f32],  color: [1.0f32, 1.0f32, 1.0f32], tex_coord: [1.0f32, 1.0f32]},
         };
 
-        let diffuse_bytes = include_bytes!("../../../../textures/happy-tree.png");
-        let binding = image::load_from_memory(diffuse_bytes).unwrap();
-        let img = binding.as_rgba8().unwrap();
-
-        let compiler = slang_refl::Compiler::new();
-        let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
-
-        let refl = linked_program.get_reflection();
-
-        println!("there are {} entry points in shader", refl.entry_point_reflections.len());
-        for entry in refl.entry_point_reflections {
-            println!("{:?} shader {}(), with fields", entry.stage, entry.name);
-            for s in entry.struct_reflections {
-                println!("\t{}", s);
-            }
-        }
-
-        let compiled_triangle_shader = linked_program.get_bytecode();
 
 
-        let mut pipelines: HashMap<PipelineID, Box<dyn Bind>> = HashMap::new();
+        // let refl = linked_program.get_reflection();
+        //
+        // println!("there are {} entry points in shader", refl.entry_point_reflections.len());
+        // for entry in refl.entry_point_reflections {
+        //     println!("{:?} shader {}(), with fields", entry.stage, entry.name);
+        //     for s in entry.struct_reflections {
+        //         println!("\t{}", s);
+        //     }
+        // }
+
+
+
+        let pipelines: HashMap<PipelineID, Box<dyn Bind>> = HashMap::new();
         
-        let mut textured_mesh_pipeline = TexturedMeshPipeline::new(
-            &*device, &*render_pass, compiled_triangle_shader,
-            physical_surface.resolution(), framebuffers.len());
         
-        textured_mesh_pipeline.instance(
-            &index_buffer_data, &vertices,
-            img
-        );
-        
-        pipelines.insert(Self::get_pipeline_id(), Box::new(textured_mesh_pipeline));
+        let drawlets = HashMap::new();
         
         Self {
             instance,
@@ -270,8 +260,9 @@ impl VulkanRenderBackend {
             frames_in_flight_fences,
 
             pipelines: ManuallyDrop::new(pipelines),
+            drawlets: ManuallyDrop::new(drawlets),
+            
             current_frame: 0,
-            render_state: hecs::World::new(),
         }
     }
 }
@@ -411,11 +402,30 @@ impl RenderBackend for VulkanRenderBackend {
         self.new_swapchain_size = Some(vk::Extent2D { width, height });
     }
 
-    fn create_pipeline<PipelineType: render_backend::Bind>() -> PipelineID {
-        todo!()
+    fn create_pipeline<PipelineType: TypedBind + Bind + 'static>(self: &mut Self) -> impl PipelineHandle
+    {
+        let diffuse_bytes = include_bytes!("../../../../textures/happy-tree.png");
+        let binding = image::load_from_memory(diffuse_bytes).unwrap();
+        let img = binding.as_rgba8().unwrap();
+
+        let compiler = slang_refl::Compiler::new();
+        let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
+
+        let compiled_triangle_shader = linked_program.get_bytecode();
+
+        let pipeline = PipelineType::new(
+            &*self.device, &*self.render_pass, compiled_triangle_shader,
+            self.physical_surface.resolution(), self.framebuffers.len());
+        
+        let pipeline_id = Self::get_pipeline_id();
+        let ret = pipeline.new_handle(pipeline_id.clone());
+        
+        self.pipelines.insert(pipeline_id.clone(), Box::new(pipeline));
+        
+        ret
     }
 
-    fn create_drawlet<DrawletType: Render>(self: &mut Self) -> Weak<DrawletType> {
+    fn create_drawlet<DrawletHdl: DrawletHandle>(self: &mut Self, pipeline_id: PipelineID) -> DrawletHdl {
         todo!()
     }
 }

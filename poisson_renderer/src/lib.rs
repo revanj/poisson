@@ -35,14 +35,25 @@ use crate::render_backend::vulkan::VulkanRenderBackend;
 #[cfg(target_arch = "wasm32")]
 use web_sys;
 use winit::keyboard::{KeyCode, PhysicalKey};
+use crate::render_backend::vulkan::render_object::TexturedMeshPipeline;
 use crate::render_backend::web::WgpuRenderBackend;
+
+pub struct GameWorld {
+    
+}
+
+impl GameWorld {
+    fn new() -> Self {
+        GameWorld {}
+    }
+}
 
 pub struct PoissonEngine<Backend: RenderBackend> {
     window: Option<Arc<dyn Window>>,
     input: input::Input,
     render_backend: Arc<Mutex<Option<Backend>>>,
+    game_world: GameWorld,
 }
-
 
 impl<Backend: RenderBackend> PoissonEngine<Backend> {
     pub fn new() -> Self {
@@ -50,11 +61,23 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
             window: None,
             input: input::Input::new(),
             render_backend: Default::default(),
+            game_world: GameWorld::new(),
         }
     }
     
     fn init(self: &mut Self) {
         self.input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
+        if let Some(backend) = self.render_backend.lock().as_mut() {
+            let pipeline_handle = backend.create_pipeline::<TexturedMeshPipeline>();
+        }
+        
+       
+        // let mesh_handle1 = self.pipeline_handle.spawn(model, texture);
+        // 
+        // mesh_handle.set_uniform(value);
+        
+        
+        
     }
     
     fn update(self: &mut Self) {

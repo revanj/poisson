@@ -7,6 +7,7 @@ edition = "2024"
 default = []
 webgl = ["wgpu/webgl"]
 
+
 [dependencies]
 winit = {git = "https://github.com/rust-windowing/winit.git", rev = "5199474", features = []}
 poisson_macros = {path = "../poisson_macros" }
@@ -27,7 +28,7 @@ bytemuck = { version = "1.23.1", features = ["derive"] }
 image = {version = "0.25.6", features = ["png"]}
 anyhow = "1.0.98"
 instant = { version = "0.1.13", features = ["wasm-bindgen"] }
-hecs = { version = "0.10.5" }
+thinset = {version = "0.4.0"}
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
