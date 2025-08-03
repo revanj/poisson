@@ -75,17 +75,18 @@ impl VulkanRenderBackend {
 
     
     
-    pub fn spawn_drawlet<Handle: DrawletHandle>(self: &mut Self, pipeline_id: PipelineID) {
+    pub fn spawn_drawlet<Handle: DrawletHandle>(self: &mut Self, _pipeline_id: PipelineID) {
         
     }
 
     pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
-        self.device.device.device_wait_idle().unwrap();
+        unsafe {
+            self.device.device.device_wait_idle().unwrap();
+            ManuallyDrop::drop(&mut self.swapchain);
+            ManuallyDrop::drop(&mut self.framebuffers);
+        }
 
         self.physical_surface.update_resolution(surface_size);
-        
-        ManuallyDrop::drop(&mut self.swapchain);
-        ManuallyDrop::drop(&mut self.framebuffers);
         
 
         self.swapchain = ManuallyDrop::new(Swapchain::new(
@@ -102,7 +103,7 @@ impl VulkanRenderBackend {
 }
 
 impl VulkanRenderBackend {
-    pub(crate) fn new(window: &Arc<dyn Window>) -> Self {
+    pub fn new(window: &Arc<dyn Window>) -> Self {
         let instance =
             ManuallyDrop::new(Instance::new(window));
 
@@ -121,8 +122,7 @@ impl VulkanRenderBackend {
 
         let draw_command_buffers =
             device.spawn_command_buffers(swapchain.images_count().try_into().unwrap());
-
-
+        
         let semaphore_create_info = vk::SemaphoreCreateInfo::default();
         let fence_create_info = vk::FenceCreateInfo::default()
             .flags(vk::FenceCreateFlags::SIGNALED);
@@ -198,6 +198,8 @@ impl VulkanRenderBackend {
     }
 }
 
+trait Vulkan {}
+
 impl RenderBackend for VulkanRenderBackend {
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) {
         let render_backend = VulkanRenderBackend::new(&window);
@@ -244,7 +246,6 @@ impl RenderBackend for VulkanRenderBackend {
             _ => panic!("Failed to acquire swapchain."),
         };
 
-
         let clear_values = [
             vk::ClearValue {
                 color: vk::ClearColorValue {
@@ -272,26 +273,26 @@ impl RenderBackend for VulkanRenderBackend {
                 x.update_uniform_buffer(self.current_frame, elapsed_time);
             }
         }
-        
+
         unsafe {
             let device = &self.device.device;
-            
-            let draw_command_buffer = 
+
+            let draw_command_buffer =
                 self.draw_command_buffers.command_buffers[self.current_frame];
-            
+
             device.reset_command_buffer(
                 draw_command_buffer,
                 vk::CommandBufferResetFlags::RELEASE_RESOURCES
             ).expect("Failed to reset draw command buffer");
-            
-            let command_buffer_begin_info = 
+
+            let command_buffer_begin_info =
                 vk::CommandBufferBeginInfo::default()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-            
+
             device.begin_command_buffer(
-                draw_command_buffer, 
+                draw_command_buffer,
                 &command_buffer_begin_info
-            ).expect("Begin commandbuffer");
+            ).expect("Begin command buffer");
 
             for (_, pipeline) in self.pipelines.iter() {
                 device.cmd_begin_render_pass(
@@ -317,7 +318,7 @@ impl RenderBackend for VulkanRenderBackend {
             device.end_command_buffer(
                 draw_command_buffer
             ).expect("Failed to end draw command buffer");
-            
+
             let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
             let command_buffers = vec![draw_command_buffer];
             let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
@@ -329,12 +330,12 @@ impl RenderBackend for VulkanRenderBackend {
                 .signal_semaphores(&signal_semaphores);
 
             device.queue_submit(
-                self.device.present_queue, 
-                &[submit_info], 
+                self.device.present_queue,
+                &[submit_info],
                 self.frames_in_flight_fences[self.current_frame]
             ).expect("Drawing queue submit failed.");
         }
-        
+
         unsafe {
             let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
             let swapchains = [self.swapchain.swapchain];
@@ -343,7 +344,7 @@ impl RenderBackend for VulkanRenderBackend {
                 .wait_semaphores(&signal_semaphores)
                 .swapchains(&swapchains)
                 .image_indices(&image_indices);
-            
+
             self.swapchain.swapchain_loader
                 .queue_present(self.device.present_queue, &present_info)
                 .unwrap()
@@ -353,7 +354,7 @@ impl RenderBackend for VulkanRenderBackend {
         self.current_frame = self.current_frame % 3;
     }
 
-    fn process_event(self: &mut Self, event: &WindowEvent) {
+    fn process_event(self: &mut Self, _event: &WindowEvent) {
         println!("process event");
     }
 

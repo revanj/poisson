@@ -8,7 +8,7 @@ use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Pi
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
 use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
-use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID};
+use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID, RenderBackend};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
 use crate::render_backend::vulkan::render_pass::RenderPass;

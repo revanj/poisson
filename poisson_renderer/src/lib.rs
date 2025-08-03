@@ -1,3 +1,5 @@
+#![feature(adt_const_params)]
+
 use crate::render_backend::PipelineHandle;
 use core::time;
 use std::ops::Deref;

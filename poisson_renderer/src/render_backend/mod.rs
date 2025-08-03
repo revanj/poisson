@@ -1,3 +1,4 @@
+use std::marker::ConstParamTy;
 use std::sync::{Arc, Weak};
 use std::time::SystemTime;
 use winit::window::Window;
@@ -26,8 +27,7 @@ pub struct PipelineID(usize);
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct DrawletID(usize);
 
-
-pub trait RenderBackend{
+pub trait RenderBackend {
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized;
     fn render(self: &mut Self);
     fn process_event(self: &mut Self, event: &WindowEvent);
