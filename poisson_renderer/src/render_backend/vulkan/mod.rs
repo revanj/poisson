@@ -17,15 +17,10 @@ use std::collections::HashMap;
 pub use instance::*;
 use std::ops::Drop;
 use ash::vk;
-use ash::khr::{swapchain as ash_swapchain};
 
-use winit::raw_window_handle::{HasWindowHandle};
-use std::io::Cursor;
 use std::mem::ManuallyDrop;
 
-use std::sync::{Arc, Weak};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use ash::vk::{DescriptorType, DeviceSize, ShaderStageFlags};
+use std::sync::Arc;
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use winit::window::Window;
@@ -34,70 +29,19 @@ use slang_refl;
 
 use crate::render_backend;
 use render_backend::RenderBackend;
-use render_backend::vulkan::buffer::GpuBuffer;
-use render_backend::vulkan::command_buffer::{CommandBuffers, OneshotCommandBuffer};
+use render_backend::vulkan::command_buffer::{CommandBuffers};
 use render_backend::vulkan::device::Device;
 use render_backend::vulkan::framebuffer::Framebuffer;
 use render_backend::vulkan::physical_surface::PhysicalSurface;
 use render_backend::vulkan::swapchain::Swapchain;
 use render_backend::vulkan::render_pass::RenderPass;
 
-use image;
-use wgpu::MemoryHints::Manual;
-
+use vk::PipelineStageFlags;
 use crate::render_backend::{PipelineID, DrawletID, DrawletHandle, PipelineHandle};
-use crate::render_backend::vulkan::img::Image;
-use crate::render_backend::vulkan::render_object::{Draw, Bind, TexturedMeshPipeline, Inst};
-use crate::render_backend::vulkan::texture::Texture;
-
-
-#[allow(clippy::too_many_arguments)]
-pub fn record_submit_commandbuffer<F: FnOnce(&ash::Device, vk::CommandBuffer)>(
-    device: &ash::Device,
-    command_buffer: vk::CommandBuffer,
-    in_flight_fence: &vk::Fence,
-    submit_queue: vk::Queue,
-    wait_mask: &[vk::PipelineStageFlags],
-    wait_semaphores: &[vk::Semaphore],
-    signal_semaphores: &[vk::Semaphore],
-    f: F,
-) {
-    unsafe {
-        device
-            .reset_command_buffer(
-                command_buffer,
-                vk::CommandBufferResetFlags::RELEASE_RESOURCES,
-            )
-            .expect("Reset command buffer failed.");
-
-        let command_buffer_begin_info = vk::CommandBufferBeginInfo::default()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-        device
-            .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-            .expect("Begin commandbuffer");
-        f(device, command_buffer);
-        device
-            .end_command_buffer(command_buffer)
-            .expect("End commandbuffer");
-
-        let command_buffers = vec![command_buffer];
-
-        let submit_info = vk::SubmitInfo::default()
-            .wait_semaphores(wait_semaphores)
-            .wait_dst_stage_mask(wait_mask)
-            .command_buffers(&command_buffers)
-            .signal_semaphores(signal_semaphores);
-
-        device
-            .queue_submit(submit_queue, &[submit_info], *in_flight_fence)
-            .expect("queue submit failed.");
-    }
-}
+use crate::render_backend::vulkan::render_object::{Draw, Bind, Inst};
 
 
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
-/// There will probably be a pointer of this being passed around
 pub struct VulkanRenderBackend {
     pub instance: ManuallyDrop<Instance>,
     pub physical_surface: ManuallyDrop<PhysicalSurface>,
@@ -328,54 +272,82 @@ impl RenderBackend for VulkanRenderBackend {
                 x.update_uniform_buffer(self.current_frame, elapsed_time);
             }
         }
-        record_submit_commandbuffer(
-            &self.device.device,
-            self.draw_command_buffers.command_buffers[self.current_frame],
-            &self.frames_in_flight_fences[self.current_frame],
-            self.device.present_queue,
-            &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT],
-            &[self.image_available_semaphores[self.current_frame]],
-            &[self.rendering_complete_semaphores[present_index as usize]],
-            |device, draw_command_buffer| {
-                unsafe {
-                    for (_, pipeline) in self.pipelines.iter() {
-                        device.cmd_begin_render_pass(
-                            draw_command_buffer,
-                            &render_pass_begin_info,
-                            vk::SubpassContents::INLINE,
-                        );
-                        device.cmd_bind_pipeline(
-                            draw_command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.get_pipeline(),
-                        );
-                        device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
-                        device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
-                        for x in pipeline.get_instances() {
-                            x.draw(
-                                draw_command_buffer,
-                                self.current_frame,
-                                pipeline.get_pipeline_layout()
-                            )
-                        }
-                    }
-                    device.cmd_end_render_pass(draw_command_buffer);
-                }
-            },
-        );
-        let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
-        let swapchains = [self.swapchain.swapchain];
-        let image_indices = [present_index];
-        let present_info = vk::PresentInfoKHR::default()
-            .wait_semaphores(&signal_semaphores) // &base.rendering_complete_semaphore)
-            .swapchains(&swapchains)
-            .image_indices(&image_indices);
-
-
+        
         unsafe {
+            let device = &self.device.device;
+            
+            let draw_command_buffer = 
+                self.draw_command_buffers.command_buffers[self.current_frame];
+            
+            device.reset_command_buffer(
+                draw_command_buffer,
+                vk::CommandBufferResetFlags::RELEASE_RESOURCES
+            ).expect("Failed to reset draw command buffer");
+            
+            let command_buffer_begin_info = 
+                vk::CommandBufferBeginInfo::default()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+            
+            device.begin_command_buffer(
+                draw_command_buffer, 
+                &command_buffer_begin_info
+            ).expect("Begin commandbuffer");
+
+            for (_, pipeline) in self.pipelines.iter() {
+                device.cmd_begin_render_pass(
+                    draw_command_buffer,
+                    &render_pass_begin_info,
+                    vk::SubpassContents::INLINE,
+                );
+                device.cmd_bind_pipeline(
+                    draw_command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline.get_pipeline(),
+                );
+                device.cmd_set_viewport(draw_command_buffer, 0, &viewports);
+                device.cmd_set_scissor(draw_command_buffer, 0, &scissors);
+                for x in pipeline.get_instances() {
+                    x.draw(
+                        draw_command_buffer,
+                        self.current_frame
+                    )
+                }
+            }
+            device.cmd_end_render_pass(draw_command_buffer);
+            device.end_command_buffer(
+                draw_command_buffer
+            ).expect("Failed to end draw command buffer");
+            
+            let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
+            let command_buffers = vec![draw_command_buffer];
+            let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
+
+            let submit_info = vk::SubmitInfo::default()
+                .wait_semaphores(&wait_semaphores)
+                .wait_dst_stage_mask(&[PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
+                .command_buffers(&command_buffers)
+                .signal_semaphores(&signal_semaphores);
+
+            device.queue_submit(
+                self.device.present_queue, 
+                &[submit_info], 
+                self.frames_in_flight_fences[self.current_frame]
+            ).expect("Drawing queue submit failed.");
+        }
+        
+        unsafe {
+            let signal_semaphores = [self.rendering_complete_semaphores[present_index as usize]];
+            let swapchains = [self.swapchain.swapchain];
+            let image_indices = [present_index];
+            let present_info = vk::PresentInfoKHR::default()
+                .wait_semaphores(&signal_semaphores)
+                .swapchains(&swapchains)
+                .image_indices(&image_indices);
+            
             self.swapchain.swapchain_loader
                 .queue_present(self.device.present_queue, &present_info)
-                .unwrap()};
+                .unwrap()
+        };
         
         self.current_frame += 1;
         self.current_frame = self.current_frame % 3;

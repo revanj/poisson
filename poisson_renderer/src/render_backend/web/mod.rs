@@ -235,7 +235,7 @@ struct DummyDraw {
 }
 
 impl Draw for DummyDraw {
-    fn draw(self: &Self, command_buffer: CommandBuffer, current_frame: usize, pipeline_layout: PipelineLayout) {
+    fn draw(self: &Self, command_buffer: CommandBuffer, current_frame: usize) {
         todo!()
     }
 
@@ -592,7 +592,7 @@ impl WgpuRenderBackend {
         let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
-                    binding: 0,
+                      binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,

@@ -1,8 +1,6 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::ops::Deref;
-use std::slice::{Iter, IterMut};
+
 use std::sync::{Arc, Weak};
 use ash::vk;
 use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Pipeline, ShaderStageFlags};
@@ -80,7 +78,7 @@ pub trait Inst {
 }
 
 pub trait Draw {
-    fn draw(self: &Self, command_buffer: vk::CommandBuffer, current_frame: usize, pipeline_layout: PipelineLayout);
+    fn draw(self: &Self, command_buffer: vk::CommandBuffer, current_frame: usize);
     fn update_uniform_buffer(self: &mut Self, current_frame: usize, elapsed_time: f32);
 }
 
@@ -494,7 +492,7 @@ impl TexturedMesh {
 }
 
 impl Draw for TexturedMesh {
-    fn draw(self: &Self, command_buffer: CommandBuffer, current_frame: usize, pipeline_layout: PipelineLayout) {
+    fn draw(self: &Self, command_buffer: CommandBuffer, current_frame: usize) {
         let device = self.device.upgrade().unwrap();
         unsafe {
             device.device.cmd_bind_vertex_buffers(
@@ -512,7 +510,7 @@ impl Draw for TexturedMesh {
             device.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                pipeline_layout,
+                self.pipeline_layout,
                 0, self.descriptor_sets[current_frame..current_frame + 1].as_ref(),
                 &[]);
             device.device.cmd_draw_indexed(
