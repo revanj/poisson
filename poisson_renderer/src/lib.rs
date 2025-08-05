@@ -1,122 +1,82 @@
 #![feature(adt_const_params)]
 
-use crate::render_backend::PipelineHandle;
-use core::time;
-use std::ops::Deref;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use winit::window::Window;
+use crate::render_backend::{CreatePipeline, PipelineHandle, RenderPipeline, Vertex};
 use env_logger;
-
-use wasm_bindgen::prelude::wasm_bindgen;
-use crate::render_backend::draw::textured_mesh::{UniformBufferObject, Vertex};
-
+use std::sync::Arc;
+use winit::window::Window;
 
 pub mod render_backend;
 mod windowing;
-mod input;
+pub mod input;
 
-use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasRawWindowHandle};
-use winit::window::{WindowAttributes, WindowId};
-use winit::dpi::PhysicalSize;
-
-use parking_lot::Mutex;
-use fern;
-use console_log;
 use console_error_panic_hook;
-use log::logger;
+use parking_lot::Mutex;
 
-use wgpu::Face::Back;
 use crate::render_backend::RenderBackend;
-
-#[cfg(not(target_arch = "wasm32"))]
-use crate::render_backend::vulkan::VulkanRenderBackend;
-
+use std::marker::ConstParamTy;
 
 #[cfg(target_arch = "wasm32")]
 use web_sys;
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::wasm_bindgen;
+use winit::event_loop::EventLoop;
+use crate::render_backend::vulkan::VulkanRenderBackend;
 use winit::keyboard::{KeyCode, PhysicalKey};
-use crate::render_backend::vulkan::render_object::{TexturedMeshDrawletData, TexturedMeshDrawletHandle, TexturedMeshPipeline};
+use crate::input::Input;
+use crate::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshDrawletData, TexturedMeshPipeline};
 use crate::render_backend::web::WgpuRenderBackend;
 
-pub struct GameWorld {
-    
+// #[derive(PartialEq, Eq, ConstParamTy)]
+// pub enum RendererType {
+//     Vulkan,
+//     Wgpu
+// }
+
+pub trait PoissonGame<RenBackend: RenderBackend> {
+    fn new() -> Self;
+    fn init(self: &mut Self, input: &mut Input, renderer: &mut RenBackend);
+    fn update(self: &mut Self, input: &mut Input, renderer: &mut RenBackend);
 }
 
-impl GameWorld {
-    fn new() -> Self {
-        GameWorld {}
-    }
-}
 
-pub struct PoissonEngine<Backend: RenderBackend> {
+
+pub struct PoissonEngine<GameType, RenderBackendType>
+where GameType: PoissonGame<RenderBackendType>,
+      RenderBackendType: RenderBackend
+{
     window: Option<Arc<dyn Window>>,
     input: input::Input,
-    render_backend: Arc<Mutex<Option<Backend>>>,
-    game_world: GameWorld,
+    renderer: Arc<Mutex<Option<RenderBackendType>>>,
+    game: GameType,
 }
 
-impl<Backend: RenderBackend> PoissonEngine<Backend> {
+impl<GameType, RenderBackendType> PoissonEngine<GameType, RenderBackendType>
+where GameType: PoissonGame<RenderBackendType>,
+      RenderBackendType: RenderBackend
+{
     pub fn new() -> Self {
         Self {
             window: None,
             input: input::Input::new(),
-            render_backend: Default::default(),
-            game_world: GameWorld::new(),
+            renderer: Default::default(),
+            game: GameType::new(),
         }
     }
     
     fn init(self: &mut Self) {
-        self.input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
-        if let Some(backend) = self.render_backend.lock().as_mut() {
-            
-            let index_buffer_data = vec![0u32, 1, 2, 2, 3, 0];
-            
-            let vertices = vec!{
-                Vertex {pos: [-0.5f32, -0.5f32, 0.0f32],  color: [1.0f32, 0.0f32, 0.0f32], tex_coord: [1.0f32, 0.0f32]},
-                Vertex {pos: [0.5f32, -0.5f32, 0.0f32],  color: [0.0f32, 1.0f32, 0.0f32], tex_coord: [0.0f32, 0.0f32]},
-                Vertex {pos: [0.5f32, 0.5f32, 0.0f32],  color: [0.0f32, 0.0f32, 1.0f32], tex_coord: [0.0f32, 1.0f32]},
-                Vertex {pos: [-0.5f32, 0.5f32, 0.0f32],  color: [1.0f32, 1.0f32, 1.0f32], tex_coord: [1.0f32, 1.0f32]},
-            };
-            
-            let diffuse_bytes = include_bytes!("../../textures/happy-tree.png");
-            let binding = image::load_from_memory(diffuse_bytes).unwrap();
-
-            let textured_mesh_data = TexturedMeshDrawletData {
-                index_data: index_buffer_data,
-                vertex_data: vertices,
-                texture_data: binding,
-            };
-
-            let pipeline_id = {
-                backend.create_pipeline::<TexturedMeshPipeline>().get_id()
-            };
-            let mesh_handle 
-                = backend.create_drawlet::<TexturedMeshPipeline>(pipeline_id, &textured_mesh_data);
-            
+        if let Some(backend) = self.renderer.lock().as_mut() {
+            self.game.init(&mut self.input, backend);
         }
-        
-       
-        // let mesh_handle1 p= self.pipeline_handle.spawn(model, texture);
-        // 
-        // mesh_handle.set_uniform(value);
-        
-        
-        
     }
     
     fn update(self: &mut Self) {
         
-        if let Some(render_backend) = self.render_backend.lock().as_mut() {
+        if let Some(render_backend) = self.renderer.lock().as_mut() {
+            self.game.update(&mut self.input, render_backend);
             render_backend.render();
         }
         
-        if self.input.is_pressed("up") {
-            println!("pressing up!");
-        }
     }
 
     fn request_redraw(self: &mut Self) {
@@ -128,16 +88,17 @@ impl<Backend: RenderBackend> PoissonEngine<Backend> {
 
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_vulkan() -> Result<(), impl std::error::Error> {
+pub fn run_vulkan<Game: PoissonGame<VulkanRenderBackend>>(game: Game) -> Result<(), impl std::error::Error> {
     let event_loop = EventLoop::new()?;
-    event_loop.run_app(PoissonEngine::<VulkanRenderBackend>::new())
+    event_loop.run_app(PoissonEngine::<Game, _>::new())
 }
 
-pub fn run_wgpu() -> Result<(), impl std::error::Error> {
+pub fn run_wgpu<Game: PoissonGame<WgpuRenderBackend>>(game: Game) -> Result<(), impl std::error::Error> {
     let event_loop = EventLoop::new()?;
     log::info!("run app!!");
-    event_loop.run_app(PoissonEngine::<WgpuRenderBackend>::new())
+    event_loop.run_app(PoissonEngine::<Game, _>::new())
 }
+
 
 pub fn init_logger() {
     cfg_if::cfg_if! {
@@ -193,9 +154,9 @@ fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a st
 }
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
-pub async fn run() {
+pub async fn run<Game: PoissonGame<WgpuRenderBackend>>(game: Game) {
     init_logger();
     console_error_panic_hook::set_once();
     log::info!("running!!!");
-    run_wgpu().unwrap();
+    run_wgpu::<Game>(game).unwrap();
 }

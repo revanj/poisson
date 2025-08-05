@@ -13,7 +13,9 @@ mod physical_device;
 mod texture;
 mod pipeline;
 
+
 use std::collections::HashMap;
+use std::marker::PhantomData;
 pub use instance::*;
 use std::ops::Drop;
 use ash::vk;
@@ -37,8 +39,7 @@ use render_backend::vulkan::swapchain::Swapchain;
 use render_backend::vulkan::render_pass::RenderPass;
 
 use vk::PipelineStageFlags;
-use crate::render_backend::{PipelineID, DrawletID, DrawletHandle, PipelineHandle};
-use crate::render_backend::vulkan::render_object::{Draw, Bind, Inst};
+use crate::render_backend::{PipelineID, DrawletHandle, CreatePipeline, VulkanPipeline, PipelineHandle, VulkanDrawlet, VulkanPipelineObj, VulkanPipelineDyn, RenderPipeline};
 
 
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
@@ -58,27 +59,13 @@ pub struct VulkanRenderBackend {
     pub rendering_complete_semaphores: Vec<vk::Semaphore>,
     pub frames_in_flight_fences: Vec<vk::Fence>,
 
-    pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn Bind>>>,
-    pub drawlets: ManuallyDrop<HashMap<DrawletID, Box<dyn Draw>>>,
-    
+    pub pipelines: ManuallyDrop<HashMap<PipelineID, Box<dyn VulkanPipelineDyn>>>,
+
     pub current_frame: usize,
 }
 
 
-
 impl VulkanRenderBackend {
-    fn get_pipeline_id() -> PipelineID {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static COUNTER:AtomicUsize = AtomicUsize::new(1);
-        PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
-    }
-
-    
-    
-    pub fn spawn_drawlet<Handle: DrawletHandle>(self: &mut Self, _pipeline_id: PipelineID) {
-        
-    }
-
     pub unsafe fn recreate_swapchain(self: &mut Self, surface_size: vk::Extent2D) {
         unsafe {
             self.device.device.device_wait_idle().unwrap();
@@ -169,10 +156,7 @@ impl VulkanRenderBackend {
 
 
 
-        let pipelines: HashMap<PipelineID, Box<dyn Bind>> = HashMap::new();
-        
-        
-        let drawlets = HashMap::new();
+        let pipelines = HashMap::new();
         
         Self {
             instance,
@@ -191,14 +175,11 @@ impl VulkanRenderBackend {
             frames_in_flight_fences,
 
             pipelines: ManuallyDrop::new(pipelines),
-            drawlets: ManuallyDrop::new(drawlets),
             
             current_frame: 0,
         }
     }
 }
-
-trait Vulkan {}
 
 impl RenderBackend for VulkanRenderBackend {
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) {
@@ -268,11 +249,11 @@ impl RenderBackend for VulkanRenderBackend {
         
         let elapsed_time = self.current_frame as f32 * 0.02;
 
-        for (_, p) in self.pipelines.iter_mut() {
-            for x in p.get_instances_mut() {
-                x.update_uniform_buffer(self.current_frame, elapsed_time);
-            }
-        }
+        // for (_, p) in self.pipelines.iter_mut() {
+        //     for x in p.get_instances_mut() {
+        //         x.update_uniform_buffer(self.current_frame, elapsed_time);
+        //     }
+        // }
 
         unsafe {
             let device = &self.device.device;
@@ -293,13 +274,14 @@ impl RenderBackend for VulkanRenderBackend {
                 draw_command_buffer,
                 &command_buffer_begin_info
             ).expect("Begin command buffer");
+            
+            device.cmd_begin_render_pass(
+                draw_command_buffer,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            );
 
-            for (_, pipeline) in self.pipelines.iter() {
-                device.cmd_begin_render_pass(
-                    draw_command_buffer,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE,
-                );
+            for (id, pipeline) in self.pipelines.iter() {
                 device.cmd_bind_pipeline(
                     draw_command_buffer,
                     vk::PipelineBindPoint::GRAPHICS,
@@ -361,32 +343,40 @@ impl RenderBackend for VulkanRenderBackend {
     fn resize(self: &mut Self, width: u32, height: u32) {
         self.new_swapchain_size = Some(vk::Extent2D { width, height });
     }
+}
 
-    fn create_pipeline<PipelineType: Inst + Bind + 'static>(self: &mut Self) -> impl PipelineHandle
-    {
+
+impl<PipelineType: VulkanPipelineObj + 'static> CreatePipeline<PipelineType> for VulkanRenderBackend
+{
+    fn create_pipeline(self: &mut Self, shader_path: &str) -> PipelineHandle<PipelineType> {
         let compiler = slang_refl::Compiler::new();
-        let linked_program = compiler.linked_program_from_file("shaders/triangle.slang");
+        let linked_program = compiler.linked_program_from_file(shader_path);
 
         let compiled_triangle_shader = linked_program.get_bytecode();
 
         let pipeline = PipelineType::new(
             &*self.device, &*self.render_pass, compiled_triangle_shader,
             self.physical_surface.resolution(), self.framebuffers.len());
+
+        let pipeline_id: PipelineID = <Self as CreatePipeline<PipelineType>>::get_pipeline_id();
         
-        let pipeline_id = Self::get_pipeline_id();
-        let ret = pipeline.new_handle(pipeline_id.clone());
+        let ret = PipelineHandle::<PipelineType> {
+            id: pipeline_id,
+            _pipeline_ty: PhantomData::default(),
+        };
         
+
         self.pipelines.insert(pipeline_id.clone(), Box::new(pipeline));
-        
+
         ret
     }
 
-    fn create_drawlet<InstType: Inst + 'static>(self: &mut Self, pipeline_id: PipelineID, init_data: &InstType::DrawletDataType) -> InstType::DrawletHandleType {
-        let pipeline= self.pipelines.get_mut(&pipeline_id).unwrap();
-        let inst = pipeline.as_any_mut().downcast_mut::<InstType>().unwrap();
-        let ret = inst.instantiate(init_data);
+    fn create_drawlet(self: &mut Self, pipeline: &PipelineHandle<PipelineType>, init_data: PipelineType::DrawletDataType) -> DrawletHandle<PipelineType::DrawletType> {
+        let pipeline= self.pipelines.get_mut(&pipeline.id).unwrap();
+        let pipeline_any = pipeline.as_any_mut();
+        let pipeline_concrete = pipeline_any.downcast_mut::<PipelineType>().unwrap();
         
-        ret
+        pipeline_concrete.instantiate_drawlet(init_data)
     }
 }
 

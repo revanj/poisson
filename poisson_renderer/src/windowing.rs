@@ -4,10 +4,13 @@ use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{WindowAttributes, WindowId};
-use crate::PoissonEngine;
+use crate::{PoissonEngine, PoissonGame};
 use crate::render_backend::RenderBackend;
 
-impl<Backend: RenderBackend> ApplicationHandler for PoissonEngine<Backend> {
+impl<GameType, Backend> ApplicationHandler for PoissonEngine<GameType, Backend> where 
+    GameType: PoissonGame<Backend>,
+    Backend: RenderBackend
+{
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
     {
         let window_attributes = WindowAttributes::default().with_resizable(true);
@@ -22,7 +25,7 @@ impl<Backend: RenderBackend> ApplicationHandler for PoissonEngine<Backend> {
         };
 
         if let Some(window_value) = self.window.clone() {
-            Backend::init(self.render_backend.clone(), window_value);
+            Backend::init(self.renderer.clone(), window_value);
         }
         
         self.init();
@@ -32,7 +35,7 @@ impl<Backend: RenderBackend> ApplicationHandler for PoissonEngine<Backend> {
         match &event {
             // those two should push event to a queue to be resolved before render loop
             WindowEvent::KeyboardInput { .. } => {
-                self.render_backend.lock().as_mut().unwrap().process_event(&event);
+                self.renderer.lock().as_mut().unwrap().process_event(&event);
             },
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -43,7 +46,7 @@ impl<Backend: RenderBackend> ApplicationHandler for PoissonEngine<Backend> {
                 self.request_redraw();
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
-                self.render_backend.lock().as_mut().unwrap().resize(*width, *height);
+                self.renderer.lock().as_mut().unwrap().resize(*width, *height);
                 self.update();
                 self.request_redraw();
             },
