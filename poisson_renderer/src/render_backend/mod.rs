@@ -84,7 +84,6 @@ pub trait VulkanPipelineDyn {
     fn get_pipeline(self: &Self) -> vk::Pipeline;
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn VulkanDrawlet> + '_>;
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn VulkanDrawlet> + '_>;
-
     fn as_any_mut(self: &mut Self) -> &mut dyn Any;
 }
 
@@ -99,13 +98,13 @@ pub trait VulkanPipeline: RenderPipeline {
         self: &mut Self,
         init_data: Self::DrawletDataType
     ) -> DrawletHandle<Self::DrawletType>;
+    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<Self::DrawletType>) -> &'_ mut Self::DrawletType;
 }
 
 pub trait WgpuPipeline: RenderPipeline {}
 
 pub trait VulkanDrawlet: RenderDrawlet {
-    fn draw(self: &Self, command_buffer: CommandBuffer, current_frame: usize);
-    fn update_uniform_buffer(self: &mut Self, current_frame: usize, elapsed_time: f32);
+    fn draw(self: &Self, command_buffer: CommandBuffer);
 }
 pub trait WgpuDrawlet: RenderDrawlet {}
 
@@ -121,6 +120,12 @@ pub trait CreatePipeline<RenderPipelineType: RenderPipeline>
         pipeline: &PipelineHandle<RenderPipelineType>,
         init_data: RenderPipelineType::DrawletDataType,
     ) -> DrawletHandle<RenderPipelineType::DrawletType>;
+    
+    fn get_drawlet_mut(
+        self: &mut Self,
+        pipeline_handle: &PipelineHandle<RenderPipelineType>,
+        drawlet_handle: &DrawletHandle<RenderPipelineType::DrawletType>
+    ) -> &'_ mut RenderPipelineType::DrawletType;
 
     fn get_pipeline_id() -> PipelineID {
         use std::sync::atomic::{AtomicUsize, Ordering};

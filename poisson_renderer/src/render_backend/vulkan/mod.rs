@@ -246,14 +246,6 @@ impl RenderBackend for VulkanRenderBackend {
             .framebuffer(self.framebuffers[present_index as usize].framebuffer)
             .render_area(self.physical_surface.resolution().into())
             .clear_values(&clear_values);
-        
-        let elapsed_time = self.current_frame as f32 * 0.02;
-
-        // for (_, p) in self.pipelines.iter_mut() {
-        //     for x in p.get_instances_mut() {
-        //         x.update_uniform_buffer(self.current_frame, elapsed_time);
-        //     }
-        // }
 
         unsafe {
             let device = &self.device.device;
@@ -292,7 +284,6 @@ impl RenderBackend for VulkanRenderBackend {
                 for x in pipeline.get_instances() {
                     x.draw(
                         draw_command_buffer,
-                        self.current_frame
                     )
                 }
             }
@@ -337,7 +328,6 @@ impl RenderBackend for VulkanRenderBackend {
     }
 
     fn process_event(self: &mut Self, _event: &WindowEvent) {
-        println!("process event");
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {
@@ -371,12 +361,19 @@ impl<PipelineType: VulkanPipelineObj + 'static> CreatePipeline<PipelineType> for
         ret
     }
 
-    fn create_drawlet(self: &mut Self, pipeline: &PipelineHandle<PipelineType>, init_data: PipelineType::DrawletDataType) -> DrawletHandle<PipelineType::DrawletType> {
-        let pipeline= self.pipelines.get_mut(&pipeline.id).unwrap();
+    fn create_drawlet(self: &mut Self, pipeline_handle: &PipelineHandle<PipelineType>, init_data: PipelineType::DrawletDataType) -> DrawletHandle<PipelineType::DrawletType> {
+        let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
         let pipeline_concrete = pipeline_any.downcast_mut::<PipelineType>().unwrap();
         
         pipeline_concrete.instantiate_drawlet(init_data)
+    }
+
+    fn get_drawlet_mut(self: &mut Self, pipeline_handle: &PipelineHandle<PipelineType>, drawlet_handle: &DrawletHandle<PipelineType::DrawletType>) -> &'_ mut PipelineType::DrawletType {
+        let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
+        let pipeline_any = pipeline.as_any_mut();
+        let pipeline_concrete = pipeline_any.downcast_mut::<PipelineType>().unwrap();
+        pipeline_concrete.get_drawlet_mut(&drawlet_handle)
     }
 }
 

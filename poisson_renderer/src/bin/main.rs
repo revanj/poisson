@@ -1,10 +1,11 @@
 use std::error::Error;
+use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use poisson_renderer::input::Input;
 use poisson_renderer::PoissonGame;
-use poisson_renderer::render_backend::{CreatePipeline, DrawletHandle, PipelineHandle, Vertex};
+use poisson_renderer::render_backend::{CreatePipeline, DrawletHandle, PipelineHandle, UniformBufferObject, Vertex, VulkanDrawlet};
 use poisson_renderer::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshDrawletData, TexturedMeshPipeline};
-use poisson_renderer::render_backend::vulkan::VulkanRenderBackend;
+use poisson_renderer::render_backend::vulkan::{utils, VulkanRenderBackend};
 
 fn main() -> Result<(), impl Error> {
     poisson_renderer::run_vulkan::<NothingGame>(NothingGame::new())
@@ -12,18 +13,23 @@ fn main() -> Result<(), impl Error> {
 
 struct NothingGame {
     textured_mesh_pipeline: Option<PipelineHandle<TexturedMeshPipeline>>,
-    textured_mesh_inst: Option<DrawletHandle<TexturedMesh>>
+    textured_mesh_inst: Option<DrawletHandle<TexturedMesh>>,
+    last_time: Instant,
+    elapsed_time: f32,
 }
 
 impl PoissonGame<VulkanRenderBackend> for NothingGame {
     fn new() -> Self {
         Self {
             textured_mesh_pipeline: None,
-            textured_mesh_inst: None
+            textured_mesh_inst: None,
+            last_time: Instant::now(),
+            elapsed_time: 0f32,
         }
     }
     
     fn init(self: &mut Self, input: &mut Input, renderer: &mut VulkanRenderBackend) {
+        self.last_time = Instant::now();
         input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
         let index_buffer_data = vec![0u32, 1, 2, 2, 3, 0];
 
@@ -49,12 +55,31 @@ impl PoissonGame<VulkanRenderBackend> for NothingGame {
     }
 
     fn update(self: &mut Self, input: &mut Input, renderer: &mut VulkanRenderBackend) {
+        let delta_time = self.last_time.elapsed().as_secs_f32();
+        self.last_time = Instant::now();
+        
         if input.is_pressed("up") {
-            println!("pressing up!");
+            self.elapsed_time += delta_time;
         }
+
+        let res = renderer.physical_surface.resolution();
+        let drawlet = renderer.get_drawlet_mut(self.textured_mesh_pipeline.as_ref().unwrap(), self.textured_mesh_inst.as_ref().unwrap());
+
+        let elapsed_time = self.elapsed_time;
+        let aspect = res.width as f32 / res.height as f32;
+        let new_ubo = UniformBufferObject {
+            model: cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time)),
+            view: cgmath::Matrix4::look_at(
+                cgmath::Point3::new(2.0, 2.0, 2.0),
+                cgmath::Point3::new(0.0, 0.0, 0.0),
+                cgmath::Vector3::new(0.0, 0.0, 1.0),
+            ),
+            proj: utils::perspective(cgmath::Deg(45.0), aspect, 0.1, 10.0),
+        };
+        drawlet.set_uniform_buffer(new_ubo)
     }
 }
 
-impl NothingGame {
+impl NothingGame { 
     
 }
