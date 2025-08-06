@@ -6,9 +6,11 @@ use poisson_renderer::PoissonGame;
 use poisson_renderer::render_backend::{CreateDrawlet, DrawletHandle, PipelineHandle, UniformBufferObject, Vertex, VulkanDrawlet};
 use poisson_renderer::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshData, TexturedMeshPipeline};
 use poisson_renderer::render_backend::vulkan::{utils, VulkanRenderBackend};
+use poisson_renderer::render_backend::web::WgpuRenderBackend;
 
 fn main() -> Result<(), impl Error> {
-    poisson_renderer::run_vulkan::<NothingGame>(NothingGame::new())
+    //poisson_renderer::run_vulkan::<NothingGame>(NothingGame::new())
+    poisson_renderer::run_game::<NothingGame>()
 }
 
 struct NothingGame {
@@ -18,7 +20,9 @@ struct NothingGame {
     elapsed_time: f32,
 }
 
-impl PoissonGame<VulkanRenderBackend> for NothingGame {
+impl PoissonGame for NothingGame {
+    type RenBackend = VulkanRenderBackend;
+
     fn new() -> Self {
         Self {
             textured_mesh_pipeline: None,

@@ -7,9 +7,7 @@ use winit::window::{WindowAttributes, WindowId};
 use crate::{PoissonEngine, PoissonGame};
 use crate::render_backend::RenderBackend;
 
-impl<GameType, Backend> ApplicationHandler for PoissonEngine<GameType, Backend> where 
-    GameType: PoissonGame<Backend>,
-    Backend: RenderBackend
+impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
 {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
     {
@@ -25,7 +23,7 @@ impl<GameType, Backend> ApplicationHandler for PoissonEngine<GameType, Backend> 
         };
 
         if let Some(window_value) = self.window.clone() {
-            Backend::init(self.renderer.clone(), window_value);
+            GameType::RenBackend::init(self.renderer.clone(), window_value);
         }
         
         self.init();

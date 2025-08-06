@@ -33,27 +33,25 @@ use crate::render_backend::web::WgpuRenderBackend;
 //     Wgpu
 // }
 
-pub trait PoissonGame<RenBackend: RenderBackend> {
+pub trait PoissonGame {
+    type RenBackend: RenderBackend;
     fn new() -> Self;
-    fn init(self: &mut Self, input: &mut Input, renderer: &mut RenBackend);
-    fn update(self: &mut Self, input: &mut Input, renderer: &mut RenBackend);
+    fn init(self: &mut Self, input: &mut Input, renderer: &mut Self::RenBackend);
+    fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::RenBackend);
 }
 
 
 
-pub struct PoissonEngine<GameType, RenderBackendType>
-where GameType: PoissonGame<RenderBackendType>,
-      RenderBackendType: RenderBackend
+pub struct PoissonEngine<GameType>
+where GameType: PoissonGame
 {
     window: Option<Arc<dyn Window>>,
     input: input::Input,
-    renderer: Arc<Mutex<Option<RenderBackendType>>>,
+    renderer: Arc<Mutex<Option<GameType::RenBackend>>>,
     game: GameType,
 }
 
-impl<GameType, RenderBackendType> PoissonEngine<GameType, RenderBackendType>
-where GameType: PoissonGame<RenderBackendType>,
-      RenderBackendType: RenderBackend
+impl<GameType: PoissonGame> PoissonEngine<GameType>
 {
     pub fn new() -> Self {
         Self {
@@ -87,16 +85,18 @@ where GameType: PoissonGame<RenderBackendType>,
 }
 
 
-#[cfg(not(target_arch = "wasm32"))]
-pub fn run_vulkan<Game: PoissonGame<VulkanRenderBackend>>(game: Game) -> Result<(), impl std::error::Error> {
-    let event_loop = EventLoop::new()?;
-    event_loop.run_app(PoissonEngine::<Game, _>::new())
-}
+// #[cfg(not(target_arch = "wasm32"))]
+// pub fn run_vulkan<Game: PoissonGame<RenBackend=VulkanRenderBackend>>(game: Game) -> Result<(), impl std::error::Error> {
+//     let event_loop = EventLoop::new()?;
+//     event_loop.run_app(PoissonEngine::<Game, _>::new())
+// }
 
-pub fn run_wgpu<Game: PoissonGame<WgpuRenderBackend>>(game: Game) -> Result<(), impl std::error::Error> {
+pub fn run_game<Game>() -> Result<(), impl std::error::Error>
+where Game: PoissonGame
+{
     let event_loop = EventLoop::new()?;
     log::info!("run app!!");
-    event_loop.run_app(PoissonEngine::<Game, _>::new())
+    event_loop.run_app(PoissonEngine::<Game>::new())
 }
 
 
@@ -154,9 +154,9 @@ fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a st
 }
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
-pub async fn run<Game: PoissonGame<WgpuRenderBackend>>(game: Game) {
+pub async fn run_wasm<Game: PoissonGame<RenBackend=WgpuRenderBackend>>() {
     init_logger();
     console_error_panic_hook::set_once();
     log::info!("running!!!");
-    run_wgpu::<Game>(game).unwrap();
+    run_game::<Game>().unwrap();
 }
