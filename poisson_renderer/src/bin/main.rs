@@ -9,7 +9,6 @@ use poisson_renderer::render_backend::vulkan::{utils, VulkanRenderBackend};
 use poisson_renderer::render_backend::web::WgpuRenderBackend;
 
 fn main() -> Result<(), impl Error> {
-    //poisson_renderer::run_vulkan::<NothingGame>(NothingGame::new())
     poisson_renderer::run_game::<NothingGame>()
 }
 
@@ -32,7 +31,7 @@ impl PoissonGame for NothingGame {
         }
     }
     
-    fn init(self: &mut Self, input: &mut Input, renderer: &mut VulkanRenderBackend) {
+    fn init(self: &mut Self, input: &mut Input, renderer: &mut Self::RenBackend) {
         self.last_time = Instant::now();
         input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
         let index_buffer_data = vec![0u32, 1, 2, 2, 3, 0];
@@ -58,7 +57,7 @@ impl PoissonGame for NothingGame {
         self.textured_mesh_pipeline = Some(p_handle);
     }
 
-    fn update(self: &mut Self, input: &mut Input, renderer: &mut VulkanRenderBackend) {
+    fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::RenBackend) {
         let delta_time = self.last_time.elapsed().as_secs_f32();
         self.last_time = Instant::now();
         
