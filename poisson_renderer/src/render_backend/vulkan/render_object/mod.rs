@@ -7,19 +7,13 @@ use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Ex
 
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
-use crate::render_backend::{RenderDrawlet, RenderPipeline, UniformBufferObject, Vertex, VulkanDrawlet, VulkanPipeline, VulkanPipelineDyn, VulkanPipelineObj};
+use crate::render_backend::{RenderDrawlet, RenderPipeline, UniformBufferObject, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanDrawletObj, VulkanPipeline, VulkanPipelineDyn, VulkanPipelineObj};
 use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID, RenderBackend};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
 use crate::render_backend::vulkan::render_pass::RenderPass;
 use crate::render_backend::vulkan::texture::Texture;
-use crate::render_backend::vulkan::utils;
 
-fn get_draw_id() -> DrawletID {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static COUNTER:AtomicUsize = AtomicUsize::new(1);
-    DrawletID(COUNTER.fetch_add(1, Ordering::Relaxed))
-}
 
 pub struct TexturedMeshPipeline {
     device: Weak<Device>,
@@ -32,54 +26,17 @@ pub struct TexturedMeshPipeline {
     pub instances: HashMap<DrawletID, TexturedMesh>,
 }
 
-impl TexturedMeshPipeline {
-    pub fn instance(
-        self: &mut Self,
-        drawlet_id: DrawletID,
-        index_data: &[u32],
-        vertex_data: &[Vertex],
-        texture_data: &RgbaImage)
-    {
-        self.instances.insert(drawlet_id, TexturedMesh::new(
-            &self.device.upgrade().unwrap(),
-            index_data,
-            vertex_data,
-            texture_data,
-            self.descriptor_set_layout,
-            self.n_framebuffers,
-            self.resolution,
-            self.pipeline_layout));
-    }
-
-    pub fn instance_ret(
-        self: &mut Self,
-        index_data: &[u32],
-        vertex_data: &[Vertex],
-        texture_data: &RgbaImage) -> TexturedMesh
-    {
-        TexturedMesh::new(
-            &self.device.upgrade().unwrap(),
-            index_data,
-            vertex_data,
-            texture_data,
-            self.descriptor_set_layout,
-            self.n_framebuffers,
-            self.resolution,
-            self.pipeline_layout)
-    }
-}
-
 impl VulkanPipelineDyn for TexturedMeshPipeline {
     fn get_pipeline(self: &Self) -> Pipeline {
         self.pipeline
     }
 
-    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn VulkanDrawlet> + '_> {
-        Box::new(self.instances.iter().map(|(_, x)| x as &dyn VulkanDrawlet))
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn VulkanDrawletDyn> + '_> {
+        Box::new(self.instances.iter().map(|(_, x)| x as &dyn VulkanDrawletDyn))
     }
 
-    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn VulkanDrawlet> + '_> {
-        Box::new(self.instances.iter_mut().map(|(_, x)| x as &mut dyn VulkanDrawlet))
+    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn VulkanDrawletDyn> + '_> {
+        Box::new(self.instances.iter_mut().map(|(_, x)| x as &mut dyn VulkanDrawletDyn))
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
@@ -87,14 +44,11 @@ impl VulkanPipelineDyn for TexturedMeshPipeline {
     }
 }
 
-impl VulkanPipelineObj for TexturedMeshPipeline {}
+impl VulkanPipelineObj<TexturedMesh> for TexturedMeshPipeline {}
 
-impl RenderPipeline for TexturedMeshPipeline {
-    type DrawletType = TexturedMesh;
-    type DrawletDataType = TexturedMeshDrawletData;
-}
+impl RenderPipeline for TexturedMeshPipeline {}
 
-impl VulkanPipeline for TexturedMeshPipeline {
+impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
     fn new(device: &Arc<Device>, render_pass: &RenderPass, shader_bytecode: &[u32], resolution: Extent2D, n_framebuffers: usize) -> Self {
         let ubo_layout_binding = vk::DescriptorSetLayoutBinding::default()
             .binding(0)
@@ -277,9 +231,8 @@ impl VulkanPipeline for TexturedMeshPipeline {
         }
     }
 
-    fn instantiate_drawlet(self: &mut Self, init_data: Self::DrawletDataType) -> DrawletHandle<Self::DrawletType> {
+    fn instantiate_drawlet(self: &mut Self, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
         let drawlet_id = Self::get_drawlet_id();
-        self.instance(drawlet_id, &init_data.index_data, &init_data.vertex_data, init_data.texture_data.as_rgba8().unwrap());
         self.instances.insert(drawlet_id, TexturedMesh::new(
             &self.device.upgrade().unwrap(),
             &init_data.index_data,
@@ -290,11 +243,12 @@ impl VulkanPipeline for TexturedMeshPipeline {
             self.resolution,
             self.pipeline_layout));
 
-        DrawletHandle::<Self::DrawletType> {
+        DrawletHandle::<TexturedMesh> {
             id: drawlet_id,
             _drawlet_ty: PhantomData::default(),
         }
     }
+    
     fn get_drawlet_mut(&mut self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMesh {
         self.instances.get_mut(&drawlet_handle.id).unwrap()
     }
@@ -441,8 +395,14 @@ impl TexturedMesh {
     }
 }
 
-impl RenderDrawlet for TexturedMesh {}
-impl VulkanDrawlet for TexturedMesh {
+impl RenderDrawlet for TexturedMesh {
+    type Pipeline = TexturedMeshPipeline;
+    type Data = TexturedMeshData;
+}
+
+impl VulkanDrawletObj for TexturedMesh {}
+impl VulkanDrawlet for TexturedMesh {}
+impl VulkanDrawletDyn for TexturedMesh {
     fn draw(self: &Self, command_buffer: CommandBuffer) {
         let device = self.device.upgrade().unwrap();
         unsafe {
@@ -474,23 +434,7 @@ impl VulkanDrawlet for TexturedMesh {
             );
         }
     }
-
-    // fn update_uniform_buffer(self: &mut Self, current_frame: usize, elapsed_time: f32) {
-    //     let res = self.resolution;
-    //     let aspect = res.width as f32 / res.height as f32;
-    //     let new_ubo = [UniformBufferObject {
-    //         model: cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time)),
-    //         view: cgmath::Matrix4::look_at(
-    //             cgmath::Point3::new(2.0, 2.0, 2.0),
-    //             cgmath::Point3::new(0.0, 0.0, 0.0),
-    //             cgmath::Vector3::new(0.0, 0.0, 1.0),
-    //         ),
-    //         proj: utils::perspective(cgmath::Deg(45.0), aspect, 0.1, 10.0),
-    //     }];
-    //     self.uniform_buffers[current_frame].write(&new_ubo);
-    // }
 }
-    
 
 impl TexturedMesh {
     pub fn set_uniform_buffer(self: &mut Self, ubo: UniformBufferObject) {
@@ -509,13 +453,8 @@ impl Drop for TexturedMesh {
     }
 }
 
-
-pub struct TexturedMeshDrawletData {
+pub struct TexturedMeshData {
     pub index_data: Vec<u32>,
     pub vertex_data: Vec<Vertex>,
     pub texture_data: DynamicImage
-}
-
-pub struct TexturedMeshDrawletHandle {
-    pub drawlet_id: DrawletID
 }

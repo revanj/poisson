@@ -336,21 +336,22 @@ impl RenderBackend for VulkanRenderBackend {
 }
 
 
-impl<PipelineType: VulkanPipelineObj + 'static> CreatePipeline<PipelineType> for VulkanRenderBackend
+impl<DrawletType: VulkanDrawlet> CreatePipeline<DrawletType> for VulkanRenderBackend
+where DrawletType::Pipeline: VulkanPipelineObj<DrawletType> + 'static
 {
-    fn create_pipeline(self: &mut Self, shader_path: &str) -> PipelineHandle<PipelineType> {
+    fn create_pipeline(self: &mut Self, shader_path: &str) -> PipelineHandle<DrawletType> {
         let compiler = slang_refl::Compiler::new();
         let linked_program = compiler.linked_program_from_file(shader_path);
 
         let compiled_triangle_shader = linked_program.get_bytecode();
 
-        let pipeline = PipelineType::new(
+        let pipeline = DrawletType::Pipeline::new(
             &*self.device, &*self.render_pass, compiled_triangle_shader,
             self.physical_surface.resolution(), self.framebuffers.len());
 
-        let pipeline_id: PipelineID = <Self as CreatePipeline<PipelineType>>::get_pipeline_id();
+        let pipeline_id: PipelineID = <Self as CreatePipeline<DrawletType>>::get_pipeline_id();
         
-        let ret = PipelineHandle::<PipelineType> {
+        let ret = PipelineHandle::<DrawletType> {
             id: pipeline_id,
             _pipeline_ty: PhantomData::default(),
         };
@@ -361,18 +362,18 @@ impl<PipelineType: VulkanPipelineObj + 'static> CreatePipeline<PipelineType> for
         ret
     }
 
-    fn create_drawlet(self: &mut Self, pipeline_handle: &PipelineHandle<PipelineType>, init_data: PipelineType::DrawletDataType) -> DrawletHandle<PipelineType::DrawletType> {
+    fn create_drawlet(self: &mut Self, pipeline_handle: &PipelineHandle<DrawletType>, init_data: DrawletType::Data) -> DrawletHandle<DrawletType> {
         let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
-        let pipeline_concrete = pipeline_any.downcast_mut::<PipelineType>().unwrap();
+        let pipeline_concrete = pipeline_any.downcast_mut::<DrawletType::Pipeline>().unwrap();
         
         pipeline_concrete.instantiate_drawlet(init_data)
     }
 
-    fn get_drawlet_mut(self: &mut Self, pipeline_handle: &PipelineHandle<PipelineType>, drawlet_handle: &DrawletHandle<PipelineType::DrawletType>) -> &'_ mut PipelineType::DrawletType {
+    fn get_drawlet_mut(self: &mut Self, pipeline_handle: &PipelineHandle<DrawletType>, drawlet_handle: &DrawletHandle<DrawletType>) -> &'_ mut DrawletType {
         let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
-        let pipeline_concrete = pipeline_any.downcast_mut::<PipelineType>().unwrap();
+        let pipeline_concrete = pipeline_any.downcast_mut::<DrawletType::Pipeline>().unwrap();
         pipeline_concrete.get_drawlet_mut(&drawlet_handle)
     }
 }

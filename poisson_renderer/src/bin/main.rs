@@ -4,7 +4,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use poisson_renderer::input::Input;
 use poisson_renderer::PoissonGame;
 use poisson_renderer::render_backend::{CreatePipeline, DrawletHandle, PipelineHandle, UniformBufferObject, Vertex, VulkanDrawlet};
-use poisson_renderer::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshDrawletData, TexturedMeshPipeline};
+use poisson_renderer::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshData, TexturedMeshPipeline};
 use poisson_renderer::render_backend::vulkan::{utils, VulkanRenderBackend};
 
 fn main() -> Result<(), impl Error> {
@@ -12,7 +12,7 @@ fn main() -> Result<(), impl Error> {
 }
 
 struct NothingGame {
-    textured_mesh_pipeline: Option<PipelineHandle<TexturedMeshPipeline>>,
+    textured_mesh_pipeline: Option<PipelineHandle<TexturedMesh>>,
     textured_mesh_inst: Option<DrawletHandle<TexturedMesh>>,
     last_time: Instant,
     elapsed_time: f32,
@@ -43,13 +43,13 @@ impl PoissonGame<VulkanRenderBackend> for NothingGame {
         let diffuse_bytes = include_bytes!("../../../textures/happy-tree.png");
         let binding = image::load_from_memory(diffuse_bytes).unwrap();
 
-        let textured_mesh_data = TexturedMeshDrawletData {
+        let textured_mesh_data = TexturedMeshData {
             index_data: index_buffer_data,
             vertex_data: vertices,
             texture_data: binding,
         };
 
-        let p_handle: PipelineHandle<TexturedMeshPipeline> = renderer.create_pipeline("shaders/triangle.slang");
+        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle.slang");
         self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
         self.textured_mesh_pipeline = Some(p_handle);
     }

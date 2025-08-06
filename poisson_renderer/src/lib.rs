@@ -24,7 +24,7 @@ use winit::event_loop::EventLoop;
 use crate::render_backend::vulkan::VulkanRenderBackend;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::input::Input;
-use crate::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshDrawletData, TexturedMeshPipeline};
+use crate::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshData, TexturedMeshPipeline};
 use crate::render_backend::web::WgpuRenderBackend;
 
 // #[derive(PartialEq, Eq, ConstParamTy)]
