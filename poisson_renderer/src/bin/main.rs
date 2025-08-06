@@ -3,7 +3,7 @@ use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use poisson_renderer::input::Input;
 use poisson_renderer::PoissonGame;
-use poisson_renderer::render_backend::{CreatePipeline, DrawletHandle, PipelineHandle, UniformBufferObject, Vertex, VulkanDrawlet};
+use poisson_renderer::render_backend::{CreateDrawlet, DrawletHandle, PipelineHandle, UniformBufferObject, Vertex, VulkanDrawlet};
 use poisson_renderer::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshData, TexturedMeshPipeline};
 use poisson_renderer::render_backend::vulkan::{utils, VulkanRenderBackend};
 

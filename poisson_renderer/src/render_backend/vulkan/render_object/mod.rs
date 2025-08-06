@@ -46,7 +46,29 @@ impl VulkanPipelineDyn for TexturedMeshPipeline {
 
 impl VulkanPipelineObj<TexturedMesh> for TexturedMeshPipeline {}
 
-impl RenderPipeline for TexturedMeshPipeline {}
+impl RenderPipeline<TexturedMesh> for TexturedMeshPipeline {
+    fn instantiate_drawlet(self: &mut Self, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
+        let drawlet_id = Self::get_drawlet_id();
+        self.instances.insert(drawlet_id, TexturedMesh::new(
+            &self.device.upgrade().unwrap(),
+            &init_data.index_data,
+            &init_data.vertex_data,
+            &init_data.texture_data.as_rgba8().unwrap(),
+            self.descriptor_set_layout,
+            self.n_framebuffers,
+            self.resolution,
+            self.pipeline_layout));
+
+        DrawletHandle::<TexturedMesh> {
+            id: drawlet_id,
+            _drawlet_ty: PhantomData::default(),
+        }
+    }
+
+    fn get_drawlet_mut(&mut self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMesh {
+        self.instances.get_mut(&drawlet_handle.id).unwrap()
+    }
+}
 
 impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
     fn new(device: &Arc<Device>, render_pass: &RenderPass, shader_bytecode: &[u32], resolution: Extent2D, n_framebuffers: usize) -> Self {
@@ -229,28 +251,6 @@ impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
             n_framebuffers,
             instances
         }
-    }
-
-    fn instantiate_drawlet(self: &mut Self, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
-        let drawlet_id = Self::get_drawlet_id();
-        self.instances.insert(drawlet_id, TexturedMesh::new(
-            &self.device.upgrade().unwrap(),
-            &init_data.index_data,
-            &init_data.vertex_data,
-            &init_data.texture_data.as_rgba8().unwrap(),
-            self.descriptor_set_layout,
-            self.n_framebuffers,
-            self.resolution,
-            self.pipeline_layout));
-
-        DrawletHandle::<TexturedMesh> {
-            id: drawlet_id,
-            _drawlet_ty: PhantomData::default(),
-        }
-    }
-    
-    fn get_drawlet_mut(&mut self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMesh {
-        self.instances.get_mut(&drawlet_handle.id).unwrap()
     }
 }
 

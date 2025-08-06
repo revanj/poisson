@@ -39,7 +39,7 @@ use render_backend::vulkan::swapchain::Swapchain;
 use render_backend::vulkan::render_pass::RenderPass;
 
 use vk::PipelineStageFlags;
-use crate::render_backend::{PipelineID, DrawletHandle, CreatePipeline, VulkanPipeline, PipelineHandle, VulkanDrawlet, VulkanPipelineObj, VulkanPipelineDyn, RenderPipeline};
+use crate::render_backend::{PipelineID, DrawletHandle, CreateDrawlet, VulkanPipeline, PipelineHandle, VulkanDrawlet, VulkanPipelineObj, VulkanPipelineDyn, RenderPipeline};
 
 
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
@@ -336,7 +336,7 @@ impl RenderBackend for VulkanRenderBackend {
 }
 
 
-impl<DrawletType: VulkanDrawlet> CreatePipeline<DrawletType> for VulkanRenderBackend
+impl<DrawletType: VulkanDrawlet> CreateDrawlet<DrawletType> for VulkanRenderBackend
 where DrawletType::Pipeline: VulkanPipelineObj<DrawletType> + 'static
 {
     fn create_pipeline(self: &mut Self, shader_path: &str) -> PipelineHandle<DrawletType> {
@@ -349,7 +349,7 @@ where DrawletType::Pipeline: VulkanPipelineObj<DrawletType> + 'static
             &*self.device, &*self.render_pass, compiled_triangle_shader,
             self.physical_surface.resolution(), self.framebuffers.len());
 
-        let pipeline_id: PipelineID = <Self as CreatePipeline<DrawletType>>::get_pipeline_id();
+        let pipeline_id: PipelineID = <Self as CreateDrawlet<DrawletType>>::get_pipeline_id();
         
         let ret = PipelineHandle::<DrawletType> {
             id: pipeline_id,
@@ -374,6 +374,7 @@ where DrawletType::Pipeline: VulkanPipelineObj<DrawletType> + 'static
         let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
         let pipeline_concrete = pipeline_any.downcast_mut::<DrawletType::Pipeline>().unwrap();
+        
         pipeline_concrete.get_drawlet_mut(&drawlet_handle)
     }
 }

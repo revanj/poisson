@@ -1,6 +1,6 @@
 #![feature(adt_const_params)]
 
-use crate::render_backend::{CreatePipeline, PipelineHandle, RenderPipeline, Vertex};
+use crate::render_backend::{CreateDrawlet, PipelineHandle, RenderPipeline, Vertex};
 use env_logger;
 use std::sync::Arc;
 use winit::window::Window;
