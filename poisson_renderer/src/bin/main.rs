@@ -34,10 +34,10 @@ impl PoissonGame<VulkanRenderBackend> for NothingGame {
         let index_buffer_data = vec![0u32, 1, 2, 2, 3, 0];
 
         let vertices = vec!{
-            Vertex {pos: [-0.5f32, -0.5f32, 0.0f32],  color: [1.0f32, 0.0f32, 0.0f32], tex_coord: [1.0f32, 0.0f32]},
-            Vertex {pos: [0.5f32, -0.5f32, 0.0f32],  color: [0.0f32, 1.0f32, 0.0f32], tex_coord: [0.0f32, 0.0f32]},
-            Vertex {pos: [0.5f32, 0.5f32, 0.0f32],  color: [0.0f32, 0.0f32, 1.0f32], tex_coord: [0.0f32, 1.0f32]},
-            Vertex {pos: [-0.5f32, 0.5f32, 0.0f32],  color: [1.0f32, 1.0f32, 1.0f32], tex_coord: [1.0f32, 1.0f32]},
+            Vertex {pos: [-0.5f32, -0.5f32, 0.0f32], tex_coord: [1.0f32, 0.0f32]},
+            Vertex {pos: [0.5f32, -0.5f32, 0.0f32], tex_coord: [0.0f32, 0.0f32]},
+            Vertex {pos: [0.5f32, 0.5f32, 0.0f32], tex_coord: [0.0f32, 1.0f32]},
+            Vertex {pos: [-0.5f32, 0.5f32, 0.0f32], tex_coord: [1.0f32, 1.0f32]},
         };
 
         let diffuse_bytes = include_bytes!("../../../textures/happy-tree.png");

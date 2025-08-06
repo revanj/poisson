@@ -141,12 +141,6 @@ impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
             vk::VertexInputAttributeDescription {
                 location: 1,
                 binding: 0,
-                format: vk::Format::R32G32B32_SFLOAT,
-                offset: std::mem::offset_of!(Vertex, color) as u32,
-            },
-            vk::VertexInputAttributeDescription {
-                location: 2,
-                binding: 0,
                 format: vk::Format::R32G32_SFLOAT,
                 offset: std::mem::offset_of!(Vertex, tex_coord) as u32,
             },
