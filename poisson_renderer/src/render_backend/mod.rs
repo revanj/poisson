@@ -85,14 +85,20 @@ pub trait VulkanPipeline<DrawletType: VulkanDrawlet>: RenderPipeline<DrawletType
            resolution: vk::Extent2D,
            n_framebuffers: usize,
     ) -> Self where Self: Sized;
-
 }
 
-pub trait VulkanDrawlet: RenderDrawlet {}
+pub trait VulkanDrawlet: RenderDrawlet {
+    fn draw(self: &Self, command_buffer: CommandBuffer);
+}
 pub trait VulkanDrawletDyn {
     fn draw(self: &Self, command_buffer: CommandBuffer);
 }
-pub trait VulkanDrawletObj: VulkanDrawlet + VulkanDrawletDyn {}
+
+impl<T> VulkanDrawletDyn for T where T: VulkanDrawlet {
+    fn draw(self: &Self, command_buffer: CommandBuffer) {
+        self.draw(command_buffer);
+    }
+}
 
 
 pub trait WgpuPipeline<DrawletType: WgpuDrawlet>: RenderPipeline<DrawletType> {

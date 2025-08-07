@@ -7,7 +7,7 @@ use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Ex
 
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
-use crate::render_backend::{RenderDrawlet, RenderPipeline, UniformBufferObject, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanDrawletObj, VulkanPipeline, VulkanPipelineDyn, VulkanPipelineObj};
+use crate::render_backend::{RenderDrawlet, RenderPipeline, UniformBufferObject, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn, VulkanPipelineObj};
 use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID, RenderBackend};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
@@ -394,9 +394,7 @@ impl RenderDrawlet for TexturedMesh {
     type Data = TexturedMeshData;
 }
 
-impl VulkanDrawletObj for TexturedMesh {}
-impl VulkanDrawlet for TexturedMesh {}
-impl VulkanDrawletDyn for TexturedMesh {
+impl VulkanDrawlet for TexturedMesh {
     fn draw(self: &Self, command_buffer: CommandBuffer) {
         let device = self.device.upgrade().unwrap();
         unsafe {
