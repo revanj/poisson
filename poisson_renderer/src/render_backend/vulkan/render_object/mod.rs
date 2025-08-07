@@ -7,7 +7,7 @@ use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Ex
 
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
-use crate::render_backend::{RenderDrawlet, RenderPipeline, UniformBufferObject, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn, VulkanPipelineObj};
+use crate::render_backend::{RenderDrawlet, RenderPipeline, TexturedMeshData, UniformBufferObject, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn};
 use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID, RenderBackend};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
@@ -26,6 +26,7 @@ pub struct TexturedMeshPipeline {
     pub instances: HashMap<DrawletID, TexturedMesh>,
 }
 
+// this can most certainly be turned into a macro
 impl VulkanPipelineDyn for TexturedMeshPipeline {
     fn get_pipeline(self: &Self) -> Pipeline {
         self.pipeline
@@ -43,8 +44,6 @@ impl VulkanPipelineDyn for TexturedMeshPipeline {
         self
     }
 }
-
-impl VulkanPipelineObj<TexturedMesh> for TexturedMeshPipeline {}
 
 impl RenderPipeline<TexturedMesh> for TexturedMeshPipeline {
     fn instantiate_drawlet(self: &mut Self, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
@@ -445,8 +444,4 @@ impl Drop for TexturedMesh {
     }
 }
 
-pub struct TexturedMeshData {
-    pub index_data: Vec<u32>,
-    pub vertex_data: Vec<Vertex>,
-    pub texture_data: DynamicImage
-}
+

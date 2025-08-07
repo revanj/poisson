@@ -1,4 +1,5 @@
 #![feature(adt_const_params)]
+extern crate core;
 
 use crate::render_backend::{CreateDrawlet, PipelineHandle, RenderPipeline, Vertex};
 use env_logger;
@@ -13,7 +14,6 @@ use console_error_panic_hook;
 use parking_lot::Mutex;
 
 use crate::render_backend::RenderBackend;
-use std::marker::ConstParamTy;
 
 #[cfg(target_arch = "wasm32")]
 use web_sys;
@@ -21,17 +21,8 @@ use web_sys;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 use winit::event_loop::EventLoop;
-use crate::render_backend::vulkan::VulkanRenderBackend;
-use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::input::Input;
-use crate::render_backend::vulkan::render_object::{TexturedMesh, TexturedMeshData, TexturedMeshPipeline};
 use crate::render_backend::web::WgpuRenderBackend;
-
-// #[derive(PartialEq, Eq, ConstParamTy)]
-// pub enum RendererType {
-//     Vulkan,
-//     Wgpu
-// }
 
 pub trait PoissonGame {
     type RenBackend: RenderBackend;

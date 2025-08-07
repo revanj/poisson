@@ -39,7 +39,16 @@ use render_backend::vulkan::swapchain::Swapchain;
 use render_backend::vulkan::render_pass::RenderPass;
 
 use vk::PipelineStageFlags;
-use crate::render_backend::{PipelineID, DrawletHandle, CreateDrawlet, VulkanPipeline, PipelineHandle, VulkanDrawlet, VulkanPipelineObj, VulkanPipelineDyn, RenderPipeline};
+use crate::render_backend::{
+    PipelineID, 
+    DrawletHandle, 
+    CreateDrawlet, 
+    VulkanPipeline, 
+    PipelineHandle, 
+    VulkanDrawlet, 
+    VulkanPipelineDyn, 
+    RenderPipeline
+};
 
 
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
@@ -337,7 +346,7 @@ impl RenderBackend for VulkanRenderBackend {
 
 
 impl<DrawletType: VulkanDrawlet> CreateDrawlet<DrawletType> for VulkanRenderBackend
-where DrawletType::Pipeline: VulkanPipelineObj<DrawletType> + 'static
+where DrawletType::Pipeline: VulkanPipeline<DrawletType> + 'static
 {
     fn create_pipeline(self: &mut Self, shader_path: &str) -> PipelineHandle<DrawletType> {
         let compiler = slang_refl::Compiler::new();

@@ -3,8 +3,10 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use ash::vk;
 use ash::vk::CommandBuffer;
+use image::DynamicImage;
 use winit::window::Window;
 use parking_lot::Mutex;
+use wgpu::SurfaceConfiguration;
 use winit::event::WindowEvent;
 use crate::render_backend::vulkan::device::Device;
 use crate::render_backend::vulkan::render_pass::RenderPass;
@@ -70,7 +72,6 @@ pub struct DrawletHandle<D:RenderDrawlet> {
     _drawlet_ty: PhantomData<D>
 }
 
-pub trait VulkanPipelineObj<DrawletType: VulkanDrawlet>: VulkanPipelineDyn + VulkanPipeline<DrawletType> {}
 pub trait VulkanPipelineDyn {
     fn get_pipeline(self: &Self) -> vk::Pipeline;
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn VulkanDrawletDyn> + '_>;
@@ -78,7 +79,7 @@ pub trait VulkanPipelineDyn {
     fn as_any_mut(self: &mut Self) -> &mut dyn Any;
 }
 
-pub trait VulkanPipeline<DrawletType: VulkanDrawlet>: RenderPipeline<DrawletType> {
+pub trait VulkanPipeline<DrawletType: VulkanDrawlet>: RenderPipeline<DrawletType> + VulkanPipelineDyn {
     fn new(device: &Arc<Device>,
            render_pass: &RenderPass,
            shader_bytecode: &[u32],
@@ -100,11 +101,32 @@ impl<T> VulkanDrawletDyn for T where T: VulkanDrawlet {
     }
 }
 
-
-pub trait WgpuPipeline<DrawletType: WgpuDrawlet>: RenderPipeline<DrawletType> {
-    fn new() -> Self where Self: Sized;
+pub trait WgpuPipeline<DrawletType: WgpuDrawlet>: RenderPipeline<DrawletType> + WgpuPipelineDyn {
+    fn new(
+        device: &Arc<wgpu::Device>,
+        queue: &Arc<wgpu::Queue>,
+        shader_path: &str,
+        surface_config: &SurfaceConfiguration
+    ) -> Self where Self: Sized;
 }
-pub trait WgpuDrawlet: RenderDrawlet {}
+
+pub trait WgpuPipelineDyn {
+    fn get_pipeline(self: &Self) -> &wgpu::RenderPipeline;
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn WgpuDrawletDyn> + '_>;
+    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn WgpuDrawletDyn> + '_>;
+    fn as_any_mut(self: &mut Self) -> &mut dyn Any;
+}
+pub trait WgpuDrawlet: RenderDrawlet {
+    fn draw(self: &Self, render_pass: &mut wgpu::RenderPass);
+}
+pub trait WgpuDrawletDyn {
+    fn draw(self: &Self, render_pass: &mut wgpu::RenderPass);
+}
+impl<T> WgpuDrawletDyn for T where T: WgpuDrawlet {
+    fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
+        self.draw(render_pass);
+    }
+}
 
 pub trait CreateDrawlet<DrawletType: RenderDrawlet>
 {
@@ -130,4 +152,10 @@ pub trait CreateDrawlet<DrawletType: RenderDrawlet>
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
         PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
+}
+
+pub struct TexturedMeshData {
+    pub index_data: Vec<u32>,
+    pub vertex_data: Vec<Vertex>,
+    pub texture_data: DynamicImage
 }
