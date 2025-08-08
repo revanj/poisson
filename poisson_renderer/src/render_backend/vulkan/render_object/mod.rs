@@ -7,7 +7,7 @@ use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Ex
 
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
-use crate::render_backend::{RenderDrawlet, RenderPipeline, TexturedMeshData, UniformBufferObject, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn};
+use crate::render_backend::{RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, UniformBufferObject, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn};
 use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID, RenderBackend};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
@@ -23,7 +23,7 @@ pub struct TexturedMeshPipeline {
     descriptor_set_layout: DescriptorSetLayout,
     resolution: vk::Extent2D,
     n_framebuffers: usize,
-    pub instances: HashMap<DrawletID, TexturedMesh>,
+    pub instances: HashMap<DrawletID, TexturedMeshDrawlet>,
 }
 
 // this can most certainly be turned into a macro
@@ -46,9 +46,14 @@ impl VulkanPipelineDyn for TexturedMeshPipeline {
 }
 
 impl RenderPipeline<TexturedMesh> for TexturedMeshPipeline {
+    
+}
+
+impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
+    
     fn instantiate_drawlet(self: &mut Self, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
         let drawlet_id = Self::get_drawlet_id();
-        self.instances.insert(drawlet_id, TexturedMesh::new(
+        self.instances.insert(drawlet_id, TexturedMeshDrawlet::new(
             &self.device.upgrade().unwrap(),
             &init_data.index_data,
             &init_data.vertex_data,
@@ -64,12 +69,9 @@ impl RenderPipeline<TexturedMesh> for TexturedMeshPipeline {
         }
     }
 
-    fn get_drawlet_mut(&mut self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMesh {
+    fn get_drawlet_mut(&mut self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMeshDrawlet {
         self.instances.get_mut(&drawlet_handle.id).unwrap()
     }
-}
-
-impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
     fn new(device: &Arc<Device>, render_pass: &RenderPass, shader_bytecode: &[u32], resolution: Extent2D, n_framebuffers: usize) -> Self {
         let ubo_layout_binding = vk::DescriptorSetLayoutBinding::default()
             .binding(0)
@@ -260,7 +262,7 @@ impl Drop for TexturedMeshPipeline {
     }
 }
  
-pub struct TexturedMesh {
+pub struct TexturedMeshDrawlet {
     pub device: Weak<Device>,
     pub index_buffer: GpuBuffer<u32>,
     pub vertex_buffer: GpuBuffer<Vertex>,
@@ -274,7 +276,7 @@ pub struct TexturedMesh {
 }
 
 
-impl TexturedMesh {
+impl TexturedMeshDrawlet {
     pub fn new(
         device: &Arc<Device>,
         index_data: &[u32], 
@@ -388,12 +390,11 @@ impl TexturedMesh {
     }
 }
 
-impl RenderDrawlet for TexturedMesh {
-    type Pipeline = TexturedMeshPipeline;
+impl RenderDrawlet for TexturedMeshDrawlet {
     type Data = TexturedMeshData;
 }
 
-impl VulkanDrawlet for TexturedMesh {
+impl VulkanDrawlet for TexturedMeshDrawlet {
     fn draw(self: &Self, command_buffer: CommandBuffer) {
         let device = self.device.upgrade().unwrap();
         unsafe {
@@ -427,7 +428,7 @@ impl VulkanDrawlet for TexturedMesh {
     }
 }
 
-impl TexturedMesh {
+impl TexturedMeshDrawlet {
     pub fn set_uniform_buffer(self: &mut Self, ubo: UniformBufferObject) {
         let new_ubo = [ubo];
         self.uniform_buffers[self.current_frame].write(&new_ubo);
@@ -435,7 +436,7 @@ impl TexturedMesh {
     }
 }
 
-impl Drop for TexturedMesh {
+impl Drop for TexturedMeshDrawlet {
     fn drop(&mut self) {
         let device = self.device.upgrade().unwrap();
         unsafe {

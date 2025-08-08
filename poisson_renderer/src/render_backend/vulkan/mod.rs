@@ -39,17 +39,8 @@ use render_backend::vulkan::swapchain::Swapchain;
 use render_backend::vulkan::render_pass::RenderPass;
 
 use vk::PipelineStageFlags;
-use crate::render_backend::{
-    PipelineID, 
-    DrawletHandle, 
-    CreateDrawlet, 
-    VulkanPipeline, 
-    PipelineHandle, 
-    VulkanDrawlet, 
-    VulkanPipelineDyn, 
-    RenderPipeline
-};
-use crate::render_backend::vulkan::render_object::TexturedMesh;
+use crate::render_backend::{PipelineID, DrawletHandle, VulkanPipeline, PipelineHandle, VulkanDrawlet, VulkanPipelineDyn, RenderPipeline, VulkanRenderObject, CreateDrawletVulkan, RenderDrawlet};
+use crate::render_backend::vulkan::render_object::TexturedMeshDrawlet;
 
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
 pub struct VulkanRenderBackend {
@@ -191,7 +182,7 @@ impl VulkanRenderBackend {
 }
 
 impl RenderBackend for VulkanRenderBackend {
-    type TexturedMesh = TexturedMesh;
+    type TexturedMesh = TexturedMeshDrawlet;
 
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) {
         let render_backend = VulkanRenderBackend::new(&window);
@@ -347,22 +338,21 @@ impl RenderBackend for VulkanRenderBackend {
 }
 
 
-impl<DrawletType: VulkanDrawlet> CreateDrawlet<DrawletType> for VulkanRenderBackend
-where DrawletType::Pipeline: VulkanPipeline<DrawletType> + 'static
+impl CreateDrawletVulkan for VulkanRenderBackend
 {
-    fn create_pipeline(self: &mut Self, shader_path: &str) -> PipelineHandle<DrawletType> {
+    fn create_pipeline<RenObjType: VulkanRenderObject>(self: &mut Self, shader_path: &str) -> PipelineHandle<RenObjType> {
         let compiler = slang_refl::Compiler::new();
         let linked_program = compiler.linked_program_from_file(shader_path);
 
         let compiled_triangle_shader = linked_program.get_bytecode();
 
-        let pipeline = DrawletType::Pipeline::new(
+        let pipeline = RenObjType::Pipeline::new(
             &*self.device, &*self.render_pass, compiled_triangle_shader,
             self.physical_surface.resolution(), self.framebuffers.len());
 
-        let pipeline_id: PipelineID = <Self as CreateDrawlet<DrawletType>>::get_pipeline_id();
+        let pipeline_id: PipelineID = <Self as CreateDrawletVulkan>::get_pipeline_id();
         
-        let ret = PipelineHandle::<DrawletType> {
+        let ret = PipelineHandle::<RenObjType> {
             id: pipeline_id,
             _pipeline_ty: PhantomData::default(),
         };
@@ -373,18 +363,19 @@ where DrawletType::Pipeline: VulkanPipeline<DrawletType> + 'static
         ret
     }
 
-    fn create_drawlet(self: &mut Self, pipeline_handle: &PipelineHandle<DrawletType>, init_data: DrawletType::Data) -> DrawletHandle<DrawletType> {
+    fn create_drawlet<RenObjType: VulkanRenderObject>(self: &mut Self, pipeline_handle: &PipelineHandle<RenObjType>, init_data: <<RenObjType as VulkanRenderObject>::Drawlet as RenderDrawlet>::Data) -> DrawletHandle<RenObjType>
+    {
         let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
-        let pipeline_concrete = pipeline_any.downcast_mut::<DrawletType::Pipeline>().unwrap();
+        let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
         
         pipeline_concrete.instantiate_drawlet(init_data)
     }
 
-    fn get_drawlet_mut(self: &mut Self, pipeline_handle: &PipelineHandle<DrawletType>, drawlet_handle: &DrawletHandle<DrawletType>) -> &'_ mut DrawletType {
+    fn get_drawlet_mut<RenObjType: VulkanRenderObject>(self: &mut Self, pipeline_handle: &PipelineHandle<RenObjType>, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet {
         let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
-        let pipeline_concrete = pipeline_any.downcast_mut::<DrawletType::Pipeline>().unwrap();
+        let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
         
         pipeline_concrete.get_drawlet_mut(&drawlet_handle)
     }

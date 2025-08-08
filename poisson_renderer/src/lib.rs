@@ -1,7 +1,7 @@
 #![feature(adt_const_params)]
 extern crate core;
 
-use crate::render_backend::{CreateDrawlet, PipelineHandle, RenderPipeline, Vertex};
+use crate::render_backend::{PipelineHandle, RenderPipeline, Vertex};
 use env_logger;
 use std::sync::Arc;
 use winit::window::Window;

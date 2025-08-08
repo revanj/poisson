@@ -4,11 +4,11 @@ use std::sync::{Arc, Weak};
 use image::DynamicImage;
 use wgpu::{BindGroup, BindGroupLayout, Device, PipelineLayout, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
-use crate::render_backend::{DrawletHandle, DrawletID, RenderDrawlet, RenderPipeline, TexturedMeshData, Vertex, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn};
+use crate::render_backend::{DrawletHandle, DrawletID, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn};
 use crate::render_backend::web::{Camera, CameraUniform};
 use crate::render_backend::web::texture::Texture;
 
-pub struct TexturedMesh {
+pub struct TexturedMeshDrawlet {
     num_indices: u32,
     texture: Texture,
     texture_bind_group: BindGroup,
@@ -18,13 +18,13 @@ pub struct TexturedMesh {
     vertex_buffer: wgpu::Buffer,
 }
 
-impl TexturedMesh {
+impl TexturedMeshDrawlet {
     fn new(
         device: &Device,
         queue: &Queue,
         texture_bind_group_layout: &BindGroupLayout,
         camera_bind_group_layout: &BindGroupLayout,
-        init_data: &<TexturedMesh as RenderDrawlet>::Data
+        init_data: &<TexturedMeshDrawlet as RenderDrawlet>::Data
     ) -> Self {
         let camera = Camera {
             // position the camera 1 unit up and 2 units back
@@ -120,12 +120,11 @@ impl TexturedMesh {
     }
 }
 
-impl RenderDrawlet for TexturedMesh {
-    type Pipeline = TexturedMeshPipeline;
+impl RenderDrawlet for TexturedMeshDrawlet {
     type Data = TexturedMeshData;
 }
 
-impl WgpuDrawlet for TexturedMesh {
+impl WgpuDrawlet for TexturedMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
         render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
@@ -142,7 +141,7 @@ pub struct TexturedMeshPipeline {
     texture_bind_group_layout: BindGroupLayout,
     shader_module: ShaderModule,
     render_pipeline: wgpu::RenderPipeline,
-    drawlets: HashMap<DrawletID, TexturedMesh>
+    drawlets: HashMap<DrawletID, TexturedMeshDrawlet>
 }
 
 impl WgpuPipelineDyn for TexturedMeshPipeline {
@@ -165,6 +164,25 @@ impl WgpuPipelineDyn for TexturedMeshPipeline {
 
 
 impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
+    fn instantiate_drawlet(self: &mut Self, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
+        let id = <Self as RenderPipeline<TexturedMesh>>::get_drawlet_id();
+        let new_drawlet = TexturedMeshDrawlet::new(
+            &self.device.upgrade().unwrap(),
+            &self.queue.upgrade().unwrap(),
+            &self.texture_bind_group_layout,
+            &self.camera_bind_group_layout , &init_data);
+
+        self.drawlets.insert(id, new_drawlet);
+
+        DrawletHandle {
+            id,
+            _drawlet_ty: Default::default()
+        }
+    }
+
+    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMeshDrawlet {
+        self.drawlets.get_mut(&drawlet_handle.id).unwrap()
+    }
     fn new(device: &Arc<Device>, queue: &Arc<Queue>, shader_path: &str, surface_config: &SurfaceConfiguration) -> Self
         where Self: Sized
     {
@@ -297,24 +315,4 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
     }
 }
 
-impl RenderPipeline<TexturedMesh> for TexturedMeshPipeline {
-    fn instantiate_drawlet(self: &mut Self, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
-        let id = <Self as RenderPipeline<TexturedMesh>>::get_drawlet_id();
-        let new_drawlet = TexturedMesh::new(
-            &self.device.upgrade().unwrap(),
-            &self.queue.upgrade().unwrap(),
-            &self.texture_bind_group_layout,
-            &self.camera_bind_group_layout , &init_data);
-
-        self.drawlets.insert(id, new_drawlet);
-
-        DrawletHandle {
-            id,
-            _drawlet_ty: Default::default()
-        }
-    }
-
-    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMesh {
-        self.drawlets.get_mut(&drawlet_handle.id).unwrap()
-    }
-}
+impl RenderPipeline<TexturedMesh> for TexturedMeshPipeline {}

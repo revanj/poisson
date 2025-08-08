@@ -10,7 +10,7 @@ use ash::vk::{CommandBuffer, Extent2D, Pipeline, PipelineLayout};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::window::Window;
-use crate::render_backend::{CreateDrawlet, DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderPipeline, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn};
+use crate::render_backend::{CreateDrawletWgpu, DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, RenderPipeline, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -20,7 +20,7 @@ use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWeb;
-use crate::render_backend::web::textured_mesh::TexturedMesh;
+use crate::render_backend::web::textured_mesh::TexturedMeshDrawlet;
 
 struct CameraController {
     speed: f32,
@@ -233,7 +233,7 @@ pub struct WgpuRenderBackend {
 
 
 impl RenderBackend for WgpuRenderBackend {
-    type TexturedMesh = TexturedMesh;
+    type TexturedMesh = TexturedMeshDrawlet;
 
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
     {
@@ -596,21 +596,20 @@ impl WgpuRenderBackend {
     }
 }
 
-impl<DrawletType: WgpuDrawlet> CreateDrawlet<DrawletType> for WgpuRenderBackend
-where DrawletType::Pipeline: WgpuPipeline<DrawletType> + 'static
+impl CreateDrawletWgpu for WgpuRenderBackend
 {
-    fn create_pipeline(self: &mut Self, shader_path: &str) -> PipelineHandle<DrawletType> {
+    fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, shader_path: &str) -> PipelineHandle<RenObjType> {
         // let compiler = slang_refl::Compiler::new();
         // let linked_program = compiler.linked_program_from_file(shader_path);
         //
         // let compiled_triangle_shader = linked_program.get_bytecode();
 
-        let pipeline = DrawletType::Pipeline::new(
+        let pipeline = RenObjType::Pipeline::new(
             &self.device, &self.queue, shader_path, &self.config);
 
-        let pipeline_id: PipelineID = <Self as CreateDrawlet<DrawletType>>::get_pipeline_id();
+        let pipeline_id: PipelineID = <Self as CreateDrawletWgpu>::get_pipeline_id();
 
-        let ret = PipelineHandle::<DrawletType> {
+        let ret = PipelineHandle::<RenObjType> {
             id: pipeline_id,
             _pipeline_ty: PhantomData::default(),
         };
@@ -621,18 +620,19 @@ where DrawletType::Pipeline: WgpuPipeline<DrawletType> + 'static
         ret
     }
 
-    fn create_drawlet(self: &mut Self, pipeline_handle: &PipelineHandle<DrawletType>, init_data: DrawletType::Data) -> DrawletHandle<DrawletType> {
+    fn create_drawlet<RenObjType: WgpuRenderObject>(self: &mut Self, pipeline_handle: &PipelineHandle<RenObjType>, init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data) -> DrawletHandle<RenObjType>
+    {
         let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
-        let pipeline_concrete = pipeline_any.downcast_mut::<DrawletType::Pipeline>().unwrap();
+        let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
 
         pipeline_concrete.instantiate_drawlet(init_data)
     }
 
-    fn get_drawlet_mut(self: &mut Self, pipeline_handle: &PipelineHandle<DrawletType>, drawlet_handle: &DrawletHandle<DrawletType>) -> &'_ mut DrawletType {
+    fn get_drawlet_mut<RenObjType: WgpuRenderObject>(self: &mut Self, pipeline_handle: &PipelineHandle<RenObjType>, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet {
         let pipeline= self.pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
-        let pipeline_concrete = pipeline_any.downcast_mut::<DrawletType::Pipeline>().unwrap();
+        let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
 
         pipeline_concrete.get_drawlet_mut(&drawlet_handle)
     }

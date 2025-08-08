@@ -3,22 +3,22 @@ use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use poisson_renderer::input::Input;
 use poisson_renderer::PoissonGame;
-use poisson_renderer::render_backend::{CreateDrawlet, DrawletHandle, PipelineHandle, RenderBackend, TexturedMeshData, UniformBufferObject, Vertex};
+use poisson_renderer::render_backend::{CreateDrawletVulkan, CreateDrawletWgpu, DrawletHandle, PipelineHandle, RenderBackend, TexturedMesh, TexturedMeshData, UniformBufferObject, Vertex};
 use poisson_renderer::render_backend::vulkan::{utils, VulkanRenderBackend};
-use poisson_renderer::render_backend::web::textured_mesh::TexturedMesh;
+use poisson_renderer::render_backend::web::textured_mesh::TexturedMeshDrawlet;
 use poisson_renderer::render_backend::web::WgpuRenderBackend;
 
 fn main() -> Result<(), impl Error> {
     poisson_renderer::run_game::<NothingGame>()
 }
 
-macro_rules! ren {
-    ($x:ident) => (<<NothingGame as PoissonGame>::Ren as RenderBackend>::$x)
-}
+// macro_rules! ren {
+//     ($x:ident) => (<<NothingGame as PoissonGame>::Ren as RenderBackend>::$x)
+// }
 
 struct NothingGame {
-    textured_mesh_pipeline: Option<PipelineHandle<ren!(TexturedMesh)>>,
-    textured_mesh_inst: Option<DrawletHandle<ren!(TexturedMesh)>>,
+    textured_mesh_pipeline: Option<PipelineHandle<TexturedMesh>>,
+    textured_mesh_inst: Option<DrawletHandle<TexturedMesh>>,
     last_time: Instant,
     elapsed_time: f32,
 }
@@ -27,7 +27,7 @@ struct NothingGame {
 
 impl PoissonGame for NothingGame {
 
-    type Ren = VulkanRenderBackend;
+    type Ren = WgpuRenderBackend;
 
     fn new() -> Self {
         Self {
@@ -59,7 +59,7 @@ impl PoissonGame for NothingGame {
             texture_data: binding,
         };
 
-        let p_handle: PipelineHandle<ren!(TexturedMesh)> = renderer.create_pipeline("shaders/triangle.slang");
+        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle.slang");
         self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
         self.textured_mesh_pipeline = Some(p_handle);
     }
@@ -74,7 +74,7 @@ impl PoissonGame for NothingGame {
 
         // let res = renderer.physical_surface.resolution();
         // let drawlet = renderer.get_drawlet_mut(self.textured_mesh_pipeline.as_ref().unwrap(), self.textured_mesh_inst.as_ref().unwrap());
-        // 
+        //
         // let elapsed_time = self.elapsed_time;
         // let aspect = res.width as f32 / res.height as f32;
         // let new_ubo = UniformBufferObject {
