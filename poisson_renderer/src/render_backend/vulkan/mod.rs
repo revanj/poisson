@@ -49,7 +49,7 @@ use crate::render_backend::{
     VulkanPipelineDyn, 
     RenderPipeline
 };
-
+use crate::render_backend::vulkan::render_object::TexturedMesh;
 
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
 pub struct VulkanRenderBackend {
@@ -191,6 +191,8 @@ impl VulkanRenderBackend {
 }
 
 impl RenderBackend for VulkanRenderBackend {
+    type TexturedMesh = TexturedMesh;
+
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) {
         let render_backend = VulkanRenderBackend::new(&window);
         backend_to_init.lock().replace(render_backend);

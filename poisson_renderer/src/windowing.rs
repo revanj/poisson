@@ -23,7 +23,7 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
         };
 
         if let Some(window_value) = self.window.clone() {
-            GameType::RenBackend::init(self.renderer.clone(), window_value);
+            GameType::Ren::init(self.renderer.clone(), window_value);
         }
         
         self.init();

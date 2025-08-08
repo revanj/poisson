@@ -25,10 +25,10 @@ use crate::input::Input;
 use crate::render_backend::web::WgpuRenderBackend;
 
 pub trait PoissonGame {
-    type RenBackend: RenderBackend;
+    type Ren: RenderBackend;
     fn new() -> Self;
-    fn init(self: &mut Self, input: &mut Input, renderer: &mut Self::RenBackend);
-    fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::RenBackend);
+    fn init(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren);
+    fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren);
 }
 
 
@@ -38,7 +38,7 @@ where GameType: PoissonGame
 {
     window: Option<Arc<dyn Window>>,
     input: input::Input,
-    renderer: Arc<Mutex<Option<GameType::RenBackend>>>,
+    renderer: Arc<Mutex<Option<GameType::Ren>>>,
     game: GameType,
 }
 
@@ -145,7 +145,7 @@ fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'a st
 }
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
-pub async fn run_wasm<Game: PoissonGame<RenBackend=WgpuRenderBackend>>() {
+pub async fn run_wasm<Game: PoissonGame<Ren=WgpuRenderBackend>>() {
     init_logger();
     console_error_panic_hook::set_once();
     log::info!("running!!!");

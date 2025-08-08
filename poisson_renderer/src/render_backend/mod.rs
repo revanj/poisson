@@ -14,7 +14,7 @@ use crate::render_backend::vulkan::render_pass::RenderPass;
 pub mod vulkan;
 pub mod web;
 
-
+#[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Vertex {
     pub pos: [f32; 3],
@@ -36,6 +36,9 @@ pub struct DrawletID(usize);
 
 
 pub trait RenderBackend {
+    // Common Drawlet Types
+    type TexturedMesh: RenderDrawlet;
+    
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized;
     fn render(self: &mut Self);
     fn process_event(self: &mut Self, event: &WindowEvent);

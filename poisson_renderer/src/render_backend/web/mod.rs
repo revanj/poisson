@@ -20,6 +20,7 @@ use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWeb;
+use crate::render_backend::web::textured_mesh::TexturedMesh;
 
 struct CameraController {
     speed: f32,
@@ -227,21 +228,13 @@ pub struct WgpuRenderBackend {
     size: winit::dpi::PhysicalSize<u32>,
     size_changed: bool,
     max_size: winit::dpi::PhysicalSize<u32>,
-    // render_pipeline: wgpu::RenderPipeline,
-    // vertex_buffer: wgpu::Buffer,
-    // index_buffer: wgpu::Buffer,
-    // diffuse_bind_group: wgpu::BindGroup,
-    // diffuse_texture: texture::Texture,
-    // camera: Camera,
-    // camera_controller: CameraController,
-    // camera_uniform: CameraUniform,
-    // camera_buffer: wgpu::Buffer,
-    // camera_bind_group: wgpu::BindGroup,
     pipelines: HashMap<PipelineID, Box<dyn WgpuPipelineDyn>>
 }
 
 
 impl RenderBackend for WgpuRenderBackend {
+    type TexturedMesh = TexturedMesh;
+
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
     {
         cfg_if::cfg_if! {
@@ -287,9 +280,9 @@ impl RenderBackend for WgpuRenderBackend {
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
+                            r: 0.5,
+                            g: 0.5,
+                            b: 0.5,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -609,7 +602,7 @@ where DrawletType::Pipeline: WgpuPipeline<DrawletType> + 'static
     fn create_pipeline(self: &mut Self, shader_path: &str) -> PipelineHandle<DrawletType> {
         // let compiler = slang_refl::Compiler::new();
         // let linked_program = compiler.linked_program_from_file(shader_path);
-        // 
+        //
         // let compiled_triangle_shader = linked_program.get_bytecode();
 
         let pipeline = DrawletType::Pipeline::new(
