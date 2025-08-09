@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use ash::vk;
 use ash::vk::CommandBuffer;
+use bytemuck::{Pod, Zeroable};
 use image::DynamicImage;
 use winit::window::Window;
 use parking_lot::Mutex;
@@ -26,11 +27,10 @@ pub struct Vertex {
     pub tex_coord: [f32; 2]
 }
 
+#[repr(C)]
 #[derive(Clone, Debug, Copy)]
-pub struct UniformBufferObject {
-    pub model: cgmath::Matrix4<f32>,
-    pub view: cgmath::Matrix4<f32>,
-    pub proj: cgmath::Matrix4<f32>,
+pub struct Mat4Ubo {
+    pub mvp: cgmath::Matrix4<f32>
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]

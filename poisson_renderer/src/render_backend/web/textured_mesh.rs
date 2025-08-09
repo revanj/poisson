@@ -4,11 +4,12 @@ use std::sync::{Arc, Weak};
 use image::DynamicImage;
 use wgpu::{BindGroup, BindGroupLayout, Device, PipelineLayout, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
-use crate::render_backend::{DrawletHandle, DrawletID, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn};
+use crate::render_backend::{DrawletHandle, DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn};
 use crate::render_backend::web::{Camera, CameraUniform};
 use crate::render_backend::web::texture::Texture;
 
 pub struct TexturedMeshDrawlet {
+    queue: Weak<Queue>,
     num_indices: u32,
     texture: Texture,
     texture_bind_group: BindGroup,
@@ -21,7 +22,7 @@ pub struct TexturedMeshDrawlet {
 impl TexturedMeshDrawlet {
     fn new(
         device: &Device,
-        queue: &Queue,
+        queue: &Arc<Queue>,
         texture_bind_group_layout: &BindGroupLayout,
         camera_bind_group_layout: &BindGroupLayout,
         init_data: &<TexturedMeshDrawlet as RenderDrawlet>::Data
@@ -109,6 +110,7 @@ impl TexturedMeshDrawlet {
         );
 
         Self {
+            queue: Arc::downgrade(queue),
             num_indices: init_data.index_data.len() as u32,
             texture,
             camera_buffer,
@@ -283,7 +285,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw, // 2.
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
                 // Requires Features::DEPTH_CLIP_CONTROL
@@ -316,3 +318,15 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
 }
 
 impl RenderPipeline<TexturedMesh> for TexturedMeshPipeline {}
+
+impl TexturedMeshDrawlet {
+    pub fn set_mvp(self: &mut Self, ubo: Mat4Ubo) {
+        let ubo_slice: &[u8] = unsafe {
+            std::slice::from_raw_parts(
+                (&ubo as *const Mat4Ubo) as *const u8,
+                ::core::mem::size_of::<Mat4Ubo>(),
+            )
+        };
+        self.queue.upgrade().as_ref().unwrap().write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(ubo_slice));
+    }
+}

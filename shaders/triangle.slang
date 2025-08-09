@@ -1,8 +1,6 @@
 struct Uniform
 {
-    float4x4 model;
-    float4x4 view;
-    float4x4 projection;
+    float4x4 mvp;
 }
 
 [[vk::binding(0)]] Uniform uniform_var;
@@ -37,7 +35,7 @@ VertexStageOutput vertexMain(
 {
     VertexStageOutput output;
 
-    float4 position = mul(float4(assembledVertex.position, 1.0), mul(uniform_var.model, mul(uniform_var.view, uniform_var.projection)));
+    float4 position = mul(float4(assembledVertex.position, 1.0), uniform_var.mvp);
 
     output.coarseVertex.tex_coord = assembledVertex.tex_coord;
     output.sv_position = position;

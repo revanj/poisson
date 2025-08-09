@@ -3,7 +3,7 @@ use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use poisson_renderer::input::Input;
 use poisson_renderer::PoissonGame;
-use poisson_renderer::render_backend::{CreateDrawletVulkan, CreateDrawletWgpu, DrawletHandle, PipelineHandle, RenderBackend, TexturedMesh, TexturedMeshData, UniformBufferObject, Vertex};
+use poisson_renderer::render_backend::{CreateDrawletVulkan, CreateDrawletWgpu, DrawletHandle, PipelineHandle, RenderBackend, TexturedMesh, TexturedMeshData, Mat4Ubo, Vertex};
 use poisson_renderer::render_backend::vulkan::{utils, VulkanRenderBackend};
 use poisson_renderer::render_backend::web::textured_mesh::TexturedMeshDrawlet;
 use poisson_renderer::render_backend::web::WgpuRenderBackend;
@@ -59,7 +59,7 @@ impl PoissonGame for NothingGame {
             texture_data: binding,
         };
 
-        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle.slang");
+        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle.wgsl");
         self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
         self.textured_mesh_pipeline = Some(p_handle);
     }
@@ -71,22 +71,19 @@ impl PoissonGame for NothingGame {
         if input.is_pressed("up") {
             self.elapsed_time += delta_time;
         }
+        
+        let drawlet = renderer.get_drawlet_mut(self.textured_mesh_pipeline.as_ref().unwrap(), self.textured_mesh_inst.as_ref().unwrap());
 
-        // let res = renderer.physical_surface.resolution();
-        // let drawlet = renderer.get_drawlet_mut(self.textured_mesh_pipeline.as_ref().unwrap(), self.textured_mesh_inst.as_ref().unwrap());
-        //
-        // let elapsed_time = self.elapsed_time;
-        // let aspect = res.width as f32 / res.height as f32;
-        // let new_ubo = UniformBufferObject {
-        //     model: cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time)),
-        //     view: cgmath::Matrix4::look_at(
-        //         cgmath::Point3::new(2.0, 2.0, 2.0),
-        //         cgmath::Point3::new(0.0, 0.0, 0.0),
-        //         cgmath::Vector3::new(0.0, 0.0, 1.0),
-        //     ),
-        //     proj: utils::perspective(cgmath::Deg(45.0), aspect, 0.1, 10.0),
-        // };
-        // drawlet.set_uniform_buffer(new_ubo)
+        let elapsed_time = self.elapsed_time;
+        let aspect =  800f32/600f32;
+        let m =  cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
+        let v = cgmath::Matrix4::look_at(
+            cgmath::Point3::new(2.0, 2.0, 2.0),
+            cgmath::Point3::new(0.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, 1.0));
+        let p = utils::perspective(cgmath::Deg(45.0), aspect, 0.1, 10.0);
+        let new_ubo = Mat4Ubo { mvp: p * v * m };
+        drawlet.set_mvp(new_ubo)
     }
 }
 

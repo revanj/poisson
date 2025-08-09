@@ -7,7 +7,7 @@ use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Ex
 
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
-use crate::render_backend::{RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, UniformBufferObject, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn};
+use crate::render_backend::{RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Mat4Ubo, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn};
 use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID, RenderBackend};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
@@ -269,7 +269,7 @@ pub struct TexturedMeshDrawlet {
     pub texture: Texture,
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
-    pub uniform_buffers: Vec<GpuBuffer<UniformBufferObject>>,
+    pub uniform_buffers: Vec<GpuBuffer<Mat4Ubo>>,
     pub resolution: vk::Extent2D,
     pub pipeline_layout: PipelineLayout,
     pub current_frame: usize,
@@ -337,7 +337,7 @@ impl TexturedMeshDrawlet {
 
         let mut uniform_buffers = Vec::new();
         for _ in 0..n_framebuffers {
-            let mut ubo_buffer = GpuBuffer::<UniformBufferObject>::create_buffer(
+            let mut ubo_buffer = GpuBuffer::<Mat4Ubo>::create_buffer(
                 &device,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
                 vk::MemoryPropertyFlags::HOST_VISIBLE
@@ -349,7 +349,7 @@ impl TexturedMeshDrawlet {
         }
         for i in 0..n_framebuffers {
             let descriptor_buffer_info = [vk::DescriptorBufferInfo::default()
-                .buffer(uniform_buffers[i].buffer).range(size_of::<UniformBufferObject>() as DeviceSize)];
+                .buffer(uniform_buffers[i].buffer).range(size_of::<Mat4Ubo>() as DeviceSize)];
             let descriptor_image_info = [vk::DescriptorImageInfo::default()
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .image_view(texture.image.view)
@@ -429,7 +429,7 @@ impl VulkanDrawlet for TexturedMeshDrawlet {
 }
 
 impl TexturedMeshDrawlet {
-    pub fn set_uniform_buffer(self: &mut Self, ubo: UniformBufferObject) {
+    pub fn set_mvp(self: &mut Self, ubo: Mat4Ubo) {
         let new_ubo = [ubo];
         self.uniform_buffers[self.current_frame].write(&new_ubo);
         self.current_frame = (self.current_frame + 1) % 3;
