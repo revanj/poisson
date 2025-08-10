@@ -1,4 +1,5 @@
-use std::any::{Any, TypeId};
+use crate::AsAny;
+use std::any::{Any};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
@@ -7,6 +8,7 @@ use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Ex
 
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
+use poisson_macros::AsAny;
 use crate::render_backend::{RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Mat4Ubo, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn};
 use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID, RenderBackend};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
@@ -15,6 +17,7 @@ use crate::render_backend::vulkan::render_pass::RenderPass;
 use crate::render_backend::vulkan::texture::Texture;
 
 
+#[derive(AsAny)]
 pub struct TexturedMeshPipeline {
     device: Weak<Device>,
     pub pipeline: vk::Pipeline,
@@ -38,10 +41,6 @@ impl VulkanPipelineDyn for TexturedMeshPipeline {
 
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn VulkanDrawletDyn> + '_> {
         Box::new(self.instances.iter_mut().map(|(_, x)| x as &mut dyn VulkanDrawletDyn))
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
     }
 }
 

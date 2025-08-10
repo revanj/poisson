@@ -27,7 +27,7 @@ struct NothingGame {
 
 impl PoissonGame for NothingGame {
 
-    type Ren = WgpuRenderBackend;
+    type Ren = VulkanRenderBackend;
 
     fn new() -> Self {
         Self {
@@ -59,7 +59,7 @@ impl PoissonGame for NothingGame {
             texture_data: binding,
         };
 
-        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle.wgsl");
+        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle.slang");
         self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
         self.textured_mesh_pipeline = Some(p_handle);
     }

@@ -33,3 +33,18 @@ pub fn shader_input_derive(input: TokenStream) -> TokenStream {
 
     generated.into()
 }
+
+#[proc_macro_derive(AsAny)]
+pub fn as_any_derive(input: TokenStream) -> TokenStream {
+    let input  = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    let generated = quote! {
+        impl AsAny for #name {
+            fn as_any(self: &Self) -> &dyn Any { self }
+            fn as_any_mut(self: &mut Self) -> &mut dyn Any { self }
+        }
+    };
+
+    generated.into()
+}

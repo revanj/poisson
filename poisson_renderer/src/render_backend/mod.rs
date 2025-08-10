@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 use wgpu::SurfaceConfiguration;
 use wgpu::wgc::command::DrawError;
 use winit::event::WindowEvent;
+use crate::AsAny;
 use crate::render_backend::vulkan::device::Device;
 use crate::render_backend::vulkan::render_object::TexturedMeshDrawlet as VkTexturedMeshDrawlet;
 use crate::render_backend::vulkan::render_object::TexturedMeshPipeline as VkTexturedMeshPipeline;
@@ -72,11 +73,10 @@ pub struct DrawletHandle<D:RenderObject> {
     _drawlet_ty: PhantomData<D>
 }
 
-pub trait VulkanPipelineDyn {
+pub trait VulkanPipelineDyn: AsAny {
     fn get_pipeline(self: &Self) -> vk::Pipeline;
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn VulkanDrawletDyn> + '_>;
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn VulkanDrawletDyn> + '_>;
-    fn as_any_mut(self: &mut Self) -> &mut dyn Any;
 }
 
 pub trait VulkanPipeline<RenObjType: VulkanRenderObject>: RenderPipeline<RenObjType> + VulkanPipelineDyn {
@@ -123,11 +123,10 @@ pub trait WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType>
     ) -> Self where Self: Sized;
 }
 
-pub trait WgpuPipelineDyn {
+pub trait WgpuPipelineDyn: AsAny {
     fn get_pipeline(self: &Self) -> &wgpu::RenderPipeline;
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn WgpuDrawletDyn> + '_>;
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn WgpuDrawletDyn> + '_>;
-    fn as_any_mut(self: &mut Self) -> &mut dyn Any;
 }
 pub trait WgpuDrawlet: RenderDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass);

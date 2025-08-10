@@ -1,9 +1,11 @@
+use crate::AsAny;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use image::DynamicImage;
 use wgpu::{BindGroup, BindGroupLayout, Device, PipelineLayout, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
+use poisson_macros::AsAny;
 use crate::render_backend::{DrawletHandle, DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn};
 use crate::render_backend::web::{Camera, CameraUniform};
 use crate::render_backend::web::texture::Texture;
@@ -136,6 +138,7 @@ impl WgpuDrawlet for TexturedMeshDrawlet {
     }
 }
 
+#[derive(AsAny)]
 pub struct TexturedMeshPipeline {
     device: Weak<Device>,
     queue: Weak<wgpu::Queue>,
@@ -157,10 +160,6 @@ impl WgpuPipelineDyn for TexturedMeshPipeline {
 
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn WgpuDrawletDyn> + '_> {
         Box::new(self.drawlets.iter_mut().map(|(_, x)| x as &mut dyn WgpuDrawletDyn))
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
     }
 }
 

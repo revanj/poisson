@@ -1,6 +1,7 @@
 #![feature(adt_const_params)]
 extern crate core;
 
+use std::any::Any;
 use crate::render_backend::{PipelineHandle, RenderPipeline, Vertex};
 use env_logger;
 use std::sync::Arc;
@@ -31,7 +32,10 @@ pub trait PoissonGame {
     fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren);
 }
 
-
+trait AsAny {
+    fn as_any(self: &Self) -> &dyn Any;
+    fn as_any_mut(self: &mut Self) -> &mut dyn Any;
+}
 
 pub struct PoissonEngine<GameType>
 where GameType: PoissonGame
