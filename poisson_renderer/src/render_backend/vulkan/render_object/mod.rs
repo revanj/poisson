@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use ash::vk;
-use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Extent2D, Pipeline, ShaderStageFlags};
+use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorType, DeviceSize, Extent2D, Pipeline, ShaderStageFlags};
 
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
@@ -23,7 +23,8 @@ pub struct TexturedMeshPipeline {
     pub pipeline: vk::Pipeline,
     shader_module: vk::ShaderModule,
     pub pipeline_layout: vk::PipelineLayout,
-    descriptor_set_layout: DescriptorSetLayout,
+    uniform_descriptor_set_layout: DescriptorSetLayout,
+    texture_descriptor_set_layout: DescriptorSetLayout,
     resolution: vk::Extent2D,
     n_framebuffers: usize,
     pub instances: HashMap<DrawletID, TexturedMeshDrawlet>,
@@ -57,7 +58,8 @@ impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
             &init_data.index_data,
             &init_data.vertex_data,
             &init_data.texture_data.as_rgba8().unwrap(),
-            self.descriptor_set_layout,
+            self.uniform_descriptor_set_layout,
+            self.texture_descriptor_set_layout,
             self.n_framebuffers,
             self.resolution,
             self.pipeline_layout));
@@ -77,34 +79,47 @@ impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
             .descriptor_type(DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
             .stage_flags(ShaderStageFlags::VERTEX);
+        
         let texture_layout_binding = vk::DescriptorSetLayoutBinding::default()
-            .binding(1)
+            .binding(0)
             .descriptor_count(1)
             .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT);
         let sampler_layout_binding = vk::DescriptorSetLayoutBinding::default()
-            .binding(2)
+            .binding(1)
             .descriptor_count(1)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_type(vk::DescriptorType::SAMPLER)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT);
 
-        let bindings = [
-            ubo_layout_binding, texture_layout_binding, sampler_layout_binding];
+        let ubo_bindings = [ubo_layout_binding];
+        let texture_bindings = [texture_layout_binding, sampler_layout_binding];
 
-        let descriptor_set_layout_create_info =
+        let ubo_descriptor_set_layout_create_info =
             vk::DescriptorSetLayoutCreateInfo::default()
-                .bindings(&bindings);
+                .bindings(&ubo_bindings);
+        let texture_descriptor_set_layout_create_info =
+            vk::DescriptorSetLayoutCreateInfo::default()
+                .bindings(&texture_bindings);
 
-        let descriptor_set_layout = unsafe {
-            device.device.create_descriptor_set_layout(&descriptor_set_layout_create_info, None).unwrap()
+        let uniform_descriptor_set_layout = unsafe {
+            device.device.create_descriptor_set_layout(&ubo_descriptor_set_layout_create_info, None).unwrap()
         };
+        let texture_descriptor_set_layout = unsafe {
+            device.device.create_descriptor_set_layout(&texture_descriptor_set_layout_create_info, None).unwrap()
+        };
+        
         let compiled_triangle_shader = shader_bytecode;
 
         let shader_info = vk::ShaderModuleCreateInfo::default().code(&compiled_triangle_shader);
         let shader_module = unsafe { device.device.create_shader_module(&shader_info, None) }
             .expect("Vertex shader module error");
 
-        let descriptor_set_layouts = vec![descriptor_set_layout; n_framebuffers];
+        let mut descriptor_set_layouts = Vec::new();
+        for _ in 0..n_framebuffers {
+            descriptor_set_layouts.push(uniform_descriptor_set_layout);
+            descriptor_set_layouts.push(texture_descriptor_set_layout);
+        }
+
         let layout_create_info =
             vk::PipelineLayoutCreateInfo::default().set_layouts(&descriptor_set_layouts);
 
@@ -114,8 +129,8 @@ impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
                 .unwrap()
         };
 
-        let vertex_entry_name = c"vertexMain";
-        let fragment_entry_name = c"fragmentMain";
+        let vertex_entry_name = c"vertex";
+        let fragment_entry_name = c"fragment";
         let shader_stage_create_infos = [
             vk::PipelineShaderStageCreateInfo {
                 module: shader_module,
@@ -243,7 +258,8 @@ impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
         TexturedMeshPipeline {
             device: Arc::downgrade(device),
             pipeline: graphics_pipelines[0],
-            descriptor_set_layout,
+            uniform_descriptor_set_layout,
+            texture_descriptor_set_layout,
             shader_module,
             pipeline_layout,
             resolution,
@@ -261,7 +277,8 @@ impl Drop for TexturedMeshPipeline {
             device.device.destroy_pipeline(self.pipeline, None);
             device.device.destroy_shader_module(self.shader_module, None);
             device.device.destroy_pipeline_layout(self.pipeline_layout, None);
-            device.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+            device.device.destroy_descriptor_set_layout(self.uniform_descriptor_set_layout, None);
+            device.device.destroy_descriptor_set_layout(self.texture_descriptor_set_layout, None);
         }
     }
 }
@@ -271,8 +288,10 @@ pub struct TexturedMeshDrawlet {
     pub index_buffer: GpuBuffer<u32>,
     pub vertex_buffer: GpuBuffer<Vertex>,
     pub texture: Texture,
-    pub descriptor_pool: vk::DescriptorPool,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub uniform_descriptor_pool: vk::DescriptorPool,
+    pub texture_descriptor_pool: vk::DescriptorPool,
+    pub uniform_descriptor_sets: Vec<vk::DescriptorSet>,
+    pub texture_descriptor_sets: Vec<vk::DescriptorSet>,
     pub uniform_buffers: Vec<GpuBuffer<Mat4Ubo>>,
     pub resolution: vk::Extent2D,
     pub pipeline_layout: PipelineLayout,
@@ -283,10 +302,11 @@ pub struct TexturedMeshDrawlet {
 impl TexturedMeshDrawlet {
     pub fn new(
         device: &Arc<Device>,
-        index_data: &[u32], 
-        vertex_data: &[Vertex], 
+        index_data: &[u32],
+        vertex_data: &[Vertex],
         texture_data: &RgbaImage,
-        descriptor_set_layout: DescriptorSetLayout,
+        uniform_descriptor_set_layout: DescriptorSetLayout,
+        texture_descriptor_set_layout: DescriptorSetLayout,
         n_framebuffers: usize,
         resolution: vk::Extent2D,
         pipeline_layout: PipelineLayout) -> Self
@@ -314,10 +334,12 @@ impl TexturedMeshDrawlet {
 
         let texture = Texture::from_image(&device, texture_data);
 
-        let descriptor_pool_sizes = [
+        let uniform_descriptor_pool_sizes = [
             vk::DescriptorPoolSize::default()
                 .descriptor_count(n_framebuffers as u32)
-                .ty(DescriptorType::UNIFORM_BUFFER),
+                .ty(DescriptorType::UNIFORM_BUFFER)
+            ];
+        let texture_descriptor_pool_sizes = [
             vk::DescriptorPoolSize::default()
                 .descriptor_count(n_framebuffers as u32)
                 .ty(DescriptorType::SAMPLED_IMAGE),
@@ -325,21 +347,46 @@ impl TexturedMeshDrawlet {
                 .descriptor_count(n_framebuffers as u32)
                 .ty(DescriptorType::SAMPLER)];
 
-        let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
-            .pool_sizes(&descriptor_pool_sizes)
+        let uniform_descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
+            .pool_sizes(&uniform_descriptor_pool_sizes)
+            .max_sets(n_framebuffers as u32);
+        let texture_descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
+            .pool_sizes(&texture_descriptor_pool_sizes)
             .max_sets(n_framebuffers as u32);
 
-        let descriptor_pool = unsafe {
-            device.device.create_descriptor_pool(&descriptor_pool_create_info, None).unwrap()
+
+        let uniform_descriptor_pool = unsafe {
+            device.device.create_descriptor_pool(&uniform_descriptor_pool_create_info, None).unwrap()
         };
 
-        let descriptor_set_layouts = vec![descriptor_set_layout; n_framebuffers];
-        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::default()
-            .descriptor_pool(descriptor_pool)
-            .set_layouts(&descriptor_set_layouts);
+        let texture_descriptor_pool = unsafe {
+            device.device.create_descriptor_pool(&texture_descriptor_pool_create_info, None).unwrap()
+        };
 
-        let descriptor_sets = unsafe {
-            device.device.allocate_descriptor_sets(&descriptor_set_alloc_info).unwrap()
+
+        let mut uniform_descriptor_set_layouts = Vec::new();
+        for _ in 0..n_framebuffers {
+            uniform_descriptor_set_layouts.push(uniform_descriptor_set_layout);
+        }
+        let mut texture_descriptor_set_layouts = Vec::new();
+        for _ in 0..n_framebuffers {
+            texture_descriptor_set_layouts.push(texture_descriptor_set_layout);
+        }
+
+        let uniform_descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::default()
+            .descriptor_pool(uniform_descriptor_pool)
+            .set_layouts(&uniform_descriptor_set_layouts);
+
+        let texture_descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::default()
+            .descriptor_pool(texture_descriptor_pool)
+            .set_layouts(&texture_descriptor_set_layouts);
+
+
+        let uniform_descriptor_sets = unsafe {
+            device.device.allocate_descriptor_sets(&uniform_descriptor_set_alloc_info).unwrap()
+        };
+        let texture_descriptor_sets = unsafe {
+            device.device.allocate_descriptor_sets(&texture_descriptor_set_alloc_info).unwrap()
         };
 
         let mut uniform_buffers = Vec::new();
@@ -369,21 +416,21 @@ impl TexturedMeshDrawlet {
                     .buffer_info(&descriptor_buffer_info)
                     .dst_binding(0)
                     .dst_array_element(0)
-                    .dst_set(descriptor_sets[i]),
+                    .dst_set(uniform_descriptor_sets[i]),
                 vk::WriteDescriptorSet::default()
                     .descriptor_count(1)
                     .descriptor_type(DescriptorType::SAMPLED_IMAGE)
                     .image_info(&descriptor_image_info)
-                    .dst_binding(1)
+                    .dst_binding(0)
                     .dst_array_element(0)
-                    .dst_set(descriptor_sets[i]),
+                    .dst_set(texture_descriptor_sets[i]),
                 vk::WriteDescriptorSet::default()
                     .descriptor_count(1)
                     .descriptor_type(DescriptorType::SAMPLER)
                     .image_info(&descriptor_sampler_info)
-                    .dst_binding(2)
+                    .dst_binding(1)
                     .dst_array_element(0)
-                    .dst_set(descriptor_sets[i])
+                    .dst_set(texture_descriptor_sets[i])
             ];
             unsafe {
                 device.device.update_descriptor_sets(&descriptor_write, &[]);
@@ -396,8 +443,10 @@ impl TexturedMeshDrawlet {
             vertex_buffer,
             uniform_buffers,
             texture,
-            descriptor_pool,
-            descriptor_sets,
+            uniform_descriptor_pool,
+            texture_descriptor_pool,
+            uniform_descriptor_sets,
+            texture_descriptor_sets,
             resolution,
             pipeline_layout,
             current_frame: 0
@@ -429,7 +478,13 @@ impl VulkanDrawlet for TexturedMeshDrawlet {
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.pipeline_layout,
-                0, self.descriptor_sets[self.current_frame..self.current_frame + 1].as_ref(),
+                0, self.uniform_descriptor_sets[self.current_frame..self.current_frame + 1].as_ref(),
+                &[]);
+            device.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout,
+                1, self.texture_descriptor_sets[self.current_frame..self.current_frame + 1].as_ref(),
                 &[]);
             device.device.cmd_draw_indexed(
                 command_buffer,
@@ -455,7 +510,8 @@ impl Drop for TexturedMeshDrawlet {
     fn drop(&mut self) {
         let device = self.device.upgrade().unwrap();
         unsafe {
-            device.device.destroy_descriptor_pool(self.descriptor_pool, None);
+            device.device.destroy_descriptor_pool(self.uniform_descriptor_pool, None);
+            device.device.destroy_descriptor_pool(self.texture_descriptor_pool, None);
         }
     }
 }
