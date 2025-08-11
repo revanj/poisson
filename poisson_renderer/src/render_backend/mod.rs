@@ -4,6 +4,7 @@ use std::sync::{Arc, Weak};
 use ash::vk;
 use ash::vk::CommandBuffer;
 use bytemuck::{Pod, Zeroable};
+use cgmath::Matrix4;
 use image::DynamicImage;
 use winit::window::Window;
 use parking_lot::Mutex;
@@ -42,9 +43,7 @@ pub struct DrawletID(usize);
 
 
 pub trait RenderBackend {
-    // Common Drawlet Types
-    type TexturedMesh: RenderDrawlet;
-
+    const PERSPECTIVE_ALIGNMENT: [f32; 3];
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized;
     fn render(self: &mut Self);
     fn process_event(self: &mut Self, event: &WindowEvent);

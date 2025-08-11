@@ -235,7 +235,7 @@ pub struct WgpuRenderBackend {
 
 
 impl RenderBackend for WgpuRenderBackend {
-    type TexturedMesh = TexturedMeshDrawlet;
+    const PERSPECTIVE_ALIGNMENT: [f32; 3] = [1f32, 1f32, -1f32];
 
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
     {

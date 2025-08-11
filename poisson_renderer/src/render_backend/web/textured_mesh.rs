@@ -84,10 +84,13 @@ impl TexturedMeshDrawlet {
             ],
             label: Some("camera_bind_group"),
         });
+        let transformed_vertex: Vec<_> = init_data.vertex_data.iter().map(|x| 
+        Vertex {pos: x.pos, tex_coord: [x.tex_coord[0], 1f32 - x.tex_coord[1]]}).collect();
+        
         let vertex_data: &[u8] = unsafe {
             std::slice::from_raw_parts(
-                init_data.vertex_data.as_ptr() as *const u8,
-                init_data.vertex_data.len() * std::mem::size_of::<Vertex>()
+                transformed_vertex.as_ptr() as *const u8,
+                transformed_vertex.len() * std::mem::size_of::<Vertex>()
             )
         };
         let index_data: &[u8] = unsafe {

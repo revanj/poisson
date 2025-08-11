@@ -23,6 +23,7 @@ use ash::vk;
 use std::mem::ManuallyDrop;
 
 use std::sync::Arc;
+use cgmath::{Matrix4, Vector4};
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use winit::window::Window;
@@ -182,7 +183,7 @@ impl VulkanRenderBackend {
 }
 
 impl RenderBackend for VulkanRenderBackend {
-    type TexturedMesh = TexturedMeshDrawlet;
+    const PERSPECTIVE_ALIGNMENT: [f32; 3] = [1f32, -1f32, -1f32];
 
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) {
         let render_backend = VulkanRenderBackend::new(&window);

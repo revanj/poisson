@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::f32::consts::PI;
 use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use poisson_renderer::input::Input;
@@ -27,7 +28,7 @@ struct NothingGame {
 
 impl PoissonGame for NothingGame {
 
-    type Ren = VulkanRenderBackend;
+    type Ren = WgpuRenderBackend;
 
     fn new() -> Self {
         Self {
@@ -81,7 +82,7 @@ impl PoissonGame for NothingGame {
             cgmath::Point3::new(2.0, 2.0, 2.0),
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 0.0, 1.0));
-        let p = utils::perspective(cgmath::Deg(45.0), aspect, 0.1, 10.0);
+        let p = utils::perspective(PI/4f32, aspect, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
         let new_ubo = Mat4Ubo { mvp: p * v * m };
         drawlet.set_mvp(new_ubo)
     }
