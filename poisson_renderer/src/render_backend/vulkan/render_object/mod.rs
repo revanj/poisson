@@ -114,11 +114,11 @@ impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
         let shader_module = unsafe { device.device.create_shader_module(&shader_info, None) }
             .expect("Vertex shader module error");
 
-        let mut descriptor_set_layouts = Vec::new();
-        for _ in 0..n_framebuffers {
-            descriptor_set_layouts.push(uniform_descriptor_set_layout);
-            descriptor_set_layouts.push(texture_descriptor_set_layout);
-        }
+        let descriptor_set_layouts = vec![uniform_descriptor_set_layout, texture_descriptor_set_layout];
+        // for _ in 0..n_framebuffers {
+        //     descriptor_set_layouts.push(uniform_descriptor_set_layout);
+        //     descriptor_set_layouts.push(texture_descriptor_set_layout);
+        // }
 
         let layout_create_info =
             vk::PipelineLayoutCreateInfo::default().set_layouts(&descriptor_set_layouts);
