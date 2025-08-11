@@ -77,14 +77,19 @@ impl VulkanPipeline<TexturedMesh> for TexturedMeshPipeline {
             .descriptor_type(DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
             .stage_flags(ShaderStageFlags::VERTEX);
-        let sampler_layout_binding = vk::DescriptorSetLayoutBinding::default()
+        let texture_layout_binding = vk::DescriptorSetLayoutBinding::default()
             .binding(1)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT);
+        let sampler_layout_binding = vk::DescriptorSetLayoutBinding::default()
+            .binding(2)
             .descriptor_count(1)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT);
 
         let bindings = [
-            ubo_layout_binding, sampler_layout_binding];
+            ubo_layout_binding, texture_layout_binding, sampler_layout_binding];
 
         let descriptor_set_layout_create_info =
             vk::DescriptorSetLayoutCreateInfo::default()
@@ -315,7 +320,10 @@ impl TexturedMeshDrawlet {
                 .ty(DescriptorType::UNIFORM_BUFFER),
             vk::DescriptorPoolSize::default()
                 .descriptor_count(n_framebuffers as u32)
-                .ty(DescriptorType::COMBINED_IMAGE_SAMPLER)];
+                .ty(DescriptorType::SAMPLED_IMAGE),
+            vk::DescriptorPoolSize::default()
+                .descriptor_count(n_framebuffers as u32)
+                .ty(DescriptorType::SAMPLER)];
 
         let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::default()
             .pool_sizes(&descriptor_pool_sizes)
@@ -351,7 +359,8 @@ impl TexturedMeshDrawlet {
                 .buffer(uniform_buffers[i].buffer).range(size_of::<Mat4Ubo>() as DeviceSize)];
             let descriptor_image_info = [vk::DescriptorImageInfo::default()
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                .image_view(texture.image.view)
+                .image_view(texture.image.view)];
+            let descriptor_sampler_info = [vk::DescriptorImageInfo::default()
                 .sampler(texture.sampler)];
             let descriptor_write = [
                 vk::WriteDescriptorSet::default()
@@ -363,9 +372,16 @@ impl TexturedMeshDrawlet {
                     .dst_set(descriptor_sets[i]),
                 vk::WriteDescriptorSet::default()
                     .descriptor_count(1)
-                    .descriptor_type(DescriptorType::COMBINED_IMAGE_SAMPLER)
+                    .descriptor_type(DescriptorType::SAMPLED_IMAGE)
                     .image_info(&descriptor_image_info)
                     .dst_binding(1)
+                    .dst_array_element(0)
+                    .dst_set(descriptor_sets[i]),
+                vk::WriteDescriptorSet::default()
+                    .descriptor_count(1)
+                    .descriptor_type(DescriptorType::SAMPLER)
+                    .image_info(&descriptor_sampler_info)
+                    .dst_binding(2)
                     .dst_array_element(0)
                     .dst_set(descriptor_sets[i])
             ];

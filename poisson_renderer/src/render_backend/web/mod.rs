@@ -16,6 +16,8 @@ use winit::dpi::PhysicalSize;
 use bytemuck;
 use wgpu::util::DeviceExt;
 use image;
+use wgpu::CompositeAlphaMode::PreMultiplied;
+use wgpu::wgt::SurfaceConfiguration;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
@@ -280,12 +282,12 @@ impl RenderBackend for WgpuRenderBackend {
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.5,
-                            g: 0.5,
-                            b: 0.5,
-                            a: 1.0,
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 0.0,
                         }),
-                        store: wgpu::StoreOp::Store,
+                        store: wgpu::StoreOp::Discard,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -407,6 +409,7 @@ impl WgpuRenderBackend {
         let config = surface
             .get_default_config(&adapter, size.width, size.height)
             .unwrap();
+
         surface.configure(&device, &config);
 
         // let diffuse_bytes = include_bytes!("../../../../textures/happy-tree.png");

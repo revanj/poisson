@@ -4,7 +4,8 @@ struct Uniform
 }
 
 [[vk::binding(0)]] Uniform uniform_var;
-[[vk::binding(1)]] Sampler2D sampler;
+[[vk::binding(1)]] Texture2D<float4> texture;
+[[vk::binding(2)]] SamplerState sampler;
 
 
 struct AssembledVertex
@@ -49,6 +50,7 @@ Fragment fragmentMain(
     CoarseVertex coarseVertex : CoarseVertex) : SV_Target
 {
     Fragment output;
-    output.color = sampler.Sample(coarseVertex.tex_coord);
+    output.color = texture.Sample(sampler, coarseVertex.tex_coord);
+    output.color = texture.Sample(sampler, coarseVertex.tex_coord);
     return output;
 }
