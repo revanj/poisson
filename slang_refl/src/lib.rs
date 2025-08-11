@@ -79,7 +79,8 @@ mod interface {
         type SlangComponentOpaque;
         type SlangCompilerOpaque;
 
-        fn new_slang_compiler() -> UniquePtr<SlangCompilerOpaque>;
+        fn new_wgsl_compiler() -> UniquePtr<SlangCompilerOpaque>;
+        fn new_spirv_compiler() -> UniquePtr<SlangCompilerOpaque>;
         fn load_module(self: &SlangCompilerOpaque, path_name: &str) -> UniquePtr<SlangModuleOpaque>;
         fn add_module(self: Pin<&mut SlangComponentListOpaque>, module: UniquePtr<SlangModuleOpaque>);
         fn add_entry_point(self: Pin<&mut SlangComponentListOpaque>, entry_point: UniquePtr<SlangEntryPointOpaque>);
@@ -89,7 +90,8 @@ mod interface {
         fn find_entry_point_by_name(self: &SlangModuleOpaque, fn_name: &str) -> UniquePtr<SlangEntryPointOpaque>;
         fn get_entry_point_count(self: &SlangModuleOpaque) -> u32;
         fn get_entry_point_by_index(self: &SlangModuleOpaque, idx: u32) -> UniquePtr<SlangEntryPointOpaque>;
-        fn get_bytes(self: &SlangByteCodeOpaque) -> &[u32];
+        fn get_u32(self: &SlangByteCodeOpaque) -> &[u32];
+        fn get_u8(self: &SlangByteCodeOpaque) -> &[u8];
         fn get_target_code(self: &SlangComponentOpaque) -> UniquePtr<SlangByteCodeOpaque>;
         fn new_slang_component_list() -> UniquePtr<SlangComponentListOpaque>;
         fn get_program_reflection(self: &SlangComponentOpaque) -> SlangProgramReflection;
@@ -129,8 +131,15 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn new() -> Self {
-        let slang_compiler = interface::new_slang_compiler();
+    pub fn new_spirv_compiler() -> Self {
+        let slang_compiler = interface::new_spirv_compiler();
+        Self {
+            compiler_ptr: slang_compiler
+        }
+    }
+
+    pub fn new_wgsl_compiler() -> Self {
+        let slang_compiler = interface::new_wgsl_compiler();
         Self {
             compiler_ptr: slang_compiler
         }
@@ -218,8 +227,11 @@ impl LinkedProgram {
             byte_code_ptr: byte_ptr
         }
     }
-    pub fn get_bytecode(self: &Self) -> &[u32] {
-        self.byte_code_ptr.as_ref().unwrap().get_bytes()
+    pub fn get_u32(self: &Self) -> &[u32] {
+        self.byte_code_ptr.as_ref().unwrap().get_u32()
+    }
+    pub fn get_u8(self: &Self) -> &[u8] {
+        self.byte_code_ptr.as_ref().unwrap().get_u8()
     }
 
     pub fn get_reflection(self: &Self) -> SlangProgramReflection {

@@ -341,10 +341,10 @@ impl RenderBackend for VulkanRenderBackend {
 impl CreateDrawletVulkan for VulkanRenderBackend
 {
     fn create_pipeline<RenObjType: VulkanRenderObject>(self: &mut Self, shader_path: &str) -> PipelineHandle<RenObjType> {
-        let compiler = slang_refl::Compiler::new();
+        let compiler = slang_refl::Compiler::new_spirv_compiler();
         let linked_program = compiler.linked_program_from_file(shader_path);
 
-        let compiled_triangle_shader = linked_program.get_bytecode();
+        let compiled_triangle_shader = linked_program.get_u32();
 
         let pipeline = RenObjType::Pipeline::new(
             &*self.device, &*self.render_pass, compiled_triangle_shader,

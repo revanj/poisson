@@ -3,9 +3,17 @@ struct Uniform
     float4x4 mvp;
 }
 
-[[vk::binding(0)]] Uniform uniform_var;
-[[vk::binding(1)]] Texture2D<float4> texture;
-[[vk::binding(2)]] SamplerState sampler;
+struct TextureVar {
+    Texture2D<float4> texture;
+    SamplerState sampler;
+}
+
+// [[vk::binding(0)]] Uniform uniform_var;
+// [[vk::binding(1)]] Texture2D<float4> texture;
+// [[vk::binding(2)]] SamplerState sampler;
+
+ParameterBlock<Uniform> uniform_var;
+ParameterBlock<TextureVar> texture_var;
 
 
 struct AssembledVertex
@@ -31,7 +39,7 @@ struct VertexStageOutput
 };
 
 [shader("vertex")]
-VertexStageOutput vertexMain(
+VertexStageOutput vertex(
     AssembledVertex assembledVertex)
 {
     VertexStageOutput output;
@@ -46,11 +54,11 @@ VertexStageOutput vertexMain(
 }
 
 [shader("fragment")]
-Fragment fragmentMain(
+Fragment fragment(
     CoarseVertex coarseVertex : CoarseVertex) : SV_Target
 {
     Fragment output;
-    output.color = texture.Sample(sampler, coarseVertex.tex_coord);
-    output.color = texture.Sample(sampler, coarseVertex.tex_coord);
+    output.color = texture_var.texture.Sample(texture_var.sampler, coarseVertex.tex_coord);
+    output.color = texture_var.texture.Sample(texture_var.sampler, coarseVertex.tex_coord);
     return output;
 }

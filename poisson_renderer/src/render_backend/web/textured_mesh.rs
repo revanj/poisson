@@ -1,5 +1,6 @@
 use crate::AsAny;
 use std::any::Any;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use image::DynamicImage;
@@ -130,8 +131,8 @@ impl RenderDrawlet for TexturedMeshDrawlet {
 
 impl WgpuDrawlet for TexturedMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
-        render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.texture_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
@@ -191,7 +192,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -208,7 +209,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             view_dimension: wgpu::TextureViewDimension::D2,
@@ -218,7 +219,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         // This should match the filterable field of the
                         // corresponding Texture entry above.
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
@@ -228,17 +229,23 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 label: Some("texture_bind_group_layout"),
             });
 
+        let compiler = slang_refl::Compiler::new_wgsl_compiler();
+        let linked_program = compiler.linked_program_from_file(shader_path);
+
+        let compiled_triangle_shader = linked_program.get_u8();
+        let wgsl_str = str::from_utf8(compiled_triangle_shader).unwrap();
+        
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../../../../shaders/triangle.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(Cow::from(wgsl_str)),
         });
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
+                    &camera_bind_group_layout,
                     &texture_bind_group_layout,
-                    &camera_bind_group_layout
                 ],
                 push_constant_ranges: &[],
             });
@@ -265,14 +272,14 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some("vs_main"), // 1.
+                entry_point: Some("vertex"), // 1.
                 buffers: &[desc], // 2.
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
 
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"),
+                entry_point: Some("fragment"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: surface_config.format,
                     blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),

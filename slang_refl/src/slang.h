@@ -32,7 +32,8 @@ public:
 class SlangByteCodeOpaque {
 public:
     SlangByteCodeOpaque(Slang::ComPtr<slang::IBlob> c, Slang::ComPtr<slang::IBlob> blob);
-    rust::Slice<const uint32_t> get_bytes() const;
+    rust::Slice<const uint32_t> get_u32() const;
+    rust::Slice<const uint8_t> get_u8() const;
     Slang::ComPtr<slang::IBlob> code;
     Slang::ComPtr<slang::IBlob> diagnostics_blob;
 };
@@ -58,7 +59,7 @@ public:
 
 class SlangCompilerOpaque {
 public:
-    SlangCompilerOpaque();
+    SlangCompilerOpaque(bool is_vulkan);
     std::unique_ptr<SlangModuleOpaque> load_module(rust::Str path_name) const;
     std::unique_ptr<SlangComponentOpaque> compose(std::unique_ptr<SlangComponentListOpaque> list) const;
     std::unique_ptr<SlangComponentOpaque> link(std::unique_ptr<SlangComponentOpaque> composed) const;
@@ -70,4 +71,5 @@ private:
 };
 
 std::unique_ptr<SlangComponentListOpaque> new_slang_component_list();
-std::unique_ptr<SlangCompilerOpaque> new_slang_compiler();
+std::unique_ptr<SlangCompilerOpaque> new_spirv_compiler();
+std::unique_ptr<SlangCompilerOpaque> new_wgsl_compiler();

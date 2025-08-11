@@ -48,9 +48,16 @@ std::unique_ptr<SlangEntryPointOpaque> SlangModuleOpaque::get_entry_point_by_ind
 SlangByteCodeOpaque::SlangByteCodeOpaque(Slang::ComPtr<slang::IBlob> c, Slang::ComPtr<slang::IBlob> blob):
     code(std::move(c)), diagnostics_blob(std::move(blob)) {}
 
-rust::Slice<const uint32_t> SlangByteCodeOpaque::get_bytes() const {
+rust::Slice<const uint32_t> SlangByteCodeOpaque::get_u32() const {
     auto buffer_start = static_cast<uint32_t const*>(code->getBufferPointer());
     uint32_t buffer_size = static_cast<uint32_t>(code->getBufferSize()) / 4;
+
+    return {buffer_start, buffer_size};
+}
+
+rust::Slice<const uint8_t> SlangByteCodeOpaque::get_u8() const {
+    auto buffer_start = static_cast<uint8_t const*>(code->getBufferPointer());
+    auto buffer_size = static_cast<uint32_t>(code->getBufferSize());
 
     return {buffer_start, buffer_size};
 }
@@ -73,12 +80,20 @@ std::unique_ptr<SlangByteCodeOpaque> SlangComponentOpaque::get_target_code() con
     return std::make_unique<SlangByteCodeOpaque>(code, blob);
 }
 
-SlangCompilerOpaque::SlangCompilerOpaque() {
+SlangCompilerOpaque::SlangCompilerOpaque(bool is_vulkan) {
     createGlobalSession(globalSession.writeRef());
     slang::SessionDesc sessionDesc = {};
     slang::TargetDesc targetDesc = {};
-    targetDesc.format = SLANG_SPIRV;
-    targetDesc.profile = globalSession->findProfile("spirv_1_0");
+
+    if (is_vulkan)
+    {
+        targetDesc.format = SLANG_SPIRV;
+        targetDesc.profile = globalSession->findProfile("spirv_1_0");
+    } else
+    {
+        targetDesc.format = SLANG_WGSL;
+        targetDesc.profile = globalSession->findProfile("wgsl_1_0");
+    }
 
     sessionDesc.targets = &targetDesc;
     sessionDesc.targetCount = 1;
@@ -145,10 +160,12 @@ std::unique_ptr<SlangComponentListOpaque> new_slang_component_list() {
     return std::make_unique<SlangComponentListOpaque>();
 }
 
-std::unique_ptr<SlangCompilerOpaque> new_slang_compiler() {
-  return std::make_unique<SlangCompilerOpaque>();
+std::unique_ptr<SlangCompilerOpaque> new_spirv_compiler() {
+  return std::make_unique<SlangCompilerOpaque>(true);
 }
-
+std::unique_ptr<SlangCompilerOpaque> new_wgsl_compiler() {
+    return std::make_unique<SlangCompilerOpaque>(false);
+}
 // struct SlangEntryPointReflection {
 //        name: String,
 //        stage: ShaderStage,
