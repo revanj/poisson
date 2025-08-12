@@ -28,7 +28,7 @@ struct NothingGame {
 
 impl PoissonGame for NothingGame {
 
-    type Ren = WgpuRenderBackend;
+    type Ren = VulkanRenderBackend;
 
     fn new() -> Self {
         Self {

@@ -16,7 +16,6 @@ use winit::dpi::PhysicalSize;
 use bytemuck;
 use wgpu::util::DeviceExt;
 use image;
-use wgpu::CompositeAlphaMode::PreMultiplied;
 use wgpu::wgt::SurfaceConfiguration;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -285,7 +284,7 @@ impl RenderBackend for WgpuRenderBackend {
                             r: 0.0,
                             g: 0.0,
                             b: 0.0,
-                            a: 0.0,
+                            a: 1.0,
                         }),
                         store: wgpu::StoreOp::Discard,
                     },
