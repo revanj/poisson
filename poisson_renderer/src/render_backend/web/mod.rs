@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use std::time::SystemTime;
-use ash::vk::{CommandBuffer, Extent2D, Pipeline, PipelineLayout};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::window::Window;
@@ -281,7 +280,7 @@ impl RenderBackend for WgpuRenderBackend {
     fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
     {
         cfg_if::cfg_if! {
-            if #[cfg(any(target_arch="wasm32", target_platform="linux"))] {
+            if #[cfg(target_arch="wasm32")] {
                     wasm_bindgen_futures::spawn_local(async move {
                         let new_backend = WgpuRenderBackend::new(&window).await;
                         let mut locked_backend = backend_to_init.lock();

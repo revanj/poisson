@@ -7,7 +7,7 @@ use ash::util::Align;
 use ash::vk;
 use ash::vk::{BufferUsageFlags, DeviceSize, SharingMode};
 use crate::render_backend::vulkan::device::Device;
-use crate::render_backend::vulkan::utils;
+use crate::render_backend::vulkan::find_memorytype_index;
 
 pub enum BufferType {
     Uniform,
@@ -39,7 +39,7 @@ impl<T: Copy> GpuBuffer<T> {
 
         let physical_memory_properties = device.physical_memory_properties;
 
-        let memory_type = utils::find_memorytype_index(
+        let memory_type = find_memorytype_index(
             &mem_requirements, &physical_memory_properties,
             vk::MemoryPropertyFlags::HOST_VISIBLE
                 | vk::MemoryPropertyFlags::HOST_COHERENT).unwrap();
@@ -129,7 +129,7 @@ impl<T: Copy> GpuBuffer<T> {
             device.device.get_buffer_memory_requirements(buffer)
         };
 
-        let memory_index = utils::find_memorytype_index(
+        let memory_index = find_memorytype_index(
             &memory_req,
             &device.physical_memory_properties,
             memory_property

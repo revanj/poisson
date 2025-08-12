@@ -8,8 +8,11 @@ use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use crate::AsAny;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod vulkan;
+
 pub mod web;
+pub mod math;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]

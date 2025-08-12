@@ -4,9 +4,9 @@ use ash::vk::{CommandBuffer, ImageAspectFlags, ImageTiling};
 
 
 use crate::render_backend::vulkan;
-use vulkan::{utils};
 use vulkan::command_buffer::OneshotCommandBuffer;
 use vulkan::device::Device;
+use crate::render_backend::vulkan::find_memorytype_index;
 
 pub struct Image {
     pub device: std::sync::Weak<Device>,
@@ -180,7 +180,7 @@ impl Image {
             .create_image(&image_create_info, None).unwrap()};
         let image_memory_req = unsafe {device.device
             .get_image_memory_requirements(image)};
-        let image_memory_index = utils::find_memorytype_index(
+        let image_memory_index = find_memorytype_index(
             &image_memory_req,
             &device.physical_memory_properties,
             memory_property,
@@ -246,7 +246,7 @@ impl Image {
             .create_image(&depth_image_create_info, None).unwrap()};
         let depth_image_memory_req = unsafe {device.device
             .get_image_memory_requirements(depth_image)};
-        let depth_image_memory_index = utils::find_memorytype_index(
+        let depth_image_memory_index = find_memorytype_index(
             &depth_image_memory_req,
             &device.physical_memory_properties,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,

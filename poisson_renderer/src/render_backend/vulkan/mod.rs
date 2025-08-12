@@ -8,7 +8,6 @@ mod framebuffer;
 pub(crate) mod render_pass;
 pub mod render_object;
 mod buffer;
-pub mod utils;
 mod physical_device;
 mod texture;
 mod pipeline;
@@ -44,6 +43,20 @@ use vk::PipelineStageFlags;
 use crate::render_backend::{PipelineID, DrawletHandle, PipelineHandle, RenderPipeline, RenderDrawlet, RenderObject};
 use crate::render_backend::vulkan::render_object::TexturedMeshDrawlet;
 
+pub fn find_memorytype_index(
+    memory_req: &vk::MemoryRequirements,
+    memory_prop: &vk::PhysicalDeviceMemoryProperties,
+    flags: vk::MemoryPropertyFlags,
+) -> Option<u32> {
+    memory_prop.memory_types[..memory_prop.memory_type_count as _]
+        .iter()
+        .enumerate()
+        .find(|(index, memory_type)| {
+            (1u32 << index) & memory_req.memory_type_bits != 0
+                && memory_type.property_flags & flags == flags
+        })
+        .map(|(index, _memory_type)| index as _)
+}
 
 pub trait VulkanRenderObject: RenderObject + Sized {
     type Drawlet: VulkanDrawlet;
