@@ -10,18 +10,60 @@ use ash::vk::{CommandBuffer, Extent2D, Pipeline, PipelineLayout};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::window::Window;
-use crate::render_backend::{CreateDrawletWgpu, DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, RenderPipeline, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
+use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, RenderObject, RenderPipeline};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
 use wgpu::util::DeviceExt;
 use image;
-use wgpu::wgt::SurfaceConfiguration;
+use wgpu::SurfaceConfiguration;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWeb;
+use crate::AsAny;
 use crate::render_backend::web::textured_mesh::TexturedMeshDrawlet;
+
+pub trait WgpuRenderObject: RenderObject + Sized {
+    type Drawlet: WgpuDrawlet;
+    type Pipeline: WgpuPipeline<Self> + WgpuPipelineDyn + 'static;
+    type Data;
+}
+
+
+
+pub trait WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType> + WgpuPipelineDyn {
+    fn instantiate_drawlet(
+        self: &mut Self,
+        init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data
+    ) -> DrawletHandle<RenObjType>;
+
+    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet ;
+    fn new(
+        device: &Arc<wgpu::Device>,
+        queue: &Arc<wgpu::Queue>,
+        shader_path: &str,
+        surface_config: &SurfaceConfiguration
+    ) -> Self where Self: Sized;
+}
+
+pub trait WgpuPipelineDyn: AsAny {
+    fn get_pipeline(self: &Self) -> &wgpu::RenderPipeline;
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn WgpuDrawletDyn> + '_>;
+    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn WgpuDrawletDyn> + '_>;
+}
+pub trait WgpuDrawlet: RenderDrawlet {
+    fn draw(self: &Self, render_pass: &mut wgpu::RenderPass);
+}
+pub trait WgpuDrawletDyn {
+    fn draw(self: &Self, render_pass: &mut wgpu::RenderPass);
+}
+impl<T> WgpuDrawletDyn for T where T: WgpuDrawlet {
+    fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
+        self.draw(render_pass);
+    }
+}
+
 
 struct CameraController {
     speed: f32,
@@ -253,13 +295,7 @@ impl RenderBackend for WgpuRenderBackend {
     }
 
     fn render(self: &mut Self) {
-        // self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
-        // if self.size.width == 0 || self.size.height == 0 {
-        //     return;
-        // }
         self.resize_surface_if_needed();
-        // self.camera_controller.update_camera(&mut self.camera);
-        // self.camera_uniform.update_view_proj(&self.camera);
 
         let output = self.surface.get_current_texture().unwrap();
         let view = output
@@ -308,7 +344,6 @@ impl RenderBackend for WgpuRenderBackend {
     }
 
     fn process_event(self: &mut Self, event: &WindowEvent) {
-        //self.camera_controller.process_events(event);
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {
@@ -411,179 +446,6 @@ impl WgpuRenderBackend {
 
         surface.configure(&device, &config);
 
-        // let diffuse_bytes = include_bytes!("../../../../textures/happy-tree.png");
-        // let diffuse_texture = texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
-        //
-        // let texture_bind_group_layout =
-        //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        //         entries: &[
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 0,
-        //                 visibility: wgpu::ShaderStages::FRAGMENT,
-        //                 ty: wgpu::BindingType::Texture {
-        //                     multisampled: false,
-        //                     view_dimension: wgpu::TextureViewDimension::D2,
-        //                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
-        //                 },
-        //                 count: None,
-        //             },
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 1,
-        //                 visibility: wgpu::ShaderStages::FRAGMENT,
-        //                 // This should match the filterable field of the
-        //                 // corresponding Texture entry above.
-        //                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-        //                 count: None,
-        //             },
-        //         ],
-        //         label: Some("texture_bind_group_layout"),
-        //     });
-        //
-        // let diffuse_bind_group = device.create_bind_group(
-        //     &wgpu::BindGroupDescriptor {
-        //         layout: &texture_bind_group_layout,
-        //         entries: &[
-        //             wgpu::BindGroupEntry {
-        //                 binding: 0,
-        //                 resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-        //             },
-        //             wgpu::BindGroupEntry {
-        //                 binding: 1,
-        //                 resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-        //             }
-        //         ],
-        //         label: Some("diffuse_bind_group"),
-        //     }
-        // );
-        //
-        // let camera = Camera {
-        //     // position the camera 1 unit up and 2 units back
-        //     // +z is out of the screen
-        //     eye: (0.0, 1.0, 2.0).into(),
-        //     // have it look at the origin
-        //     target: (0.0, 0.0, 0.0).into(),
-        //     // which way is "up"
-        //     up: cgmath::Vector3::unit_y(),
-        //     aspect: config.width as f32 / config.height as f32,
-        //     fovy: 45.0,
-        //     znear: 0.1,
-        //     zfar: 100.0,
-        // };
-        //
-        // let mut camera_uniform = CameraUniform::new();
-        // camera_uniform.update_view_proj(&camera);
-        //
-        // let camera_buffer = device.create_buffer_init(
-        //     &wgpu::util::BufferInitDescriptor {
-        //         label: Some("Camera Buffer"),
-        //         contents: bytemuck::cast_slice(&[camera_uniform]),
-        //         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        //     }
-        // );
-        //
-        // let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        //     entries: &[
-        //         wgpu::BindGroupLayoutEntry {
-        //               binding: 0,
-        //             visibility: wgpu::ShaderStages::VERTEX,
-        //             ty: wgpu::BindingType::Buffer {
-        //                 ty: wgpu::BufferBindingType::Uniform,
-        //                 has_dynamic_offset: false,
-        //                 min_binding_size: None,
-        //             },
-        //             count: None,
-        //         }
-        //     ],
-        //     label: Some("camera_bind_group_layout"),
-        // });
-        //
-        // let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //     layout: &camera_bind_group_layout,
-        //     entries: &[
-        //         wgpu::BindGroupEntry {
-        //             binding: 0,
-        //             resource: camera_buffer.as_entire_binding(),
-        //         }
-        //     ],
-        //     label: Some("camera_bind_group"),
-        // });
-        //
-        //
-        // let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        //     label: Some("Shader"),
-        //     source: wgpu::ShaderSource::Wgsl(include_str!("../../../../shaders/triangle.wgsl").into()),
-        // });
-        //
-        // let render_pipeline_layout =
-        //     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        //         label: Some("Render Pipeline Layout"),
-        //         bind_group_layouts: &[
-        //             &texture_bind_group_layout,
-        //             &camera_bind_group_layout
-        //         ],
-        //         push_constant_ranges: &[],
-        //     });
-        // let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        //     label: Some("Render Pipeline"),
-        //     layout: Some(&render_pipeline_layout),
-        //     vertex: wgpu::VertexState {
-        //         module: &shader,
-        //         entry_point: Some("vs_main"), // 1.
-        //         buffers: &[Vertex::desc(),], // 2.
-        //         compilation_options: wgpu::PipelineCompilationOptions::default(),
-        //     },
-        //     fragment: Some(wgpu::FragmentState { // 3.
-        //         module: &shader,
-        //         entry_point: Some("fs_main"),
-        //         targets: &[Some(wgpu::ColorTargetState { // 4.
-        //             format: config.format,
-        //             blend: Some(wgpu::BlendState::REPLACE),
-        //             write_mask: wgpu::ColorWrites::ALL,
-        //         })],
-        //         compilation_options: wgpu::PipelineCompilationOptions::default(),
-        //     }),
-        //     primitive: wgpu::PrimitiveState {
-        //         topology: wgpu::PrimitiveTopology::TriangleList, // 1.
-        //         strip_index_format: None,
-        //         front_face: wgpu::FrontFace::Ccw, // 2.
-        //         cull_mode: Some(wgpu::Face::Back),
-        //         // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-        //         polygon_mode: wgpu::PolygonMode::Fill,
-        //         // Requires Features::DEPTH_CLIP_CONTROL
-        //         unclipped_depth: false,
-        //         // Requires Features::CONSERVATIVE_RASTERIZATION
-        //         conservative: false,
-        //     },
-        //     depth_stencil: None, // 1.
-        //     multisample: wgpu::MultisampleState {
-        //         count: 1, // 2.
-        //         mask: !0, // 3.
-        //         alpha_to_coverage_enabled: false, // 4.
-        //     },
-        //     multiview: None, // 5.
-        //     cache: None, // 6.
-        // });
-        //
-        // let vertex_buffer = device.create_buffer_init(
-        //     &wgpu::util::BufferInitDescriptor {
-        //         label: Some("Vertex Buffer"),
-        //         contents: bytemuck::cast_slice(VERTICES),
-        //         usage: wgpu::BufferUsages::VERTEX,
-        //     }
-        // );
-        //
-        // let index_buffer = device.create_buffer_init(
-        //     &wgpu::util::BufferInitDescriptor {
-        //         label: Some("Index Buffer"),
-        //         contents: bytemuck::cast_slice(INDICES),
-        //         usage: wgpu::BufferUsages::INDEX,
-        //     }
-        // );
-        // let num_indices = INDICES.len() as u32;
-
-        //let camera_controller = CameraController::new(2f32);
-
-
         Self {
             surface,
             _adapter: adapter,
@@ -637,5 +499,31 @@ impl CreateDrawletWgpu for WgpuRenderBackend
         let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
 
         pipeline_concrete.get_drawlet_mut(&drawlet_handle)
+    }
+}
+
+pub trait CreateDrawletWgpu
+{
+    fn create_pipeline<RenObjType: WgpuRenderObject>(
+        self: &mut Self,
+        shader_path: &str
+    ) -> PipelineHandle<RenObjType>;
+
+    fn create_drawlet<RenObjType: WgpuRenderObject>(
+        self: &mut Self,
+        pipeline: &PipelineHandle<RenObjType>,
+        init_data: <RenObjType::Drawlet as RenderDrawlet>::Data,
+    ) -> DrawletHandle<RenObjType>;
+
+    fn get_drawlet_mut<RenObjType: WgpuRenderObject>(
+        self: &mut Self,
+        pipeline_handle: &PipelineHandle<RenObjType>,
+        drawlet_handle: &DrawletHandle<RenObjType>
+    ) -> &'_ mut RenObjType::Drawlet;
+
+    fn get_pipeline_id() -> PipelineID {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER:AtomicUsize = AtomicUsize::new(1);
+        PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 }

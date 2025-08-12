@@ -23,6 +23,7 @@ use ash::vk;
 use std::mem::ManuallyDrop;
 
 use std::sync::Arc;
+use ash::vk::CommandBuffer;
 use cgmath::{Matrix4, Vector4};
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
@@ -30,7 +31,7 @@ use winit::window::Window;
 
 use slang_refl;
 
-use crate::render_backend;
+use crate::{render_backend, AsAny};
 use render_backend::RenderBackend;
 use render_backend::vulkan::command_buffer::{CommandBuffers};
 use render_backend::vulkan::device::Device;
@@ -40,8 +41,50 @@ use render_backend::vulkan::swapchain::Swapchain;
 use render_backend::vulkan::render_pass::RenderPass;
 
 use vk::PipelineStageFlags;
-use crate::render_backend::{PipelineID, DrawletHandle, VulkanPipeline, PipelineHandle, VulkanDrawlet, VulkanPipelineDyn, RenderPipeline, VulkanRenderObject, CreateDrawletVulkan, RenderDrawlet};
+use crate::render_backend::{PipelineID, DrawletHandle, PipelineHandle, RenderPipeline, RenderDrawlet, RenderObject};
 use crate::render_backend::vulkan::render_object::TexturedMeshDrawlet;
+
+
+pub trait VulkanRenderObject: RenderObject + Sized {
+    type Drawlet: VulkanDrawlet;
+    type Pipeline: VulkanPipeline<Self> + VulkanPipelineDyn + 'static;
+    type Data;
+}
+
+pub trait VulkanPipelineDyn: AsAny {
+    fn get_pipeline(self: &Self) -> vk::Pipeline;
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn VulkanDrawletDyn> + '_>;
+    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn VulkanDrawletDyn> + '_>;
+}
+
+pub trait VulkanPipeline<RenObjType: VulkanRenderObject>: RenderPipeline<RenObjType> + VulkanPipelineDyn {
+    fn instantiate_drawlet(
+        self: &mut Self,
+        init_data: <<RenObjType as VulkanRenderObject>::Drawlet as RenderDrawlet>::Data
+    ) -> DrawletHandle<RenObjType>;
+
+    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet ;
+
+    fn new(device: &Arc<Device>,
+           render_pass: &RenderPass,
+           shader_bytecode: &[u32],
+           resolution: vk::Extent2D,
+           n_framebuffers: usize,
+    ) -> Self where Self: Sized;
+}
+
+pub trait VulkanDrawlet: RenderDrawlet {
+    fn draw(self: &Self, command_buffer: CommandBuffer);
+}
+pub trait VulkanDrawletDyn {
+    fn draw(self: &Self, command_buffer: CommandBuffer);
+}
+
+impl<T> VulkanDrawletDyn for T where T: VulkanDrawlet {
+    fn draw(self: &Self, command_buffer: CommandBuffer) {
+        self.draw(command_buffer);
+    }
+}
 
 /// Vulkan Context which contains physical device, logical device, and surface, etc.
 pub struct VulkanRenderBackend {
@@ -405,5 +448,32 @@ impl Drop for VulkanRenderBackend {
             ManuallyDrop::drop(&mut self.physical_surface);
             ManuallyDrop::drop(&mut self.instance);
         }
+    }
+}
+
+pub trait CreateDrawletVulkan
+{
+    fn create_pipeline<RenObjType: VulkanRenderObject>
+    (
+        self: &mut Self,
+        shader_path: &str
+    ) -> PipelineHandle<RenObjType>;
+
+    fn create_drawlet<RenObjType: VulkanRenderObject>(
+        self: &mut Self,
+        pipeline: &PipelineHandle<RenObjType>,
+        init_data: <RenObjType::Drawlet as RenderDrawlet>::Data,
+    ) -> DrawletHandle<RenObjType>;
+
+    fn get_drawlet_mut<RenObjType: VulkanRenderObject>(
+        self: &mut Self,
+        pipeline_handle: &PipelineHandle<RenObjType>,
+        drawlet_handle: &DrawletHandle<RenObjType>
+    ) -> &'_ mut RenObjType::Drawlet;
+
+    fn get_pipeline_id() -> PipelineID {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER:AtomicUsize = AtomicUsize::new(1);
+        PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 }

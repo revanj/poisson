@@ -4,18 +4,24 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use ash::vk;
-use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorType, DeviceSize, Extent2D, Pipeline, ShaderStageFlags};
+use ash::vk::{CommandBuffer, DescriptorSetLayout, DescriptorType, DeviceSize, Extent2D, Pipeline, ShaderStageFlags};
 
 use image::{DynamicImage, RgbaImage};
 use vk::PipelineLayout;
 use poisson_macros::AsAny;
-use crate::render_backend::{RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Mat4Ubo, Vertex, VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn};
-use crate::render_backend::{DrawletHandle, DrawletID, PipelineHandle, PipelineID, RenderBackend};
+use crate::render_backend::{RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Mat4Ubo, Vertex};
+use crate::render_backend::{DrawletHandle, DrawletID};
 use crate::render_backend::vulkan::buffer::GpuBuffer;
 use crate::render_backend::vulkan::device::Device;
 use crate::render_backend::vulkan::render_pass::RenderPass;
 use crate::render_backend::vulkan::texture::Texture;
+use crate::render_backend::vulkan::{VulkanDrawlet, VulkanDrawletDyn, VulkanPipeline, VulkanPipelineDyn, VulkanRenderObject};
 
+impl VulkanRenderObject for TexturedMesh {
+    type Drawlet = TexturedMeshDrawlet;
+    type Pipeline = TexturedMeshPipeline;
+    type Data = TexturedMeshData;
+}
 
 #[derive(AsAny)]
 pub struct TexturedMeshPipeline {

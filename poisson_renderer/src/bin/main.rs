@@ -4,18 +4,14 @@ use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use poisson_renderer::input::Input;
 use poisson_renderer::PoissonGame;
-use poisson_renderer::render_backend::{CreateDrawletVulkan, CreateDrawletWgpu, DrawletHandle, PipelineHandle, RenderBackend, TexturedMesh, TexturedMeshData, Mat4Ubo, Vertex};
-use poisson_renderer::render_backend::vulkan::{utils, VulkanRenderBackend};
+use poisson_renderer::render_backend::{DrawletHandle, PipelineHandle, RenderBackend, TexturedMesh, TexturedMeshData, Mat4Ubo, Vertex};
+use poisson_renderer::render_backend::vulkan::{utils, CreateDrawletVulkan, VulkanRenderBackend};
 use poisson_renderer::render_backend::web::textured_mesh::TexturedMeshDrawlet;
-use poisson_renderer::render_backend::web::WgpuRenderBackend;
+use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 
 fn main() -> Result<(), impl Error> {
     poisson_renderer::run_game::<NothingGame>()
 }
-
-// macro_rules! ren {
-//     ($x:ident) => (<<NothingGame as PoissonGame>::Ren as RenderBackend>::$x)
-// }
 
 struct NothingGame {
     textured_mesh_pipeline: Option<PipelineHandle<TexturedMesh>>,
@@ -28,7 +24,7 @@ struct NothingGame {
 
 impl PoissonGame for NothingGame {
 
-    type Ren = VulkanRenderBackend;
+    type Ren = WgpuRenderBackend;
 
     fn new() -> Self {
         Self {

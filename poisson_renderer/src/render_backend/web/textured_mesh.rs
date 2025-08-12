@@ -7,9 +7,15 @@ use image::DynamicImage;
 use wgpu::{BindGroup, BindGroupLayout, Device, PipelineLayout, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
-use crate::render_backend::{DrawletHandle, DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn};
-use crate::render_backend::web::{Camera, CameraUniform};
+use crate::render_backend::{DrawletHandle, DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex};
+use crate::render_backend::web::{Camera, CameraUniform, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::texture::Texture;
+
+impl WgpuRenderObject for TexturedMesh {
+    type Drawlet = TexturedMeshDrawlet;
+    type Pipeline = TexturedMeshPipeline;
+    type Data = TexturedMeshData;
+}
 
 pub struct TexturedMeshDrawlet {
     queue: Weak<Queue>,
