@@ -38,13 +38,22 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested { .. } => {
-                self.window.as_ref().unwrap().pre_present_notify();
-                self.update();
+                if !self.done_init {
+                    self.init();
+                } else {
+                    self.window.as_ref().unwrap().pre_present_notify();
+                    self.update();
+                }
                 self.request_redraw();
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
                 self.renderer.lock().as_mut().unwrap().resize(*width, *height);
-                self.update();
+                if !self.done_init {
+                    self.init();
+                } else {
+                    self.window.as_ref().unwrap().pre_present_notify();
+                    self.update();
+                }
                 self.request_redraw();
             },
             _ => (),

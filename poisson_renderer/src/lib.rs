@@ -66,6 +66,7 @@ where GameType: PoissonGame
     input: input::Input,
     renderer: Arc<Mutex<Option<GameType::Ren>>>,
     game: GameType,
+    done_init: bool,
 }
 
 impl<GameType: PoissonGame> PoissonEngine<GameType>
@@ -79,14 +80,14 @@ impl<GameType: PoissonGame> PoissonEngine<GameType>
             input,
             renderer: Default::default(),
             game,
+            done_init: false
         }
     }
     
     fn init(self: &mut Self) {
-        log::info!("running init function");
         if let Some(backend) = self.renderer.lock().as_mut() {
-            log::info!("some backend");
             self.game.init(&mut self.input, backend);
+            self.done_init = true;
         }
     }
     
@@ -211,9 +212,6 @@ impl PoissonGame for NothingGame {
     }
 
     fn init(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren) {
-        
-        log::info!("attempting to print shader");
-        
         self.last_time = Instant::now();
 
         let index_buffer_data = vec![0u32, 1, 2, 2, 3, 0];
@@ -239,31 +237,31 @@ impl PoissonGame for NothingGame {
         
         log::info!("{}", triangle_shader);
 
-        // let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle", triangle_shader);
-        // self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
-        // self.textured_mesh_pipeline = Some(p_handle);
+        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle", triangle_shader);
+        self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
+        self.textured_mesh_pipeline = Some(p_handle);
     }
 
     fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren) {
-        // let delta_time = self.last_time.elapsed().as_secs_f32();
-        // self.last_time = Instant::now();
-        //
-        // if input.is_pressed("up") {
-        //     self.elapsed_time += delta_time;
-        // }
-        //
-        // let drawlet = renderer.get_drawlet_mut(self.textured_mesh_pipeline.as_ref().unwrap(), self.textured_mesh_inst.as_ref().unwrap());
-        //
-        // let elapsed_time = self.elapsed_time;
-        // let aspect =  800f32/600f32;
-        // let m =  cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
-        // let v = cgmath::Matrix4::look_at(
-        //     cgmath::Point3::new(2.0, 2.0, 2.0),
-        //     cgmath::Point3::new(0.0, 0.0, 0.0),
-        //     cgmath::Vector3::new(0.0, 0.0, 1.0));
-        // let p = perspective(PI/4f32, aspect, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
-        // let new_ubo = Mat4Ubo { mvp: p * v * m };
-        // drawlet.set_mvp(new_ubo)
+        let delta_time = self.last_time.elapsed().as_secs_f32();
+        self.last_time = Instant::now();
+        
+        if input.is_pressed("up") {
+            self.elapsed_time += delta_time;
+        }
+        
+        let drawlet = renderer.get_drawlet_mut(self.textured_mesh_pipeline.as_ref().unwrap(), self.textured_mesh_inst.as_ref().unwrap());
+        
+        let elapsed_time = self.elapsed_time;
+        let aspect =  800f32/600f32;
+        let m =  cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
+        let v = cgmath::Matrix4::look_at(
+            cgmath::Point3::new(2.0, 2.0, 2.0),
+            cgmath::Point3::new(0.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 0.0, 1.0));
+        let p = perspective(PI/4f32, aspect, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
+        let new_ubo = Mat4Ubo { mvp: p * v * m };
+        drawlet.set_mvp(new_ubo)
     }
 }
 
