@@ -191,7 +191,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
     fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMeshDrawlet {
         self.drawlets.get_mut(&drawlet_handle.id).unwrap()
     }
-    fn new(device: &Arc<Device>, queue: &Arc<Queue>, shader_path: &str, surface_config: &SurfaceConfiguration) -> Self
+    fn new(device: &Arc<Device>, queue: &Arc<Queue>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
         where Self: Sized
     {
         let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -234,12 +234,8 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-
-        let compiler = slang_refl::Compiler::new_wgsl_compiler();
-        let linked_program = compiler.linked_program_from_file(shader_path);
-
-        let compiled_triangle_shader = linked_program.get_u8();
-        let wgsl_str = str::from_utf8(compiled_triangle_shader).unwrap();
+        
+        let wgsl_str = str::from_utf8(shader_u8).unwrap();
         
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),

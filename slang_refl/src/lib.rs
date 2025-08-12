@@ -169,6 +169,8 @@ impl Compiler {
             self.compiler_ptr.as_ref().unwrap().link_module(module.module_ptr)
         )
     }
+    
+    
 
     pub fn linked_program_from_file(self: &Self, path: &str) -> LinkedProgram {
         let module = self.load_module(path);

@@ -30,7 +30,7 @@ use winit::window::Window;
 
 use slang_refl;
 
-use crate::{render_backend, AsAny};
+use crate::{render_backend, AsAny, PoissonGame};
 use render_backend::RenderBackend;
 use render_backend::vulkan::command_buffer::{CommandBuffers};
 use render_backend::vulkan::device::Device;
@@ -40,6 +40,7 @@ use render_backend::vulkan::swapchain::Swapchain;
 use render_backend::vulkan::render_pass::RenderPass;
 
 use vk::PipelineStageFlags;
+use crate::input::Input;
 use crate::render_backend::{PipelineID, DrawletHandle, PipelineHandle, RenderPipeline, RenderDrawlet, RenderObject};
 use crate::render_backend::vulkan::render_object::TexturedMeshDrawlet;
 
@@ -241,9 +242,10 @@ impl VulkanRenderBackend {
 impl RenderBackend for VulkanRenderBackend {
     const PERSPECTIVE_ALIGNMENT: [f32; 3] = [1f32, -1f32, -1f32];
 
-    fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) {
+    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
+    {
         let render_backend = VulkanRenderBackend::new(&window);
-        backend_to_init.lock().replace(render_backend);
+        backend_clone.lock().replace(render_backend);
     }
 
     fn render(self: &mut Self) {

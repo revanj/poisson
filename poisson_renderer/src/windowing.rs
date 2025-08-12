@@ -23,10 +23,9 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
         };
 
         if let Some(window_value) = self.window.clone() {
+            log::info!("window created, creating renderer");
             GameType::Ren::init(self.renderer.clone(), window_value);
         }
-        
-        self.init();
     }
 
     fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {

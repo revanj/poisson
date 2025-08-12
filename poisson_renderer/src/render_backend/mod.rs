@@ -6,7 +6,8 @@ use image::DynamicImage;
 use winit::window::Window;
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
-use crate::AsAny;
+use crate::{AsAny, PoissonEngine, PoissonGame};
+use crate::input::Input;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod vulkan;

@@ -3,9 +3,11 @@ pub mod textured_mesh;
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
-use std::time::SystemTime;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::window::Window;
@@ -13,14 +15,17 @@ use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBac
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
+use cfg_if::cfg_if;
 use wgpu::util::DeviceExt;
 use image;
+use image::EncodableLayout;
 use wgpu::SurfaceConfiguration;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWeb;
-use crate::AsAny;
+use crate::{AsAny, PoissonGame};
+use crate::input::Input;
 use crate::render_backend::web::textured_mesh::TexturedMeshDrawlet;
 
 pub trait WgpuRenderObject: RenderObject + Sized {
@@ -41,7 +46,7 @@ pub trait WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType>
     fn new(
         device: &Arc<wgpu::Device>,
         queue: &Arc<wgpu::Queue>,
-        shader_path: &str,
+        shader_u8: &[u8],
         surface_config: &SurfaceConfiguration
     ) -> Self where Self: Sized;
 }
@@ -277,18 +282,19 @@ pub struct WgpuRenderBackend {
 impl RenderBackend for WgpuRenderBackend {
     const PERSPECTIVE_ALIGNMENT: [f32; 3] = [1f32, 1f32, -1f32];
 
-    fn init(backend_to_init: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
+    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
     {
         cfg_if::cfg_if! {
             if #[cfg(target_arch="wasm32")] {
-                    wasm_bindgen_futures::spawn_local(async move {
-                        let new_backend = WgpuRenderBackend::new(&window).await;
-                        let mut locked_backend = backend_to_init.lock();
-                        *locked_backend = Some(new_backend);
-                    });
+                log::info!("running wasm32 backend creation");
+                wasm_bindgen_futures::spawn_local(async move {
+                    let new_backend = WgpuRenderBackend::new(&window).await;
+                    let mut locked_backend = backend_clone.lock();
+                    *locked_backend = Some(new_backend);
+                });
             } else {
                 let render_backend = pollster::block_on(WgpuRenderBackend::new(&window));
-                backend_to_init.lock().replace(render_backend);
+                backend_clone.lock().replace(render_backend);
             }
         }
     }
@@ -373,11 +379,12 @@ impl WgpuRenderBackend {
     }
 
     pub async fn new(window: &Arc<dyn Window>) -> Self {
+        log::info!("started running renderer constructor");
         #[cfg(any(target_arch = "wasm32"))]
         {
+            
             let canvas = window.canvas().unwrap();
 
-            // 将 canvas 添加到当前网页中
             web_sys::window()
                 .and_then(|win| win.document())
                 .map(|doc| {
@@ -445,6 +452,8 @@ impl WgpuRenderBackend {
 
         surface.configure(&device, &config);
 
+        log::info!("finished running renderer constructor");
+
         Self {
             surface,
             _adapter: adapter,
@@ -461,14 +470,35 @@ impl WgpuRenderBackend {
 
 impl CreateDrawletWgpu for WgpuRenderBackend
 {
-    fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, shader_path: &str) -> PipelineHandle<RenObjType> {
-        // let compiler = slang_refl::Compiler::new();
-        // let linked_program = compiler.linked_program_from_file(shader_path);
-        //
-        // let compiled_triangle_shader = linked_program.get_bytecode();
-
+    fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, shader_path: &str, shader_text: &str) -> PipelineHandle<RenObjType> {
+        let owned_str = shader_path.to_owned();
+        let wgsl_path = owned_str.clone() + ".wgsl";
+        #[cfg(not(target_arch="wasm32"))]
+        {
+            let compiler = slang_refl::Compiler::new_wgsl_compiler();
+            let slang_path = owned_str + ".slang";
+            let linked_program = compiler.linked_program_from_file(slang_path.as_str());
+            let compiled_shader = linked_program.get_u8();
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(wgsl_path.clone()).unwrap();
+            
+            file.write_all(compiled_shader).unwrap()
+        }
+        let mut wgsl_code;
+        
+        cfg_if! {
+            if #[cfg(not(target_arch="wasm32"))] {
+                wgsl_code = fs::read(wgsl_path).unwrap();
+            } else {
+                wgsl_code = shader_text.to_owned();
+            }
+        }
+        
         let pipeline = RenObjType::Pipeline::new(
-            &self.device, &self.queue, shader_path, &self.config);
+            &self.device, &self.queue, wgsl_code.as_bytes(), &self.config);
 
         let pipeline_id: PipelineID = <Self as CreateDrawletWgpu>::get_pipeline_id();
 
@@ -505,7 +535,8 @@ pub trait CreateDrawletWgpu
 {
     fn create_pipeline<RenObjType: WgpuRenderObject>(
         self: &mut Self,
-        shader_path: &str
+        shader_path: &str,
+        shader_text: &str,
     ) -> PipelineHandle<RenObjType>;
 
     fn create_drawlet<RenObjType: WgpuRenderObject>(

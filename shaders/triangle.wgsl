@@ -1,39 +1,76 @@
-// Vertex shader
-struct CameraUniform {
-    view_proj: mat4x4<f32>,
+struct _MatrixStorage_float4x4std140_0
+{
+    @align(16) data_0 : array<vec4<f32>, i32(4)>,
 };
-@group(1) @binding(0) // 1.
-var<uniform> camera: CameraUniform;
 
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) tex_coords: vec2<f32>,
-}
+struct Uniform_std140_0
+{
+    @align(16) mvp_0 : _MatrixStorage_float4x4std140_0,
+};
 
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) tex_coords: vec2<f32>,
-}
+@binding(0) @group(0) var<uniform> uniform_var_0 : Uniform_std140_0;
+@binding(0) @group(1) var texture_var_texture_0 : texture_2d<f32>;
+
+@binding(1) @group(1) var texture_var_sampler_0 : sampler;
+
+struct VertexStageOutput_0
+{
+    @location(0) tex_coord_0 : vec2<f32>,
+    @builtin(position) sv_position_0 : vec4<f32>,
+};
+
+struct vertexInput_0
+{
+    @location(0) position_0 : vec3<f32>,
+    @location(1) tex_coord_1 : vec2<f32>,
+};
+
+struct CoarseVertex_0
+{
+     _S1 : vec2<f32>,
+};
+
+struct VertexStageOutput_1
+{
+     coarseVertex_0 : CoarseVertex_0,
+     _S2 : vec4<f32>,
+};
 
 @vertex
-fn vs_main(
-    model: VertexInput,
-) -> VertexOutput {
-    var out: VertexOutput;
-    out.tex_coords = model.tex_coords;
-    out.clip_position = camera.view_proj * vec4<f32>(model.position, 1.0); // 2.
-    return out;
+fn vertex( _S3 : vertexInput_0) -> VertexStageOutput_0
+{
+    var position_1 : vec4<f32> = (((mat4x4<f32>(uniform_var_0.mvp_0.data_0[i32(0)][i32(0)], uniform_var_0.mvp_0.data_0[i32(0)][i32(1)], uniform_var_0.mvp_0.data_0[i32(0)][i32(2)], uniform_var_0.mvp_0.data_0[i32(0)][i32(3)], uniform_var_0.mvp_0.data_0[i32(1)][i32(0)], uniform_var_0.mvp_0.data_0[i32(1)][i32(1)], uniform_var_0.mvp_0.data_0[i32(1)][i32(2)], uniform_var_0.mvp_0.data_0[i32(1)][i32(3)], uniform_var_0.mvp_0.data_0[i32(2)][i32(0)], uniform_var_0.mvp_0.data_0[i32(2)][i32(1)], uniform_var_0.mvp_0.data_0[i32(2)][i32(2)], uniform_var_0.mvp_0.data_0[i32(2)][i32(3)], uniform_var_0.mvp_0.data_0[i32(3)][i32(0)], uniform_var_0.mvp_0.data_0[i32(3)][i32(1)], uniform_var_0.mvp_0.data_0[i32(3)][i32(2)], uniform_var_0.mvp_0.data_0[i32(3)][i32(3)])) * (vec4<f32>(_S3.position_0, 1.0f))));
+    var output_0 : VertexStageOutput_1;
+    output_0.coarseVertex_0._S1 = _S3.tex_coord_1;
+    output_0._S2 = position_1;
+    var _S4 : VertexStageOutput_0;
+    _S4.tex_coord_0 = output_0.coarseVertex_0._S1;
+    _S4.sv_position_0 = output_0._S2;
+    return _S4;
 }
 
+struct Fragment_0
+{
+    @location(0) color_0 : vec4<f32>,
+};
 
-@group(0) @binding(0)
-var t_diffuse: texture_2d<f32>;
-@group(0) @binding(1)
-var s_diffuse: sampler;
+struct pixelInput_0
+{
+    @location(0) _S5 : vec2<f32>,
+};
+
+struct pixelInput_1
+{
+     coarseVertex_1 : CoarseVertex_0,
+};
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-
-    return textureSample(t_diffuse, s_diffuse, in.tex_coords);
-
+fn fragment( _S6 : pixelInput_0) -> Fragment_0
+{
+    var _S7 : pixelInput_1;
+    _S7.coarseVertex_1._S1 = _S6._S5;
+    var output_1 : Fragment_0;
+    output_1.color_0 = (textureSample((texture_var_texture_0), (texture_var_sampler_0), (_S7.coarseVertex_1._S1)));
+    return output_1;
 }
+
