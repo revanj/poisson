@@ -20,6 +20,8 @@ wgpu = { version = "26" , features = ["webgl"]}
 wasm-bindgen-futures = "0.4.50"
 log = "0.4.27"
 fern = "0.7"
+console_log = "1.0.0"
+console_error_panic_hook = "0.1.7"
 
 env_logger = "0.11.8"
 wasm-bindgen = "0.2.100"
@@ -28,6 +30,7 @@ image = {version = "0.25.6", features = ["png"]}
 anyhow = "1.0.98"
 instant = { version = "0.1.13", features = ["wasm-bindgen"] }
 thinset = {version = "0.4.0"}
+const_format = "0.2.34"
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

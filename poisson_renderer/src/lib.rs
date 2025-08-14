@@ -3,48 +3,27 @@
 extern crate core;
 
 use std::any::Any;
-use std::f32::consts::PI;
-use crate::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex};
 use env_logger;
 use std::sync::Arc;
-use instant::Instant;
 use winit::window::Window;
 
 pub mod render_backend;
 mod windowing;
 pub mod input;
-
+pub mod utils;
 
 use parking_lot::Mutex;
 
 use crate::render_backend::RenderBackend;
-
-#[cfg(target_arch = "wasm32")]
-use web_sys;
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::wasm_bindgen;
 use winit::event_loop::EventLoop;
-use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::input::Input;
-use crate::render_backend::math::utils::perspective;
-use crate::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 
-#[cfg(not(target_arch="wasm32"))]
-#[macro_export]
-macro_rules! include_shader {
-    ($x:expr) => {
-        include_str!(concat!($x, ".slang"))
-    }     
-}
-
-#[cfg(target_arch="wasm32")]
-#[macro_export]
-macro_rules! include_shader {
-    ($x:expr) => {
-        include_str!(concat!($x, ".wgsl"))
-    }     
-}
+#[cfg(target_arch = "wasm32")]
+use {
+    web_sys,
+    wasm_bindgen::prelude::wasm_bindgen,
+    console_log
+};
 
 pub trait PoissonGame {
     type Ren: RenderBackend;

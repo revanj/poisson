@@ -1,14 +1,24 @@
 use std::error::Error;
 use std::f32::consts::PI;
 use instant::Instant;
-use poisson_renderer::{include_shader, init_logger, run_game, PoissonGame};
+use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, TexturedMesh, TexturedMeshData, Vertex};
+use poisson_renderer::render_backend::{
+    DrawletHandle, Mat4Ubo, PipelineHandle,
+    RenderBackend, TexturedMesh, TexturedMeshData, Vertex
+};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath;
+use fs_embed::fs_embed;
 use poisson_renderer::render_backend::math::utils::perspective;
+
+#[cfg(not(target_arch = "wasm32"))]
+use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -26,19 +36,20 @@ pub struct NothingGame {
     textured_mesh_inst: Option<DrawletHandle<TexturedMesh>>,
     last_time: Instant,
     elapsed_time: f32,
+    assets: fs_embed::Dir,
 }
-
-
 
 impl PoissonGame for NothingGame {
     type Ren = WgpuRenderBackend;
 
     fn new() -> Self {
+        static FILES: fs_embed::Dir = fs_embed!("assets");
         Self {
             textured_mesh_pipeline: None,
             textured_mesh_inst: None,
             last_time: Instant::now(),
             elapsed_time: 0f32,
+            assets: FILES.clone().auto_dynamic()
         }
     }
 
@@ -58,8 +69,9 @@ impl PoissonGame for NothingGame {
             Vertex {pos: [-0.5f32, 0.5f32, 0.0f32], tex_coord: [1.0f32, 1.0f32]},
         };
 
-        let diffuse_bytes = include_bytes!("../../textures/happy-tree.png");
-        let binding = image::load_from_memory(diffuse_bytes).unwrap();
+        let texture_file = self.assets.get_file("textures/happy-tree.png").unwrap();
+        let texture_bytes = texture_file.read_bytes().unwrap();
+        let binding = image::load_from_memory(texture_bytes.as_slice()).unwrap();
 
         let textured_mesh_data = TexturedMeshData {
             index_data: index_buffer_data,
@@ -67,9 +79,10 @@ impl PoissonGame for NothingGame {
             texture_data: binding,
         };
 
-        let triangle_shader = include_shader!("../../shaders/triangle");
+        let triangle_shader = self.assets.get_file(shader!("shaders/triangle")).unwrap();
+        let triangle_shader_content = triangle_shader.read_str().unwrap();
 
-        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("shaders/triangle", triangle_shader);
+        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("nothing_game/assets/shaders/triangle", triangle_shader_content.as_str());
         self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
         self.textured_mesh_pipeline = Some(p_handle);
     }

@@ -399,7 +399,7 @@ impl RenderBackend for VulkanRenderBackend {
 
 impl CreateDrawletVulkan for VulkanRenderBackend
 {
-    fn create_pipeline<RenObjType: VulkanRenderObject>(self: &mut Self, shader_path: &str) -> PipelineHandle<RenObjType> {
+    fn create_pipeline<RenObjType: VulkanRenderObject>(self: &mut Self, shader_path: &str, _triangle_shader: &str) -> PipelineHandle<RenObjType> {
         let compiler = slang_refl::Compiler::new_spirv_compiler();
         let linked_program = compiler.linked_program_from_file(shader_path);
 
@@ -471,7 +471,8 @@ pub trait CreateDrawletVulkan
     fn create_pipeline<RenObjType: VulkanRenderObject>
     (
         self: &mut Self,
-        shader_path: &str
+        shader_path: &str,
+        triangle_shader: &str
     ) -> PipelineHandle<RenObjType>;
 
     fn create_drawlet<RenObjType: VulkanRenderObject>(

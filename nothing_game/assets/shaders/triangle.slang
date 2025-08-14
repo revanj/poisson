@@ -8,10 +8,6 @@ struct TextureVar {
     SamplerState sampler;
 }
 
-// [[vk::binding(0)]] Uniform uniform_var;
-// [[vk::binding(1)]] Texture2D<float4> texture;
-// [[vk::binding(2)]] SamplerState sampler;
-
 ParameterBlock<Uniform> uniform_var;
 ParameterBlock<TextureVar> texture_var;
 

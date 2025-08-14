@@ -12,3 +12,10 @@ image = "0.25.6"
 instant = "0.1.13"
 winit = {git = "https://github.com/rust-windowing/winit.git", rev = "5199474", features = []}
 cgmath = "0.18.0"
+fs-embed = "0.2.4"
+include_dir = {version = "0.7.4", features=[ "metadata" ]}
+wasm-bindgen-futures = "0.4.50"
+wasm-bindgen = "0.2.100"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
