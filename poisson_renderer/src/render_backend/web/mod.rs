@@ -379,7 +379,6 @@ impl WgpuRenderBackend {
     }
 
     pub async fn new(window: &Arc<dyn Window>) -> Self {
-        log::info!("started running renderer constructor");
         #[cfg(any(target_arch = "wasm32"))]
         {
             
@@ -451,8 +450,6 @@ impl WgpuRenderBackend {
             .unwrap();
 
         surface.configure(&device, &config);
-
-        log::info!("finished running renderer constructor");
 
         Self {
             surface,

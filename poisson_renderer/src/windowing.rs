@@ -23,7 +23,6 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
         };
 
         if let Some(window_value) = self.window.clone() {
-            log::info!("window created, creating renderer");
             GameType::Ren::init(self.renderer.clone(), window_value);
         }
     }
@@ -38,27 +37,27 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested { .. } => {
-                if !self.done_init {
-                    self.init();
-                } else {
-                    self.window.as_ref().unwrap().pre_present_notify();
-                    self.update();
-                }
-                self.request_redraw();
+                self.init_or_update();
             },
             WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
                 self.renderer.lock().as_mut().unwrap().resize(*width, *height);
-                if !self.done_init {
-                    self.init();
-                } else {
-                    self.window.as_ref().unwrap().pre_present_notify();
-                    self.update();
-                }
-                self.request_redraw();
+                self.init_or_update();
             },
             _ => (),
         }
         
         self.input.process_event(&event);
+    }
+}
+
+impl<GameType: PoissonGame> PoissonEngine<GameType> {
+    fn init_or_update(&mut self) {
+        if !self.done_init {
+            self.init();
+        } else {
+            self.window.as_ref().unwrap().pre_present_notify();
+            self.update();
+        }
+        self.request_redraw();
     }
 }

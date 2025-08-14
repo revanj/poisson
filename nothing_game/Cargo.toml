@@ -1,0 +1,14 @@
+[package]
+name = "nothing_game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+poisson_renderer = { path = "../poisson_renderer" }
+log = "0.4.27"
+console_log = "1.0.0"
+console_error_panic_hook = "0.1.7"
+image = "0.25.6"
+instant = "0.1.13"
+winit = {git = "https://github.com/rust-windowing/winit.git", rev = "5199474", features = []}
+cgmath = "0.18.0"

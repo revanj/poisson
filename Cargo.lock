@@ -1513,6 +1513,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
+name = "nothing_game"
+version = "0.1.0"
+dependencies = [
+ "cgmath",
+ "console_error_panic_hook",
+ "console_log",
+ "image",
+ "instant",
+ "log",
+ "poisson_renderer",
+ "winit",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1819,8 +1833,6 @@ dependencies = [
  "cfg-if",
  "cgmath",
  "cmake",
- "console_error_panic_hook",
- "console_log",
  "cxx-build",
  "env_logger",
  "fern",
@@ -2284,6 +2296,7 @@ dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
+ "link-cplusplus",
 ]
 
 [[package]]
