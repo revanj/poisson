@@ -41,6 +41,7 @@ pub trait RenderBackend {
     fn render(self: &mut Self);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
+    
 }
 
 pub trait RenderPipeline<RenObj: RenderObject> {

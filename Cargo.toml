@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members= ["poisson_renderer", "poisson_macros", "slang_refl", "rj", "arch_playground", "nothing_game"]
+members= ["poisson_renderer", "poisson_macros", "slang_refl", "rj", "arch_playground", "nothing_game", "rj_math"]
