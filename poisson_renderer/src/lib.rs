@@ -11,6 +11,8 @@ pub mod render_backend;
 mod windowing;
 pub mod input;
 pub mod utils;
+mod game_elements;
+pub mod math;
 
 use parking_lot::Mutex;
 
@@ -20,9 +22,9 @@ use crate::input::Input;
 
 #[cfg(target_arch = "wasm32")]
 use {
-    web_sys,
+    console_log,
     wasm_bindgen::prelude::wasm_bindgen,
-    console_log
+    web_sys
 };
 
 pub trait PoissonGame {

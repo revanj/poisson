@@ -1,19 +1,16 @@
 use std::any::Any;
 use std::marker::PhantomData;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use bytemuck::{Pod, Zeroable};
 use image::DynamicImage;
 use winit::window::Window;
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
-use crate::{AsAny, PoissonEngine, PoissonGame};
-use crate::input::Input;
-
+use crate::{AsAny, PoissonGame};
 // #[cfg(not(target_arch = "wasm32"))]
 // pub mod vulkan;
 
 pub mod web;
-pub mod math;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]

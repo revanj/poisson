@@ -484,7 +484,7 @@ impl CreateDrawletWgpu for WgpuRenderBackend
             
             file.write_all(compiled_shader).unwrap()
         }
-        let mut wgsl_code;
+        let wgsl_code;
         
         cfg_if! {
             if #[cfg(not(target_arch="wasm32"))] {

@@ -12,7 +12,7 @@ use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath;
 use fs_embed::fs_embed;
-use poisson_renderer::render_backend::math::utils::perspective;
+use poisson_renderer::math::utils::perspective;
 
 // #[cfg(not(target_arch = "wasm32"))]
 // use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
