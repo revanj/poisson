@@ -9,8 +9,8 @@ use winit::event::WindowEvent;
 use crate::{AsAny, PoissonEngine, PoissonGame};
 use crate::input::Input;
 
-#[cfg(not(target_arch = "wasm32"))]
-pub mod vulkan;
+// #[cfg(not(target_arch = "wasm32"))]
+// pub mod vulkan;
 
 pub mod web;
 pub mod math;
@@ -41,6 +41,9 @@ pub trait RenderBackend {
     fn render(self: &mut Self);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
+    // fn add_render_layer();
+    // fn set_view();
+    // fn set_projection();
     
 }
 

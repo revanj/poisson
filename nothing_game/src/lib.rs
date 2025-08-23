@@ -14,8 +14,8 @@ use cgmath;
 use fs_embed::fs_embed;
 use poisson_renderer::render_backend::math::utils::perspective;
 
-#[cfg(not(target_arch = "wasm32"))]
-use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
+// #[cfg(not(target_arch = "wasm32"))]
+// use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -100,7 +100,7 @@ impl PoissonGame for NothingGame {
         let elapsed_time = self.elapsed_time;
         let aspect =  800f32/600f32;
         let m =  cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
-        let v = cgmath::Matrix4::look_at(
+        let v = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::new(2.0, 2.0, 2.0),
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 0.0, 1.0));

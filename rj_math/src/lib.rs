@@ -62,6 +62,11 @@ impl<const M: usize, const N: usize> Mat<M, N> where [(); M * N]: {
             data: init
         }
     }
+    pub fn from_columns(init: [[f32; M]; N]) {
+        let data: [f32; M * N];
+        for i in 0..
+
+    }
 }
 
 impl<const M: usize, const N: usize, const K: usize> ops::Mul<Mat<N, K>> for Mat<M, N> 
@@ -69,7 +74,7 @@ impl<const M: usize, const N: usize, const K: usize> ops::Mul<Mat<N, K>> for Mat
 {
     type Output = Mat<M, K>;
     
-    fn mul(self, rhs: Mat<N, K>) -> Self::Output {
+    fn mul(self: Mat<M, N>, rhs: Mat<N, K>) -> Self::Output {
         let mut slice: [f32; M * K] = [0f32; M * K];
         
         for m in 0..M {
@@ -85,5 +90,3 @@ impl<const M: usize, const N: usize, const K: usize> ops::Mul<Mat<N, K>> for Mat
         Mat::from_slice(slice)
     }
 }
-
-type Mat4=Mat<4, 4>;
