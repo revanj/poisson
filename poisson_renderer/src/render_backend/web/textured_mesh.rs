@@ -90,6 +90,7 @@ impl TexturedMeshDrawlet {
             ],
             label: Some("camera_bind_group"),
         });
+        
         let vertex_data: &[u8] = unsafe {
             std::slice::from_raw_parts(
                 init_data.vertex_data.as_ptr() as *const u8,
@@ -178,7 +179,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
             &self.device.upgrade().unwrap(),
             &self.queue.upgrade().unwrap(),
             &self.texture_bind_group_layout,
-            &self.camera_bind_group_layout , &init_data);
+            &self.camera_bind_group_layout, &init_data);
 
         self.drawlets.insert(id, new_drawlet);
 

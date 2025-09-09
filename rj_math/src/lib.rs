@@ -1,5 +1,5 @@
 #![feature(generic_const_exprs)]
-
+#![feature(inherent_associated_types)]
 use std::ops;
 
 struct Pred<const B: bool>;
@@ -8,6 +8,10 @@ impl True for Pred<true> {}
 impl False for Pred<false> {}
 struct Vector<const N: usize> {
     data: [f32; N]
+}
+
+impl<const N: usize> Vector<N> {
+    type T = usize;
 }
 
 impl<const N: usize> Vector<N> where Pred<{N > 0}>: True {
@@ -51,7 +55,7 @@ struct Mat<const M: usize, const N: usize> where [(); M * N]: {
 impl<const M: usize, const N: usize> ops::Index<(usize, usize)> for Mat<M, N> where [(); M * N]: {
     type Output = f32;
 
-    fn index(&self, index: (usize, usize)) -> &Self::Output {
+    fn index(&self, index: (usize, usize)) -> &f32 {
         &self.data[index.0 * N + index.1]
     }
 }
@@ -62,11 +66,6 @@ impl<const M: usize, const N: usize> Mat<M, N> where [(); M * N]: {
             data: init
         }
     }
-    pub fn from_columns(init: [[f32; M]; N]) {
-        let data: [f32; M * N];
-        for i in 0..
-
-    }
 }
 
 impl<const M: usize, const N: usize, const K: usize> ops::Mul<Mat<N, K>> for Mat<M, N> 
@@ -74,7 +73,7 @@ impl<const M: usize, const N: usize, const K: usize> ops::Mul<Mat<N, K>> for Mat
 {
     type Output = Mat<M, K>;
     
-    fn mul(self: Mat<M, N>, rhs: Mat<N, K>) -> Self::Output {
+    fn mul(self: Mat<M, N>, rhs: Mat<N, K>) -> Mat<M, K> {
         let mut slice: [f32; M * K] = [0f32; M * K];
         
         for m in 0..M {

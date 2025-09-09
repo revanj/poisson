@@ -26,10 +26,16 @@ pub struct Mat4Ubo {
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
+pub struct RenderPassID(usize);
+
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct PipelineID(usize);
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct DrawletID(usize);
+
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
+pub struct ViewID(usize);
 
 
 pub trait RenderBackend {
@@ -38,10 +44,24 @@ pub trait RenderBackend {
     fn render(self: &mut Self);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
-    // fn add_render_layer();
-    // fn set_view();
-    // fn set_projection();
+    fn get_default_view(self: &Self) -> ViewHandle;
+    fn create_view(self: &mut Self, view_proj: cgmath::Matrix4<f32>) -> ViewHandle;
+    fn set_view(self: &mut Self, view_handle: ViewHandle, view_proj: cgmath::Matrix4<f32>);
+
+    fn get_render_pass_id() -> RenderPassID {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER:AtomicUsize = AtomicUsize::new(1);
+        RenderPassID(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+
+    fn get_pipeline_id() -> PipelineID {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER:AtomicUsize = AtomicUsize::new(1);
+        PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
     
+    
+
 }
 
 pub trait RenderPipeline<RenObj: RenderObject> {
@@ -56,6 +76,10 @@ pub trait RenderDrawlet: Sized {
     type Data;
 }
 
+pub struct RenderPassHandle {
+    id: RenderPassID,
+}
+
 pub struct PipelineHandle<D:RenderObject> {
     id: PipelineID,
     _pipeline_ty: PhantomData<D>
@@ -66,6 +90,9 @@ pub struct DrawletHandle<D:RenderObject> {
     _drawlet_ty: PhantomData<D>
 }
 
+pub struct ViewHandle {
+    id: ViewID
+}
 
 pub struct TexturedMeshData {
     pub index_data: Vec<u32>,

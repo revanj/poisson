@@ -486,10 +486,4 @@ pub trait CreateDrawletVulkan
         pipeline_handle: &PipelineHandle<RenObjType>,
         drawlet_handle: &DrawletHandle<RenObjType>
     ) -> &'_ mut RenObjType::Drawlet;
-
-    fn get_pipeline_id() -> PipelineID {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static COUNTER:AtomicUsize = AtomicUsize::new(1);
-        PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
-    }
 }

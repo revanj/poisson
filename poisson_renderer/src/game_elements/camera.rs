@@ -12,7 +12,8 @@ pub struct CameraIntrinsics {
 
 pub struct Camera {
     extr: Transform,
-    intr: CameraIntrinsics
+    intr: CameraIntrinsics,
+    
 }
 
 impl Camera {
@@ -21,7 +22,7 @@ impl Camera {
             near: 0.1f32,
             far: 10f32,
             fov: PI/4f32,
-            aspect: 800f32/600f32,
+            aspect: 800f32/600f32, 
             axis_alignment
         };
         

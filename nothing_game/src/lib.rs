@@ -4,10 +4,7 @@ use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{
-    DrawletHandle, Mat4Ubo, PipelineHandle,
-    RenderBackend, TexturedMesh, TexturedMeshData, Vertex
-};
+use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, RenderPassHandle, TexturedMesh, TexturedMeshData, Vertex};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath;
@@ -32,6 +29,7 @@ pub fn run() ->  Result<(), impl Error> {
 }
 
 pub struct NothingGame {
+    scene_render_pass: Option<RenderPassHandle>,
     textured_mesh_pipeline: Option<PipelineHandle<TexturedMesh>>,
     textured_mesh_inst: Option<DrawletHandle<TexturedMesh>>,
     last_time: Instant,
@@ -45,6 +43,7 @@ impl PoissonGame for NothingGame {
     fn new() -> Self {
         static FILES: fs_embed::Dir = fs_embed!("assets");
         Self {
+            scene_render_pass: None,
             textured_mesh_pipeline: None,
             textured_mesh_inst: None,
             last_time: Instant::now(),
@@ -81,10 +80,12 @@ impl PoissonGame for NothingGame {
 
         let triangle_shader = self.assets.get_file(shader!("shaders/triangle")).unwrap();
         let triangle_shader_content = triangle_shader.read_str().unwrap();
-
-        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline("nothing_game/assets/shaders/triangle", triangle_shader_content.as_str());
-        self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
+        
+        let r_handle = renderer.create_render_pass();
+        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline(&r_handle,"nothing_game/assets/shaders/triangle", triangle_shader_content.as_str());
+        self.textured_mesh_inst = Some(renderer.create_drawlet(&r_handle, &p_handle, textured_mesh_data));
         self.textured_mesh_pipeline = Some(p_handle);
+        self.scene_render_pass = Some(r_handle);
     }
 
     fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren) {
@@ -95,7 +96,7 @@ impl PoissonGame for NothingGame {
             self.elapsed_time += delta_time;
         }
 
-        let drawlet = renderer.get_drawlet_mut(self.textured_mesh_pipeline.as_ref().unwrap(), self.textured_mesh_inst.as_ref().unwrap());
+        let drawlet = renderer.get_drawlet_mut(self.scene_render_pass.as_ref().unwrap(), self.textured_mesh_pipeline.as_ref().unwrap(), self.textured_mesh_inst.as_ref().unwrap());
 
         let elapsed_time = self.elapsed_time;
         let aspect =  800f32/600f32;
