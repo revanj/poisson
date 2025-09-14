@@ -11,7 +11,7 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::window::Window;
-use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, RenderObject, RenderPassHandle, RenderPassID, RenderPipeline, ViewHandle, ViewID};
+use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, RenderObject, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -40,6 +40,8 @@ pub trait WgpuRenderObject: RenderObject + Sized {
 pub trait WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType> + WgpuPipelineDyn {
     fn instantiate_drawlet(
         self: &mut Self,
+        layer_id: LayerID,
+        pipeline_id: PipelineID,
         init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data
     ) -> DrawletHandle<RenObjType>;
 
@@ -322,7 +324,7 @@ pub struct WgpuRenderBackend {
     size_changed: bool,
     max_size: winit::dpi::PhysicalSize<u32>,
     //pipelines: HashMap<PipelineID, Box<dyn WgpuPipelineDyn>>,
-    render_passes: HashMap<RenderPassID, WgpuRenderPass>,
+    render_passes: HashMap<LayerID, WgpuRenderPass>,
 }
 
 
@@ -417,7 +419,6 @@ impl WgpuRenderBackend {
     pub async fn new(window: &Arc<dyn Window>) -> Self {
         #[cfg(any(target_arch = "wasm32"))]
         {
-            
             let canvas = window.canvas().unwrap();
 
             web_sys::window()
@@ -503,16 +504,16 @@ impl WgpuRenderBackend {
 
 impl CreateDrawletWgpu for WgpuRenderBackend
 {
-    fn create_render_pass(self: &mut Self) -> RenderPassHandle {
+    fn create_render_pass(self: &mut Self) -> LayerHandle {
         let id = Self::get_render_pass_id();
         self.render_passes.insert(id.clone(), WgpuRenderPass {
             pipelines: Default::default(),
         });
 
-        RenderPassHandle { id }
+        LayerHandle { id }
     }
 
-    fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, render_pass_handle: &RenderPassHandle, shader_path: &str, shader_text: &str) -> PipelineHandle<RenObjType> {
+    fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, render_pass_handle: &LayerHandle, shader_path: &str, shader_text: &str) -> PipelineHandle<RenObjType> {
         let owned_str = shader_path.to_owned();
         let wgsl_path = owned_str.clone() + ".wgsl";
         #[cfg(not(target_arch="wasm32"))]
@@ -546,6 +547,7 @@ impl CreateDrawletWgpu for WgpuRenderBackend
 
         let ret = PipelineHandle::<RenObjType> {
             id: pipeline_id,
+            layer_id: render_pass_handle.id,
             _pipeline_ty: PhantomData::default(),
         };
 
@@ -555,17 +557,17 @@ impl CreateDrawletWgpu for WgpuRenderBackend
         ret
     }
 
-    fn create_drawlet<RenObjType: WgpuRenderObject>(self: &mut Self, render_pass_handle: &RenderPassHandle, pipeline_handle: &PipelineHandle<RenObjType>, init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data) -> DrawletHandle<RenObjType>
+    fn create_drawlet<RenObjType: WgpuRenderObject>(self: &mut Self, pipeline_handle: &PipelineHandle<RenObjType>, init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data) -> DrawletHandle<RenObjType>
     {
-        let pipeline= self.render_passes.get_mut(&render_pass_handle.id).unwrap().pipelines.get_mut(&pipeline_handle.id).unwrap();
+        let pipeline= self.render_passes.get_mut(&pipeline_handle.layer_id).unwrap().pipelines.get_mut(&pipeline_handle.id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
         let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
 
-        pipeline_concrete.instantiate_drawlet(init_data)
+        pipeline_concrete.instantiate_drawlet(pipeline_handle.layer_id, pipeline_handle.id, init_data)
     }
 
-    fn get_drawlet_mut<RenObjType: WgpuRenderObject>(self: &mut Self, render_pass_handle: &RenderPassHandle, pipeline_handle: &PipelineHandle<RenObjType>, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet {
-        let pipeline = self.render_passes.get_mut(&render_pass_handle.id).unwrap().pipelines.get_mut(&pipeline_handle.id).unwrap();
+    fn get_drawlet_mut<RenObjType: WgpuRenderObject>(self: &mut Self, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet {
+        let pipeline = self.render_passes.get_mut(&drawlet_handle.layer_id).unwrap().pipelines.get_mut(&drawlet_handle.pipeline_id).unwrap();
         let pipeline_any = pipeline.as_any_mut();
         let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
 
@@ -577,26 +579,23 @@ pub trait CreateDrawletWgpu
 {
     fn create_render_pass(
         self: &mut Self
-    ) -> RenderPassHandle;
+    ) -> LayerHandle;
 
     fn create_pipeline<RenObjType: WgpuRenderObject>(
         self: &mut Self,
-        render_pass_handle: &RenderPassHandle,
+        render_pass_handle: &LayerHandle,
         shader_path: &str,
         shader_text: &str,
     ) -> PipelineHandle<RenObjType>;
 
     fn create_drawlet<RenObjType: WgpuRenderObject>(
         self: &mut Self,
-        render_pass_handle: &RenderPassHandle,
         pipeline: &PipelineHandle<RenObjType>,
         init_data: <RenObjType::Drawlet as RenderDrawlet>::Data,
     ) -> DrawletHandle<RenObjType>;
 
     fn get_drawlet_mut<RenObjType: WgpuRenderObject>(
         self: &mut Self,
-        render_pass_handle: &RenderPassHandle,
-        pipeline_handle: &PipelineHandle<RenObjType>,
         drawlet_handle: &DrawletHandle<RenObjType>
     ) -> &'_ mut RenObjType::Drawlet;
 }

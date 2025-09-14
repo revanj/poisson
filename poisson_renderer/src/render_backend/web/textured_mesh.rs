@@ -7,7 +7,7 @@ use image::DynamicImage;
 use wgpu::{BindGroup, BindGroupLayout, Device, PipelineLayout, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
-use crate::render_backend::{DrawletHandle, DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex};
+use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex};
 use crate::render_backend::web::{Camera, CameraUniform, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::texture::Texture;
 
@@ -173,7 +173,7 @@ impl WgpuPipelineDyn for TexturedMeshPipeline {
 
 
 impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
-    fn instantiate_drawlet(self: &mut Self, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
+    fn instantiate_drawlet(self: &mut Self, layer_id: LayerID, pipeline_id: PipelineID, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
         let id = <Self as RenderPipeline<TexturedMesh>>::get_drawlet_id();
         let new_drawlet = TexturedMeshDrawlet::new(
             &self.device.upgrade().unwrap(),
@@ -185,6 +185,8 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
 
         DrawletHandle {
             id,
+            pipeline_id,
+            layer_id,
             _drawlet_ty: Default::default()
         }
     }
@@ -199,7 +201,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -216,7 +218,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             view_dimension: wgpu::TextureViewDimension::D2,
@@ -226,7 +228,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
                         // This should match the filterable field of the
                         // corresponding Texture entry above.
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),

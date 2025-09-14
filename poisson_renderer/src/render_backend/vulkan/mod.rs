@@ -468,8 +468,7 @@ impl Drop for VulkanRenderBackend {
 
 pub trait CreateDrawletVulkan
 {
-    fn create_pipeline<RenObjType: VulkanRenderObject>
-    (
+    fn create_pipeline<RenObjType: VulkanRenderObject>(
         self: &mut Self,
         shader_path: &str,
         triangle_shader: &str

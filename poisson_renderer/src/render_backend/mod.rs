@@ -26,7 +26,7 @@ pub struct Mat4Ubo {
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
-pub struct RenderPassID(usize);
+pub struct LayerID(usize);
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct PipelineID(usize);
@@ -48,10 +48,10 @@ pub trait RenderBackend {
     fn create_view(self: &mut Self, view_proj: cgmath::Matrix4<f32>) -> ViewHandle;
     fn set_view(self: &mut Self, view_handle: ViewHandle, view_proj: cgmath::Matrix4<f32>);
 
-    fn get_render_pass_id() -> RenderPassID {
+    fn get_render_pass_id() -> LayerID {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
-        RenderPassID(COUNTER.fetch_add(1, Ordering::Relaxed))
+        LayerID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
     fn get_pipeline_id() -> PipelineID {
@@ -76,20 +76,27 @@ pub trait RenderDrawlet: Sized {
     type Data;
 }
 
-pub struct RenderPassHandle {
-    id: RenderPassID,
+#[derive(Copy, Clone)]
+pub struct LayerHandle {
+    id: LayerID,
 }
 
+#[derive(Copy, Clone)]
 pub struct PipelineHandle<D:RenderObject> {
     id: PipelineID,
+    layer_id: LayerID,
     _pipeline_ty: PhantomData<D>
 }
 
+#[derive(Copy, Clone)]
 pub struct DrawletHandle<D:RenderObject> {
     id: DrawletID,
+    pipeline_id: PipelineID,
+    layer_id: LayerID,
     _drawlet_ty: PhantomData<D>
 }
 
+#[derive(Copy, Clone)]
 pub struct ViewHandle {
     id: ViewID
 }
