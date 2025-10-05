@@ -4,10 +4,11 @@ use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle, TexturedMesh, TexturedMeshData, Vertex};
+use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle, TexturedMesh, TexturedMeshData, Vertex, MvpUniform};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath;
+use cgmath::{Matrix4, SquareMatrix};
 use fs_embed::fs_embed;
 use poisson_renderer::math::utils::perspective;
 
@@ -71,8 +72,13 @@ impl PoissonGame for NothingGame {
         let texture_file = self.assets.get_file("textures/happy-tree.png").unwrap();
         let texture_bytes = texture_file.read_bytes().unwrap();
         let binding = image::load_from_memory(texture_bytes.as_slice()).unwrap();
+        
+        let mvp_uniform = Mat4Ubo {
+            data: Matrix4::identity(),
+        };
 
         let textured_mesh_data = TexturedMeshData {
+            mvp_data: mvp_uniform,
             index_data: index_buffer_data,
             vertex_data: vertices,
             texture_data: binding,
@@ -106,7 +112,7 @@ impl PoissonGame for NothingGame {
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 0.0, 1.0));
         let p = perspective(PI/4f32, aspect, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
-        let new_ubo = Mat4Ubo { mvp: p * v * m };
+        let new_ubo = Mat4Ubo { data: p * v * m };
         drawlet.set_mvp(new_ubo)
     }
 }

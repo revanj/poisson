@@ -1,5 +1,3 @@
-#![feature(adt_const_params)]
-#![feature(unboxed_closures)]
 extern crate core;
 
 use std::any::Any;

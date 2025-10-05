@@ -22,7 +22,7 @@ pub struct Vertex {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct Mat4Ubo {
-    pub mvp: cgmath::Matrix4<f32>
+    pub data: cgmath::Matrix4<f32>
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
@@ -59,9 +59,6 @@ pub trait RenderBackend {
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
         PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
-    
-    
-
 }
 
 pub trait RenderPipeline<RenObj: RenderObject> {
@@ -101,7 +98,14 @@ pub struct ViewHandle {
     id: ViewID
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+pub struct MvpUniform {
+    data: [[f32; 4]; 4]
+}
+
 pub struct TexturedMeshData {
+    pub mvp_data: Mat4Ubo,
     pub index_data: Vec<u32>,
     pub vertex_data: Vec<Vertex>,
     pub texture_data: DynamicImage

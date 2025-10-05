@@ -1,27 +1,15 @@
-#![feature(adt_const_params)]
-
-use std::marker::ConstParamTy;
 
 fn main() {
     println!("Hello, world!");
     
 }
 
-#[derive(Eq, PartialEq, ConstParamTy)]
-enum BackendType
-{
-    Vulkan,
-    Wgpu
+trait Backend {
+    fn create_graphics_pipeline(self: &Self) -> &mut impl GraphicsPipeline;
+    fn create_compute_pipeline(self: &Self) -> &mut impl ComputePipeline;
 }
-
-const VK :BackendType = BackendType::Vulkan;
-
-use BackendType::Vulkan;
-
-trait RenderBackend<const TYPE: BackendType> {}
-
-struct VulkanBackend {
-    
+trait GraphicsPipeline {
+    fn create_drawlet(self: &Self) -> &impl Drawlet;
 }
-
-impl RenderBackend<VK> for VulkanBackend {}
+trait ComputePipeline {}
+trait Drawlet {}

@@ -1,14 +1,12 @@
 mod texture;
 pub mod textured_mesh;
+mod graphics_obj;
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
 use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
-use async_trait::async_trait;
 use parking_lot::Mutex;
 use winit::window::Window;
 use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, RenderObject, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID};
@@ -37,7 +35,8 @@ pub trait WgpuRenderObject: RenderObject + Sized {
 
 
 
-pub trait WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType> + WgpuPipelineDyn {
+pub trait 
+WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType> + WgpuPipelineDyn {
     fn instantiate_drawlet(
         self: &mut Self,
         layer_id: LayerID,
@@ -59,6 +58,7 @@ pub trait WgpuPipelineDyn: AsAny {
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn WgpuDrawletDyn> + '_>;
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn WgpuDrawletDyn> + '_>;
 }
+
 pub trait WgpuDrawlet: RenderDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass);
 }
@@ -175,9 +175,7 @@ impl CameraController {
 }
 
 
-// We need this for Rust to store our data correctly for the shaders
 #[repr(C)]
-// This is so we can store this in a buffer
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniform {
     view_proj: [[f32; 4]; 4],
@@ -204,7 +202,6 @@ struct Vertex {
     tex_coords: [f32; 2],
 }
 
-// lib.rs
 impl Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
@@ -263,12 +260,8 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_co
 
 impl Camera {
     fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
-        // 1.
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
-        // 2.
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
-
-        // 3.
         return OPENGL_TO_WGPU_MATRIX * proj * view;
     }
 }

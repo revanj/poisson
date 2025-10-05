@@ -2,7 +2,9 @@ use crate::AsAny;
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::ptr::slice_from_raw_parts;
 use std::sync::{Arc, Weak};
+use cgmath::{Matrix, Matrix4, SquareMatrix, Vector4};
 use image::DynamicImage;
 use wgpu::{BindGroup, BindGroupLayout, Device, PipelineLayout, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
@@ -36,32 +38,26 @@ impl TexturedMeshDrawlet {
         camera_bind_group_layout: &BindGroupLayout,
         init_data: &<TexturedMeshDrawlet as RenderDrawlet>::Data
     ) -> Self {
-        let camera = Camera {
-            // position the camera 1 unit up and 2 units back
-            // +z is out of the screen
-            eye: (1.0, 2.0, 10.0).into(),
-            // have it look at the origin
-            target: (0.0, 0.0, 0.0).into(),
-            // which way is "up"
-            up: cgmath::Vector3::unit_z(),
-            aspect: 800f32/600f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
+        
+        let uniform_ptr = init_data.mvp_data.data.as_ptr();
+        let uniform_slice = unsafe {
+            &*slice_from_raw_parts(uniform_ptr as *const u8, size_of::<Matrix4<f32>>())
         };
-
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
-
-        let camera_buffer = device.create_buffer_init(
+        
+        let uniform_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Camera Buffer"),
-                contents: bytemuck::cast_slice(&[camera_uniform]),
+                contents: bytemuck::cast_slice(uniform_slice),
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             }
         );
 
-        let texture = Texture::from_image(device, queue, &init_data.texture_data, Some("TexturedMesh")).expect("failed to create texture");
+        let texture = Texture::from_image(
+            device, 
+            queue, 
+            &init_data.texture_data, 
+            Some("TexturedMesh")
+        ).expect("failed to create texture");
 
         let texture_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
@@ -85,7 +81,7 @@ impl TexturedMeshDrawlet {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: camera_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 }
             ],
             label: Some("camera_bind_group"),
@@ -123,7 +119,7 @@ impl TexturedMeshDrawlet {
             queue: Arc::downgrade(queue),
             num_indices: init_data.index_data.len() as u32,
             texture,
-            camera_buffer,
+            camera_buffer: uniform_buffer,
             texture_bind_group,
             camera_bind_group,
             vertex_buffer,
@@ -161,16 +157,13 @@ impl WgpuPipelineDyn for TexturedMeshPipeline {
     fn get_pipeline(self: &Self) -> &wgpu::RenderPipeline {
         &self.render_pipeline
     }
-
     fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn WgpuDrawletDyn> + '_> {
         Box::new(self.drawlets.iter().map(|(_, x)| x as &dyn WgpuDrawletDyn))
     }
-
     fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn WgpuDrawletDyn> + '_> {
         Box::new(self.drawlets.iter_mut().map(|(_, x)| x as &mut dyn WgpuDrawletDyn))
     }
 }
-
 
 impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
     fn instantiate_drawlet(self: &mut Self, layer_id: LayerID, pipeline_id: PipelineID, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
@@ -237,9 +230,9 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-        
+
         let wgsl_str = str::from_utf8(shader_u8).unwrap();
-        
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(Cow::from(wgsl_str)),
