@@ -1,6 +1,7 @@
 pub mod textured_mesh;
 mod gpu_resources;
 mod per_vertex_impl;
+mod colored_mesh;
 
 use std::collections::HashMap;
 use std::fs;
@@ -9,7 +10,7 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use parking_lot::Mutex;
 use winit::window::Window;
-use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, RenderObject, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID};
+use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -25,6 +26,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::web::WindowExtWeb;
 use crate::{AsAny, PoissonGame};
 use crate::input::Input;
+use crate::render_backend::render_interface::RenderObject;
 use crate::render_backend::web::textured_mesh::TexturedMeshDrawlet;
 
 pub trait WgpuRenderObject: RenderObject + Sized {

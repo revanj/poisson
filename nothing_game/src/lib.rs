@@ -4,7 +4,7 @@ use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle, TexturedMesh, TexturedMeshData, TexVertex, MvpUniform};
+use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle, TexturedMesh, TexturedMeshData, TexVertex};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath;

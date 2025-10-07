@@ -3,50 +3,42 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use wgpu::{BindGroupLayout, Device, Queue, ShaderModule, SurfaceConfiguration};
+use wgpu::{Device, Queue, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
 use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData};
+use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex};
 use crate::render_backend::web::{WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::GpuTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
 use crate::render_backend::web::per_vertex_impl::WgpuPerVertex;
 
-impl WgpuRenderObject for TexturedMesh {
-    type Drawlet = TexturedMeshDrawlet;
-    type Pipeline = TexturedMeshPipeline;
-    type Data = TexturedMeshData;
+impl WgpuRenderObject for ColoredMesh {
+    type Drawlet = ColoredMeshDrawlet;
+    type Pipeline = ColoredMeshPipeline;
+    type Data = ColoredMeshData;
 }
 
-pub struct TexturedMeshDrawlet {
+pub struct ColoredMeshDrawlet {
     queue: Weak<Queue>,
     num_indices: u32,
-    gpu_texture: GpuTexture,
     mvp_buffer: GpuMat4,
     index_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
 }
 
-impl TexturedMeshDrawlet {
+impl ColoredMeshDrawlet {
     fn new(
         device: &Device,
         queue: &Arc<Queue>,
-        init_data: &<TexturedMeshDrawlet as RenderDrawlet>::Data
+        init_data: &ColoredMeshData
     ) -> Self {
         let uniform_buffer = GpuMat4::from_mat4(device, &init_data.mvp_data);
-
-        let texture = GpuTexture::from_image(
-            device, 
-            queue,
-            &init_data.texture_data, 
-            Some("TexturedMesh")
-        ).expect("failed to create texture");
-
+        
         let vertex_data: &[u8] = unsafe {
             std::slice::from_raw_parts(
                 init_data.mesh.vertex_data.as_ptr() as *const u8,
-                init_data.mesh.vertex_data.len() * size_of::<TexVertex>()
+                init_data.mesh.vertex_data.len() * size_of::<ColoredVertex>()
             )
         };
         let index_data: &[u8] = unsafe {
@@ -74,7 +66,6 @@ impl TexturedMeshDrawlet {
         Self {
             queue: Arc::downgrade(queue),
             num_indices: init_data.mesh.index_data.len() as u32,
-            gpu_texture: texture,
             mvp_buffer: uniform_buffer,
             vertex_buffer,
             index_buffer
@@ -82,14 +73,13 @@ impl TexturedMeshDrawlet {
     }
 }
 
-impl RenderDrawlet for TexturedMeshDrawlet {
-    type Data = TexturedMeshData;
+impl RenderDrawlet for ColoredMeshDrawlet {
+    type Data = ColoredMeshData;
 }
 
-impl WgpuDrawlet for TexturedMeshDrawlet {
+impl WgpuDrawlet for ColoredMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_bind_group(0, self.mvp_buffer.get_bind_group(), &[]);
-        render_pass.set_bind_group(1, self.gpu_texture.get_bind_group(), &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
@@ -97,14 +87,14 @@ impl WgpuDrawlet for TexturedMeshDrawlet {
 }
 
 #[derive(AsAny)]
-pub struct TexturedMeshPipeline {
+pub struct ColoredMeshPipeline {
     device: Weak<Device>,
     queue: Weak<wgpu::Queue>,
     render_pipeline: wgpu::RenderPipeline,
-    drawlets: HashMap<DrawletID, TexturedMeshDrawlet>
+    drawlets: HashMap<DrawletID, ColoredMeshDrawlet>
 }
 
-impl WgpuPipelineDyn for TexturedMeshPipeline {
+impl WgpuPipelineDyn for ColoredMeshPipeline {
     fn get_pipeline(self: &Self) -> &wgpu::RenderPipeline {
         &self.render_pipeline
     }
@@ -116,10 +106,10 @@ impl WgpuPipelineDyn for TexturedMeshPipeline {
     }
 }
 
-impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
-    fn instantiate_drawlet(self: &mut Self, layer_id: LayerID, pipeline_id: PipelineID, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
-        let id = <Self as RenderPipeline<TexturedMesh>>::get_drawlet_id();
-        let new_drawlet = TexturedMeshDrawlet::new(
+impl WgpuPipeline<ColoredMesh> for ColoredMeshPipeline {
+    fn instantiate_drawlet(self: &mut Self, layer_id: LayerID, pipeline_id: PipelineID, init_data: ColoredMeshData) -> DrawletHandle<ColoredMesh> {
+        let id = <Self as RenderPipeline<ColoredMesh>>::get_drawlet_id();
+        let new_drawlet = ColoredMeshDrawlet::new(
             &self.device.upgrade().unwrap(),
             &self.queue.upgrade().unwrap(),
             &init_data);
@@ -134,11 +124,11 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
         }
     }
 
-    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMeshDrawlet {
+    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<ColoredMesh>) -> &'_ mut ColoredMeshDrawlet {
         self.drawlets.get_mut(&drawlet_handle.id).unwrap()
     }
     fn new(device: &Arc<Device>, queue: &Arc<Queue>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
-        where Self: Sized
+    where Self: Sized
     {
 
         let camera_bind_group_layout = GpuMat4::create_bind_group_layout(device);
@@ -162,7 +152,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 push_constant_ranges: &[],
             });
 
-        let desc = TexVertex::desc();
+        let desc = ColoredVertex::desc();
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
@@ -214,9 +204,9 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
     }
 }
 
-impl RenderPipeline<TexturedMesh> for TexturedMeshPipeline {}
+impl RenderPipeline<ColoredMesh> for ColoredMeshPipeline {}
 
-impl TexturedMeshDrawlet {
+impl ColoredMeshDrawlet {
     pub fn set_mvp(self: &mut Self, ubo: Mat4Ubo) {
         let ubo_slice: &[u8] = unsafe {
             std::slice::from_raw_parts(

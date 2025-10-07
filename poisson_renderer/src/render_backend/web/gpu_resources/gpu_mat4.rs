@@ -10,7 +10,7 @@ pub struct GpuMat4 {
 }
 
 impl GpuMat4 {
-    pub fn from_mat4(device: &Device, bind_group_layout: &BindGroupLayout, mat4: &cgmath::Matrix4<f32>) -> Self {
+    pub fn from_mat4(device: &Device, mat4: &cgmath::Matrix4<f32>) -> Self {
         let uniform_ptr = mat4.as_ptr();
         let uniform_slice = unsafe {
             &*slice_from_raw_parts(uniform_ptr as *const u8, size_of::<cgmath::Matrix4<f32>>())
@@ -24,6 +24,7 @@ impl GpuMat4 {
             }
         );
 
+        let bind_group_layout = Self::create_bind_group_layout(device);
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &[
@@ -54,7 +55,7 @@ impl WgpuUniformResource for GpuMat4 {
                     count: None,
                 }
             ],
-            label: Some("camera_bind_group_layout"),
+            label: Some("GpuMat4 Bind Group Layout"),
         })
     }
 
