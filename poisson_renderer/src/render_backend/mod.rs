@@ -7,17 +7,12 @@ use winit::window::Window;
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use crate::{AsAny, PoissonGame};
+use crate::render_backend::per_vertex::TexVertex;
 // #[cfg(not(target_arch = "wasm32"))]
 // pub mod vulkan;
 
 pub mod web;
-
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct Vertex {
-    pub pos: [f32; 3],
-    pub tex_coord: [f32; 2]
-}
+pub mod per_vertex;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -107,7 +102,7 @@ pub struct MvpUniform {
 pub struct TexturedMeshData {
     pub mvp_data: Mat4Ubo,
     pub index_data: Vec<u32>,
-    pub vertex_data: Vec<Vertex>,
+    pub vertex_data: Vec<TexVertex>,
     pub texture_data: DynamicImage
 }
 

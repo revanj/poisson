@@ -4,7 +4,7 @@ use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle, TexturedMesh, TexturedMeshData, TexVertex, MvpUniform};
+use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle, TexturedMesh, TexturedMeshData};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath;
@@ -17,6 +17,7 @@ use poisson_renderer::math::utils::perspective;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
+use poisson_renderer::render_backend::per_vertex::TexVertex;
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {

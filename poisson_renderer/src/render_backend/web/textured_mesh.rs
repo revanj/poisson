@@ -2,16 +2,15 @@ use crate::AsAny;
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::ptr::slice_from_raw_parts;
 use std::sync::{Arc, Weak};
-use cgmath::{Matrix, Matrix4, SquareMatrix, Vector4};
-use image::DynamicImage;
-use wgpu::{BindGroup, BindGroupLayout, Device, PipelineLayout, Queue, ShaderModule, SurfaceConfiguration};
+use wgpu::{BindGroupLayout, Device, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
-use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, Vertex};
-use crate::render_backend::web::{Camera, CameraUniform, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
-use crate::render_backend::web::texture::Texture;
+use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline, TexturedMesh, TexturedMeshData, per_vertex::TexVertex};
+use crate::render_backend::web::{WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
+use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::GpuTexture};
+use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
+use crate::render_backend::web::per_vertex_impl::WgpuPerVertex;
 
 impl WgpuRenderObject for TexturedMesh {
     type Drawlet = TexturedMeshDrawlet;
@@ -22,10 +21,8 @@ impl WgpuRenderObject for TexturedMesh {
 pub struct TexturedMeshDrawlet {
     queue: Weak<Queue>,
     num_indices: u32,
-    texture: Texture,
-    texture_bind_group: BindGroup,
-    camera_bind_group: BindGroup,
-    camera_buffer: wgpu::Buffer,
+    gpu_texture: GpuTexture,
+    mvp_buffer: GpuMat4,
     index_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
 }
@@ -34,63 +31,22 @@ impl TexturedMeshDrawlet {
     fn new(
         device: &Device,
         queue: &Arc<Queue>,
-        texture_bind_group_layout: &BindGroupLayout,
-        camera_bind_group_layout: &BindGroupLayout,
+        mvp_bind_group_layout: &BindGroupLayout,
         init_data: &<TexturedMeshDrawlet as RenderDrawlet>::Data
     ) -> Self {
-        
-        let uniform_ptr = init_data.mvp_data.data.as_ptr();
-        let uniform_slice = unsafe {
-            &*slice_from_raw_parts(uniform_ptr as *const u8, size_of::<Matrix4<f32>>())
-        };
-        
-        let uniform_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Camera Buffer"),
-                contents: bytemuck::cast_slice(uniform_slice),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            }
-        );
+        let uniform_buffer = GpuMat4::from_mat4(device, mvp_bind_group_layout, &init_data.mvp_data.data);
 
-        let texture = Texture::from_image(
+        let texture = GpuTexture::from_image(
             device, 
-            queue, 
+            queue,
             &init_data.texture_data, 
             Some("TexturedMesh")
         ).expect("failed to create texture");
 
-        let texture_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                    }
-                ],
-                label: Some("diffuse_bind_group"),
-            }
-        );
-
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                }
-            ],
-            label: Some("camera_bind_group"),
-        });
-        
         let vertex_data: &[u8] = unsafe {
             std::slice::from_raw_parts(
                 init_data.vertex_data.as_ptr() as *const u8,
-                init_data.vertex_data.len() * size_of::<Vertex>()
+                init_data.vertex_data.len() * size_of::<TexVertex>()
             )
         };
         let index_data: &[u8] = unsafe {
@@ -118,10 +74,8 @@ impl TexturedMeshDrawlet {
         Self {
             queue: Arc::downgrade(queue),
             num_indices: init_data.index_data.len() as u32,
-            texture,
-            camera_buffer: uniform_buffer,
-            texture_bind_group,
-            camera_bind_group,
+            gpu_texture: texture,
+            mvp_buffer: uniform_buffer,
             vertex_buffer,
             index_buffer
         }
@@ -134,8 +88,8 @@ impl RenderDrawlet for TexturedMeshDrawlet {
 
 impl WgpuDrawlet for TexturedMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
-        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.texture_bind_group, &[]);
+        render_pass.set_bind_group(0, self.mvp_buffer.get_bind_group(), &[]);
+        render_pass.set_bind_group(1, self.gpu_texture.get_bind_group(), &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
@@ -146,7 +100,7 @@ impl WgpuDrawlet for TexturedMeshDrawlet {
 pub struct TexturedMeshPipeline {
     device: Weak<Device>,
     queue: Weak<wgpu::Queue>,
-    camera_bind_group_layout: BindGroupLayout,
+    mvp_bind_group_layout: BindGroupLayout,
     texture_bind_group_layout: BindGroupLayout,
     shader_module: ShaderModule,
     render_pipeline: wgpu::RenderPipeline,
@@ -171,8 +125,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
         let new_drawlet = TexturedMeshDrawlet::new(
             &self.device.upgrade().unwrap(),
             &self.queue.upgrade().unwrap(),
-            &self.texture_bind_group_layout,
-            &self.camera_bind_group_layout, &init_data);
+            &self.mvp_bind_group_layout, &init_data);
 
         self.drawlets.insert(id, new_drawlet);
 
@@ -190,46 +143,10 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
     fn new(device: &Arc<Device>, queue: &Arc<Queue>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
         where Self: Sized
     {
-        let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }
-            ],
-            label: Some("camera_bind_group_layout"),
-        });
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+        let camera_bind_group_layout = GpuMat4::create_bind_group_layout(device);
+
+        let texture_bind_group_layout = GpuTexture::create_bind_group_layout(device);
 
         let wgsl_str = str::from_utf8(shader_u8).unwrap();
 
@@ -248,30 +165,15 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 push_constant_ranges: &[],
             });
 
-        let desc = wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                }
-            ]
-        };
+        let desc = TexVertex::desc();
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some("vertex"), // 1.
-                buffers: &[desc], // 2.
+                entry_point: Some("vertex"),
+                buffers: &[desc],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
 
@@ -286,22 +188,22 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+                topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw, // 2.
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: None,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None, // 1.
+            depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: 1, // 2.
-                mask: !0, // 3.
-                alpha_to_coverage_enabled: false, // 4.
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
             },
-            multiview: None, // 5.
-            cache: None, // 6.
+            multiview: None,
+            cache: None,
         });
 
         let drawlets = HashMap::new();
@@ -309,7 +211,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
         Self {
             device: Arc::downgrade(device),
             queue: Arc::downgrade(queue),
-            camera_bind_group_layout,
+            mvp_bind_group_layout: camera_bind_group_layout,
             texture_bind_group_layout,
             shader_module: shader,
             render_pipeline,
@@ -324,10 +226,9 @@ impl TexturedMeshDrawlet {
     pub fn set_mvp(self: &mut Self, ubo: Mat4Ubo) {
         let ubo_slice: &[u8] = unsafe {
             std::slice::from_raw_parts(
-                (&ubo as *const Mat4Ubo) as *const u8,
-                ::core::mem::size_of::<Mat4Ubo>(),
+                (&ubo as *const Mat4Ubo) as *const u8, size_of::<Mat4Ubo>(),
             )
         };
-        self.queue.upgrade().as_ref().unwrap().write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(ubo_slice));
+        self.queue.upgrade().as_ref().unwrap().write_buffer(&self.mvp_buffer.buffer, 0, bytemuck::cast_slice(ubo_slice));
     }
 }

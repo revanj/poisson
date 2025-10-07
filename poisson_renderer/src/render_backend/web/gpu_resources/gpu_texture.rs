@@ -1,14 +1,18 @@
 use image::GenericImageView;
 use anyhow::*;
+use ash::Device;
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor};
+use crate::render_backend::web::gpu_resources::interface::WgpuUniformResource;
 
-pub struct Texture {
+pub struct GpuTexture {
     #[allow(unused)]
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
+    pub bind_group: BindGroup,
 }
 
-impl Texture {
+impl GpuTexture {
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -75,8 +79,57 @@ impl Texture {
             }
         );
 
-        Ok(Self { texture, view, sampler })
+        let new_bind_group_layout = Self::create_bind_group_layout(device);
+
+        let bind_group = device.create_bind_group(
+            &BindGroupDescriptor {
+                layout: &new_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    }
+                ],
+                label: Some("diffuse_bind_group"),
+            }
+        );
+
+        Ok(Self { texture, view, sampler, bind_group })
     }
-    
-    
+}
+
+impl WgpuUniformResource for GpuTexture {
+    fn create_bind_group_layout(device: &wgpu::Device) -> BindGroupLayout {
+        device.create_bind_group_layout(
+            &BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            }
+        )
+    }
+
+    fn get_bind_group(self: &Self) -> &BindGroup {
+        &self.bind_group
+    }
 }
