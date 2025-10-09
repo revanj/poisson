@@ -4,7 +4,7 @@ use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle, TexturedMesh, TexturedMeshData, TexVertex};
+use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath;
@@ -17,6 +17,7 @@ use poisson_renderer::math::utils::perspective;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
+use poisson_renderer::render_backend::render_interface::{Mesh, TexVertex, TexturedMesh, TexturedMeshData};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -72,15 +73,13 @@ impl PoissonGame for NothingGame {
         let texture_file = self.assets.get_file("textures/happy-tree.png").unwrap();
         let texture_bytes = texture_file.read_bytes().unwrap();
         let binding = image::load_from_memory(texture_bytes.as_slice()).unwrap();
-        
-        let mvp_uniform = Mat4Ubo {
-            data: Matrix4::identity(),
-        };
 
         let textured_mesh_data = TexturedMeshData {
-            mvp_data: mvp_uniform,
-            index_data: index_buffer_data,
-            vertex_data: vertices,
+            mvp_data: Matrix4::identity(),
+            mesh: Mesh {
+                index_data: index_buffer_data,
+                vertex_data: vertices,
+            },
             texture_data: binding,
         };
 

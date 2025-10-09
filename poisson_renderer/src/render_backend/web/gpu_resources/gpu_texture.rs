@@ -1,6 +1,5 @@
 use image::GenericImageView;
 use anyhow::*;
-use ash::Device;
 use wgpu::{BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor};
 use crate::render_backend::web::gpu_resources::interface::WgpuUniformResource;
 

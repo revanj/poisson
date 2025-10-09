@@ -7,17 +7,17 @@ use poisson_renderer::input::Input;
 use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use cgmath;
-use cgmath::{Matrix4, SquareMatrix};
+use cgmath as cg;
+use cgmath::SquareMatrix;
 use fs_embed::fs_embed;
-use poisson_renderer::math::utils::perspective;
+use poisson_renderer::math::utils::{orthographic, perspective};
 
 // #[cfg(not(target_arch = "wasm32"))]
 // use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
-use poisson_renderer::render_backend::render_interface::{Mesh, TexVertex, TexturedMesh, TexturedMeshData};
+use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh, TexturedMesh};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -32,8 +32,9 @@ pub fn run() ->  Result<(), impl Error> {
 
 pub struct NothingGame {
     scene_render_pass: Option<LayerHandle>,
-    textured_mesh_pipeline: Option<PipelineHandle<TexturedMesh>>,
-    textured_mesh_inst: Option<DrawletHandle<TexturedMesh>>,
+    colored_mesh_pipeline: Option<PipelineHandle<ColoredMesh>>,
+    orange_mesh_inst: Option<DrawletHandle<ColoredMesh>>,
+    blue_mesh_inst: Option<DrawletHandle<ColoredMesh>>,
     last_time: Instant,
     elapsed_time: f32,
     assets: fs_embed::Dir,
@@ -46,8 +47,9 @@ impl PoissonGame for NothingGame {
         static FILES: fs_embed::Dir = fs_embed!("assets");
         Self {
             scene_render_pass: None,
-            textured_mesh_pipeline: None,
-            textured_mesh_inst: None,
+            colored_mesh_pipeline: None,
+            orange_mesh_inst: None,
+            blue_mesh_inst: None,
             last_time: Instant::now(),
             elapsed_time: 0f32,
             assets: FILES.clone().auto_dynamic()
@@ -61,35 +63,67 @@ impl PoissonGame for NothingGame {
     fn init(self: &mut Self, _input: &mut Input, renderer: &mut Self::Ren) {
         self.last_time = Instant::now();
 
-        let index_buffer_data = vec![0u32, 1, 2, 2, 3, 0];
-
-        let vertices = vec!{
-            TexVertex {pos: [-0.5f32, -0.5f32, 0.0f32], tex_coord: [1.0f32, 0.0f32]},
-            TexVertex {pos: [0.5f32, -0.5f32, 0.0f32], tex_coord: [0.0f32, 0.0f32]},
-            TexVertex {pos: [0.5f32, 0.5f32, 0.0f32], tex_coord: [0.0f32, 1.0f32]},
-            TexVertex {pos: [-0.5f32, 0.5f32, 0.0f32], tex_coord: [1.0f32, 1.0f32]},
+        let index_buffer_data = vec![
+            1u32, 2, 0,
+            0, 2, 3,
+            3, 2, 4,
+            5, 4, 3,
+            2, 11, 6,
+            2, 6 ,5,
+            6, 8, 7,
+            11, 8, 6,
+            10, 9, 11,
+            9, 8, 11
+        ];
+        let mut orange_vertices = vec!{
+            ColoredVertex {pos: [-3.5f32, -5.0f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [-3.5f32, -3f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [-1.5f32, -3f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [3.5f32, -5f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [3.5f32, -3f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [1.5f32, -3f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [1.5f32, 3f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [3.5f32, 3f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [3.5f32, 5f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [-3.5f32, 5f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [-3.5f32, 3f32, 0.0f32], color: Default::default()},
+            ColoredVertex {pos: [-1.5f32, 3f32, 0.0f32], color: Default::default()},
         };
 
-        let texture_file = self.assets.get_file("textures/happy-tree.png").unwrap();
-        let texture_bytes = texture_file.read_bytes().unwrap();
-        let binding = image::load_from_memory(texture_bytes.as_slice()).unwrap();
+        for vertex in &mut orange_vertices {
+            vertex.color = [1f32, 0.373f32, 0.02f32];
+        }
 
-        let textured_mesh_data = TexturedMeshData {
-            mvp_data: Matrix4::identity(),
+        let mut blue_vertices = orange_vertices.clone();
+        
+        let orange_mesh_data = ColoredMeshData {
+            mvp_data: cg::Matrix4::identity(),
             mesh: Mesh {
-                index_data: index_buffer_data,
-                vertex_data: vertices
+                index_data: index_buffer_data.clone(),
+                vertex_data: orange_vertices
             },
-            texture_data: binding,
+        };
+        let blue_mesh_data = ColoredMeshData {
+            mvp_data: cg::Matrix4::identity(),
+            mesh: Mesh {
+                index_data: index_buffer_data.clone(),
+                vertex_data: blue_vertices,
+            }
         };
 
-        let triangle_shader = self.assets.get_file(shader!("shaders/triangle")).unwrap();
+        let triangle_shader = self.assets.get_file(shader!("shaders/colored_mesh")).unwrap();
         let triangle_shader_content = triangle_shader.read_str().unwrap();
         
         let r_handle = renderer.create_render_pass();
-        let p_handle: PipelineHandle<TexturedMesh> = renderer.create_pipeline(&r_handle,"nothing_game/assets/shaders/triangle", triangle_shader_content.as_str());
-        self.textured_mesh_inst = Some(renderer.create_drawlet(&p_handle, textured_mesh_data));
-        self.textured_mesh_pipeline = Some(p_handle);
+        let p_handle: PipelineHandle<ColoredMesh> = 
+            renderer.create_pipeline(&r_handle,
+                "cs418_logo/assets/shaders/colored_mesh",
+                triangle_shader_content.as_str());
+        
+        self.orange_mesh_inst = Some(renderer.create_drawlet(&p_handle, orange_mesh_data));
+        //self.blue_mesh_inst = Some(renderer.create_drawlet(&p_handle, blue_mesh_data));
+        
+        self.colored_mesh_pipeline = Some(p_handle);
         self.scene_render_pass = Some(r_handle);
     }
 
@@ -100,22 +134,20 @@ impl PoissonGame for NothingGame {
         if input.is_pressed("up") {
             self.elapsed_time += delta_time;
         }
-
-        let drawlet = renderer.get_drawlet_mut(self.textured_mesh_inst.as_ref().unwrap());
+        
+        let drawlet_orange = renderer.get_drawlet_mut(self.orange_mesh_inst.as_ref().unwrap());
 
         let elapsed_time = self.elapsed_time;
-        let aspect =  800f32/600f32;
-        let m =  cgmath::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
-        let v = cgmath::Matrix4::look_at_rh(
-            cgmath::Point3::new(2.0, 2.0, 2.0),
-            cgmath::Point3::new(0.0, 0.0, 0.0),
-            cgmath::Vector3::new(0.0, 0.0, 1.0));
-        let p = perspective(PI/4f32, aspect, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
-        let new_ubo = Mat4Ubo { data: p * v * m };
-        drawlet.set_mvp(new_ubo)
+
+        
+        let m =
+            cg::Matrix4::from_translation(cg::Vector3 {x: 400f32, y: 300f32,  z: 0f32})
+                * cg::Matrix4::from_scale(50f32)
+                * cg::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
+        
+        let v = cg::Matrix4::<f32>::identity();
+        let p = orthographic(0f32, 800f32, 600f32, 0f32, -10f32, 10f32, Self::Ren::PERSPECTIVE_ALIGNMENT);
+        let new_ubo = Mat4Ubo { data: p * v * m  };
+        drawlet_orange.set_mvp(new_ubo)
     }
-}
-
-impl NothingGame {
-
 }

@@ -28,7 +28,7 @@ impl WgpuPerVertex for TexVertex {
 impl WgpuPerVertex for ColoredVertex {
     fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: size_of::<TexVertex>() as wgpu::BufferAddress,
+            array_stride: size_of::<ColoredVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {

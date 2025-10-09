@@ -19,7 +19,7 @@ use cgmath::Matrix4;
 use wgpu::util::DeviceExt;
 use image;
 use image::EncodableLayout;
-use wgpu::{BindGroup, BindGroupLayout, CommandEncoder, SurfaceConfiguration, TextureView};
+use wgpu::{BindGroup, BindGroupLayout, CommandEncoder, SurfaceConfiguration, TextureFormat, TextureView};
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
@@ -432,9 +432,19 @@ impl WgpuRenderBackend {
         let mut size = window.surface_size();
         size.width = size.width.max(800);
         size.height = size.height.max(600);
-        let config = surface
+
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb()) // wgpu 0.20+ helper
+            .unwrap_or(wgpu::TextureFormat::Rgba8UnormSrgb);
+
+        let mut config = surface
             .get_default_config(&adapter, size.width, size.height)
             .unwrap();
+        config.format = TextureFormat::Rgba8Unorm;
 
         surface.configure(&device, &config);
 

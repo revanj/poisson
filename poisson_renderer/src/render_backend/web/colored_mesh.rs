@@ -133,7 +133,7 @@ impl WgpuPipeline<ColoredMesh> for ColoredMeshPipeline {
 
         let camera_bind_group_layout = GpuMat4::create_bind_group_layout(device);
 
-        let texture_bind_group_layout = GpuTexture::create_bind_group_layout(device);
+        //let texture_bind_group_layout = GpuTexture::create_bind_group_layout(device);
 
         let wgsl_str = str::from_utf8(shader_u8).unwrap();
 
@@ -147,7 +147,6 @@ impl WgpuPipeline<ColoredMesh> for ColoredMeshPipeline {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &camera_bind_group_layout,
-                    &texture_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });

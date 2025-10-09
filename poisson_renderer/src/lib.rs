@@ -42,7 +42,7 @@ pub struct PoissonEngine<GameType>
 where GameType: PoissonGame
 {
     window: Option<Arc<dyn Window>>,
-    input: input::Input,
+    input: Input,
     renderer: Arc<Mutex<Option<GameType::Ren>>>,
     game: GameType,
     done_init: bool,
