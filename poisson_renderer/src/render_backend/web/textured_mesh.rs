@@ -9,8 +9,9 @@ use poisson_macros::AsAny;
 use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
 use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData};
 use crate::render_backend::web::{WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
-use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::GpuTexture};
+use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
+use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
 use crate::render_backend::web::per_vertex_impl::WgpuPerVertex;
 
 impl WgpuRenderObject for TexturedMesh {
@@ -22,7 +23,7 @@ impl WgpuRenderObject for TexturedMesh {
 pub struct TexturedMeshDrawlet {
     queue: Weak<Queue>,
     num_indices: u32,
-    gpu_texture: GpuTexture,
+    gpu_texture: ShaderTexture,
     mvp_buffer: GpuMat4,
     index_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
@@ -36,7 +37,7 @@ impl TexturedMeshDrawlet {
     ) -> Self {
         let uniform_buffer = GpuMat4::from_mat4(device, &init_data.mvp_data);
 
-        let texture = GpuTexture::from_image(
+        let texture = ShaderTexture::from_image(
             device, 
             queue,
             &init_data.texture_data, 
@@ -143,7 +144,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
 
         let camera_bind_group_layout = GpuMat4::create_bind_group_layout(device);
 
-        let texture_bind_group_layout = GpuTexture::create_bind_group_layout(device);
+        let texture_bind_group_layout = ShaderTexture::create_bind_group_layout(device);
 
         let wgsl_str = str::from_utf8(shader_u8).unwrap();
 
@@ -193,7 +194,14 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(
+                wgpu::DepthStencilState {
+                    format: Texture::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,

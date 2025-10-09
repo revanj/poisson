@@ -3,25 +3,13 @@ use anyhow::*;
 use wgpu::{BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor};
 use crate::render_backend::web::gpu_resources::interface::WgpuUniformResource;
 
-pub struct GpuTexture {
-    #[allow(unused)]
+pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
-    pub bind_group: BindGroup,
 }
 
-impl GpuTexture {
-    pub fn from_bytes(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bytes: &[u8],
-        label: &str
-    ) -> Result<Self> {
-        let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label))
-    }
-
+impl Texture {
     pub fn from_image(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -48,7 +36,6 @@ impl GpuTexture {
                 view_formats: &[],
             }
         );
-
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 aspect: wgpu::TextureAspect::All,
@@ -77,6 +64,72 @@ impl GpuTexture {
                 ..Default::default()
             }
         );
+        Ok(Self { texture, view, sampler })
+    }
+
+    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+    pub fn create_depth_texture(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, label: &str) -> Self {
+        let size = wgpu::Extent3d { // 2.
+            width: config.width.max(1),
+            height: config.height.max(1),
+            depth_or_array_layers: 1,
+        };
+        let desc = wgpu::TextureDescriptor {
+            label: Some(label),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: Self::DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        };
+        let texture = device.create_texture(&desc);
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = device.create_sampler(
+            &wgpu::SamplerDescriptor { // 4.
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                compare: Some(wgpu::CompareFunction::LessEqual),
+                lod_min_clamp: 0.0,
+                lod_max_clamp: 100.0,
+                ..Default::default()
+            }
+        );
+
+        Self { texture, view, sampler }
+    }
+}
+
+pub struct ShaderTexture {
+    pub texture: Texture,
+    pub bind_group: BindGroup,
+}
+
+impl ShaderTexture {
+    pub fn from_bytes(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bytes: &[u8],
+        label: &str
+    ) -> Result<Self> {
+        let img = image::load_from_memory(bytes)?;
+        Self::from_image(device, queue, &img, Some(label))
+    }
+
+    pub fn from_image(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        img: &image::DynamicImage,
+        label: Option<&str>
+    ) -> Result<Self> {
+        let texture = Texture::from_image(device, queue, img, label)?;
 
         let new_bind_group_layout = Self::create_bind_group_layout(device);
 
@@ -86,22 +139,22 @@ impl GpuTexture {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&view),
+                        resource: wgpu::BindingResource::TextureView(&texture.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
+                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
                     }
                 ],
                 label: Some("diffuse_bind_group"),
             }
         );
 
-        Ok(Self { texture, view, sampler, bind_group })
+        Ok(Self { texture, bind_group })
     }
 }
 
-impl WgpuUniformResource for GpuTexture {
+impl WgpuUniformResource for ShaderTexture {
     fn create_bind_group_layout(device: &wgpu::Device) -> BindGroupLayout {
         device.create_bind_group_layout(
             &BindGroupLayoutDescriptor {

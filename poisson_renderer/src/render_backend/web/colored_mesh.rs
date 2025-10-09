@@ -9,8 +9,9 @@ use poisson_macros::AsAny;
 use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
 use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex};
 use crate::render_backend::web::{WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
-use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::GpuTexture};
+use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
+use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
 use crate::render_backend::web::per_vertex_impl::WgpuPerVertex;
 
 impl WgpuRenderObject for ColoredMesh {
@@ -130,10 +131,8 @@ impl WgpuPipeline<ColoredMesh> for ColoredMeshPipeline {
     fn new(device: &Arc<Device>, queue: &Arc<Queue>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
     where Self: Sized
     {
-
         let camera_bind_group_layout = GpuMat4::create_bind_group_layout(device);
 
-        //let texture_bind_group_layout = GpuTexture::create_bind_group_layout(device);
 
         let wgsl_str = str::from_utf8(shader_u8).unwrap();
 
@@ -182,7 +181,14 @@ impl WgpuPipeline<ColoredMesh> for ColoredMeshPipeline {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(
+                wgpu::DepthStencilState {
+                    format: Texture::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,

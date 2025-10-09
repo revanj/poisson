@@ -19,7 +19,8 @@ use cgmath::Matrix4;
 use wgpu::util::DeviceExt;
 use image;
 use image::EncodableLayout;
-use wgpu::{BindGroup, BindGroupLayout, CommandEncoder, SurfaceConfiguration, TextureFormat, TextureView};
+use wgpu::{BindGroup, BindGroupLayout, CommandEncoder, Device, RenderPassDepthStencilAttachment, SurfaceConfiguration, TextureFormat, TextureView};
+use wgpu::hal::DepthStencilAttachment;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
@@ -27,6 +28,7 @@ use winit::platform::web::WindowExtWeb;
 use crate::{AsAny, PoissonGame};
 use crate::input::Input;
 use crate::render_backend::render_interface::RenderObject;
+use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
 use crate::render_backend::web::textured_mesh::TexturedMeshDrawlet;
 
 pub trait WgpuRenderObject: RenderObject + Sized {
@@ -224,35 +226,50 @@ impl Camera {
 }
 
 pub struct WgpuRenderPass {
+    depth_stencil: Texture,
     pipelines: HashMap<PipelineID, Box<dyn WgpuPipelineDyn>>
 }
 
 impl WgpuRenderPass {
-    fn new() -> Self {
+    fn new(device: &Device, surface_configuration: &SurfaceConfiguration) -> Self {
         Self {
+            depth_stencil:
+                Texture::create_depth_texture(
+                    device,
+                    surface_configuration,
+                    "depth stencil texture"),
             pipelines: HashMap::new()
         }
     }
     fn render(self: &Self, encoder: &mut CommandEncoder, target_view: &TextureView) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target_view,
-                resolve_target: None,
-                depth_slice: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0,
-                        a: 1.0,
-                    }),
-                    store: wgpu::StoreOp::Discard,
-                },
-            })],
-            depth_stencil_attachment: None,
+            color_attachments: &[Some(
+                wgpu::RenderPassColorAttachment {
+                    view: target_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 1.0,
+                            g: 1.0,
+                            b: 1.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Discard,
+                    },
+                })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_stencil.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             ..Default::default()
         });
+
         for (_, pipeline) in &self.pipelines {
             {
                 render_pass.set_pipeline(pipeline.get_pipeline());
@@ -362,6 +379,9 @@ impl WgpuRenderBackend {
             self.config.height = self.size.height.min(self.max_size.height);
             self.surface.configure(&self.device, &self.config);
             log::info!("width and height is, {}, {}", self.config.width, self.config.height);
+            for pass in self.render_passes.values_mut() {
+                pass.depth_stencil = Texture::create_depth_texture(self.device.as_ref(), &self.config, "depth stencil texture")
+            }
             self.size_changed = false;
         }
     }
@@ -466,9 +486,12 @@ impl CreateDrawletWgpu for WgpuRenderBackend
 {
     fn create_render_pass(self: &mut Self) -> LayerHandle {
         let id = Self::get_render_pass_id();
-        self.render_passes.insert(id.clone(), WgpuRenderPass {
-            pipelines: Default::default(),
-        });
+        self.render_passes.insert(
+            id.clone(),
+            WgpuRenderPass::new(
+                self.device.as_ref(),
+                &self.config
+            ));
 
         LayerHandle { id }
     }
