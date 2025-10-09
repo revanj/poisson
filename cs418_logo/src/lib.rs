@@ -120,8 +120,8 @@ impl PoissonGame for NothingGame {
                 "cs418_logo/assets/shaders/colored_mesh",
                 triangle_shader_content.as_str());
         
-        self.orange_mesh_inst = Some(renderer.create_drawlet(&p_handle, orange_mesh_data));
         //self.blue_mesh_inst = Some(renderer.create_drawlet(&p_handle, blue_mesh_data));
+        self.orange_mesh_inst = Some(renderer.create_drawlet(&p_handle, orange_mesh_data));
         
         self.colored_mesh_pipeline = Some(p_handle);
         self.scene_render_pass = Some(r_handle);
@@ -131,23 +131,26 @@ impl PoissonGame for NothingGame {
         let delta_time = self.last_time.elapsed().as_secs_f32();
         self.last_time = Instant::now();
 
-        if input.is_pressed("up") {
+        //if input.is_pressed("up") {
             self.elapsed_time += delta_time;
-        }
+        //}
         
-        let drawlet_orange = renderer.get_drawlet_mut(self.orange_mesh_inst.as_ref().unwrap());
-
         let elapsed_time = self.elapsed_time;
-
         
-        let m =
-            cg::Matrix4::from_translation(cg::Vector3 {x: 400f32, y: 300f32,  z: 0f32})
-                * cg::Matrix4::from_scale(50f32)
+        let m_orange =
+            cg::Matrix4::from_translation(cg::Vector3 {x: 400f32 + elapsed_time.cos() * 200f32, y: 300f32 + elapsed_time.sin() * 200f32,  z: 0f32})
+                * cg::Matrix4::from_scale(10f32 + elapsed_time.sin() * 5f32)
+                * cg::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
+        let m_blue =
+            cg::Matrix4::from_translation(cg::Vector3 {x: 400f32 + elapsed_time.cos() * 200f32, y: 300f32 + elapsed_time.sin() * 200f32,  z: 0f32})
+                * cg::Matrix4::from_scale(1.2f32)
+                * cg::Matrix4::from_scale(10f32 + elapsed_time.sin() * 5f32)
                 * cg::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
         
         let v = cg::Matrix4::<f32>::identity();
         let p = orthographic(0f32, 800f32, 600f32, 0f32, -10f32, 10f32, Self::Ren::PERSPECTIVE_ALIGNMENT);
-        let new_ubo = Mat4Ubo { data: p * v * m  };
-        drawlet_orange.set_mvp(new_ubo)
+        let orange_ubo = Mat4Ubo { data: p * v * m_orange };
+        let drawlet_orange = renderer.get_drawlet_mut(self.orange_mesh_inst.as_ref().unwrap());
+        drawlet_orange.set_mvp(orange_ubo);
     }
 }

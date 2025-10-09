@@ -1,0 +1,5 @@
+#!/bin/zsh
+
+proj_name="$1"
+wasm-pack build $proj_name --target web 
+python -m http.server -d /home/revanj/repos/poisson/$proj_name
