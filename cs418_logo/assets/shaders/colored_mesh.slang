@@ -38,7 +38,6 @@ VertexStageOutput vertex(
 
     output.coarseVertex.color = assembledVertex.color;
     output.sv_position = position;
-    // output.sv_position = mul(modelViewProjection, float4(position, 1.0));
 
     return output;
 }
@@ -49,6 +48,5 @@ Fragment fragment(
 {
     Fragment output;
     output.color = float4(coarseVertex.color, 1.0);
-    //output.color = float4(pow(coarseVertex.color, float3(2.2)), 1.0);
     return output;
 }
