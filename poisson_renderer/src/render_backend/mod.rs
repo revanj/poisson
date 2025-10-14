@@ -35,14 +35,17 @@ pub struct ViewID(usize);
 
 
 pub trait RenderBackend {
+    type Buffer: Buffer;
     const PERSPECTIVE_ALIGNMENT: [f32; 3];
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized;
-    fn render(self: &mut Self);
+    fn render(self: &mut Self, window: &Arc<dyn Window>);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
     fn get_default_view(self: &Self) -> ViewHandle;
     fn create_view(self: &mut Self, view_proj: cgmath::Matrix4<f32>) -> ViewHandle;
     fn set_view(self: &mut Self, view_handle: ViewHandle, view_proj: cgmath::Matrix4<f32>);
+    fn create_index_buffer(self: &Self, data: &[u32]) -> Self::Buffer;
+    fn create_vertex_buffer<T:Sized>(self: &Self, data: &[T]) -> Self::Buffer;
 
     fn get_render_pass_id() -> LayerID {
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -100,4 +103,4 @@ pub struct MvpUniform {
     data: [[f32; 4]; 4]
 }
 
-
+pub trait Buffer {}

@@ -17,7 +17,7 @@ use poisson_renderer::math::utils::perspective;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
-use poisson_renderer::render_backend::render_interface::{Mesh, TexVertex, TexturedMesh, TexturedMeshData};
+use poisson_renderer::render_backend::render_interface::{WgpuMesh, TexVertex, TexturedMesh, TexturedMeshData};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -76,7 +76,7 @@ impl PoissonGame for NothingGame {
 
         let textured_mesh_data = TexturedMeshData {
             mvp_data: Matrix4::identity(),
-            mesh: Mesh {
+            mesh: WgpuMesh {
                 index_data: index_buffer_data,
                 vertex_data: vertices,
             },

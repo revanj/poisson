@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use parking_lot::Mutex;
 use winit::window::Window;
-use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID};
+use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID, Buffer};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -25,7 +25,7 @@ use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWeb;
-use crate::{AsAny, PoissonGame};
+use crate::{render_backend, AsAny, PoissonGame};
 use crate::input::Input;
 use crate::render_backend::render_interface::RenderObject;
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
@@ -297,6 +297,7 @@ pub struct WgpuRenderBackend {
 
 impl RenderBackend for WgpuRenderBackend {
     const PERSPECTIVE_ALIGNMENT: [f32; 3] = [1f32, 1f32, -1f32];
+    type Buffer = WgpuBuffer;
 
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
     {
@@ -315,8 +316,8 @@ impl RenderBackend for WgpuRenderBackend {
         }
     }
 
-    fn render(self: &mut Self) {
-        self.resize_surface_if_needed();
+    fn render(self: &mut Self, window: &Arc<dyn Window>) {
+        self.resize_surface_if_needed(window);
 
         let output = self.surface.get_current_texture().unwrap();
         let view = output
@@ -370,13 +371,71 @@ impl RenderBackend for WgpuRenderBackend {
     fn set_view(self: &mut Self, view_handle: ViewHandle, view_proj: Matrix4<f32>) {
         todo!()
     }
+
+    fn create_index_buffer(self: &Self, data: &[u32]) -> WgpuBuffer {
+        let index_data: &[u8] = unsafe {
+            std::slice::from_raw_parts(
+                data.as_ptr() as *const u8, data.len() * size_of::<u32>()
+            )
+        };
+
+        let index_buffer = self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: index_data,
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );
+
+        WgpuBuffer { buffer: index_buffer }
+    }
+
+    fn create_vertex_buffer<T:Sized>(self: &Self, data: &[T]) -> WgpuBuffer {
+        let vertex_data: &[u8] = unsafe {
+            std::slice::from_raw_parts(
+                data.as_ptr() as *const u8, data.len() * size_of::<T>()
+            )
+        };
+
+        let vertex_buffer = self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: vertex_data,
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
+        WgpuBuffer { buffer: vertex_buffer }
+    }
+}
+
+use wasm_bindgen::JsCast;
+
+#[cfg(target_arch = "wasm32")]
+fn get_canvas_size(window: &Arc<dyn Window>) -> (u32, u32) {
+    let canvas = window.canvas().unwrap();
+    // let dpr = window.device_pixel_ratio();
+    let width = canvas.client_width() as u32;
+    let height = canvas.client_height() as u32;
+    (width, height)
 }
 
 impl WgpuRenderBackend {
-    fn resize_surface_if_needed(&mut self) {
+    fn resize_surface_if_needed(&mut self, window: &Arc<dyn Window>) {
         if self.size_changed {
-            self.config.width = self.size.width.min(self.max_size.width);
-            self.config.height = self.size.height.min(self.max_size.height);
+            let mut max_x = u32::MAX;
+            let mut max_y = u32::MAX;
+
+            #[cfg(target_arch = "wasm32")]
+            {
+                (max_x, max_y) = get_canvas_size(window);
+                self.config.width = max_x;
+                self.config.height = max_y;
+            }
+
+            self.config.width = self.size.width.min(max_x);
+            self.config.height = self.size.height.min(max_y);
+            
             self.surface.configure(&self.device, &self.config);
             log::info!("width and height is, {}, {}", self.config.width, self.config.height);
             for pass in self.render_passes.values_mut() {
@@ -583,3 +642,8 @@ pub trait CreateDrawletWgpu
     ) -> &'_ mut RenObjType::Drawlet;
 }
 
+pub struct WgpuBuffer {
+    buffer: wgpu::Buffer,
+}
+
+impl Buffer for WgpuBuffer {}

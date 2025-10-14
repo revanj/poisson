@@ -1,5 +1,7 @@
 use std::error::Error;
 use std::f32::consts::PI;
+use std::marker::PhantomData;
+use std::sync::Arc;
 use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
@@ -17,7 +19,7 @@ use poisson_renderer::math::utils::{orthographic, perspective};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
-use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh, TexturedMesh};
+use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, WgpuMesh, TexturedMesh};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -62,6 +64,8 @@ impl PoissonGame for NothingGame {
 
     fn init(self: &mut Self, _input: &mut Input, renderer: &mut Self::Ren) {
         self.last_time = Instant::now();
+        
+        
 
         let index_buffer_data = vec![
             1u32, 2, 0,
@@ -90,6 +94,10 @@ impl PoissonGame for NothingGame {
             ColoredVertex {pos: [-1.5f32, 3f32, 0.0f32], color: Default::default()},
         };
 
+        let index_buffer = renderer.create_index_buffer(index_buffer_data.as_slice());
+        let vertex_buffer = renderer.create_vertex_buffer(orange_vertices.as_slice());
+        
+
         for vertex in &mut orange_vertices {
             vertex.color = [1f32, 0.373f32, 0.02f32];
         }
@@ -98,18 +106,14 @@ impl PoissonGame for NothingGame {
         
         let orange_mesh_data = ColoredMeshData {
             mvp_data: cg::Matrix4::identity(),
-            mesh: Mesh {
-                index_data: index_buffer_data.clone(),
-                vertex_data: orange_vertices
-            },
+            mesh: Arc::new(WgpuMesh {
+                index_data: index_buffer,
+                vertex_data: vertex_buffer,
+                num_indices: index_buffer_data.len() as u32,
+                _phantom_data: PhantomData::default()
+            }),
         };
-        let blue_mesh_data = ColoredMeshData {
-            mvp_data: cg::Matrix4::identity(),
-            mesh: Mesh {
-                index_data: index_buffer_data.clone(),
-                vertex_data: blue_vertices,
-            }
-        };
+     
 
         let triangle_shader = self.assets.get_file(shader!("shaders/colored_mesh")).unwrap();
         let triangle_shader_content = triangle_shader.read_str().unwrap();
@@ -120,7 +124,6 @@ impl PoissonGame for NothingGame {
                 "cs418_logo/assets/shaders/colored_mesh",
                 triangle_shader_content.as_str());
         
-        //self.blue_mesh_inst = Some(renderer.create_drawlet(&p_handle, blue_mesh_data));
         self.orange_mesh_inst = Some(renderer.create_drawlet(&p_handle, orange_mesh_data));
         
         self.colored_mesh_pipeline = Some(p_handle);

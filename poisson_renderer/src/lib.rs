@@ -74,9 +74,8 @@ impl<GameType: PoissonGame> PoissonEngine<GameType>
         
         if let Some(render_backend) = self.renderer.lock().as_mut() {
             self.game.update(&mut self.input, render_backend);
-            render_backend.render();
+            render_backend.render(self.window.as_ref().unwrap());
         }
-        
     }
 
     fn request_redraw(self: &mut Self) {

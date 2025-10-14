@@ -7,8 +7,8 @@ use wgpu::{BindGroupLayout, Device, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
 use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData};
-use crate::render_backend::web::{WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
+use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData, WgpuMesh};
+use crate::render_backend::web::{WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
@@ -25,8 +25,7 @@ pub struct TexturedMeshDrawlet {
     num_indices: u32,
     gpu_texture: ShaderTexture,
     mvp_buffer: GpuMat4,
-    index_buffer: wgpu::Buffer,
-    vertex_buffer: wgpu::Buffer,
+    mesh: Arc<WgpuMesh<TexVertex>>
 }
 
 impl TexturedMeshDrawlet {
@@ -44,41 +43,12 @@ impl TexturedMeshDrawlet {
             Some("TexturedMesh")
         ).expect("failed to create texture");
 
-        let vertex_data: &[u8] = unsafe {
-            std::slice::from_raw_parts(
-                init_data.mesh.vertex_data.as_ptr() as *const u8,
-                init_data.mesh.vertex_data.len() * size_of::<TexVertex>()
-            )
-        };
-        let index_data: &[u8] = unsafe {
-            std::slice::from_raw_parts(
-                init_data.mesh.index_data.as_ptr() as *const u8,
-                init_data.mesh.index_data.len() * size_of::<u32>()
-            )
-        };
-        let vertex_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: vertex_data,
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
-
-        let index_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: index_data,
-                usage: wgpu::BufferUsages::INDEX,
-            }
-        );
-
         Self {
             queue: Arc::downgrade(queue),
-            num_indices: init_data.mesh.index_data.len() as u32,
+            num_indices: init_data.mesh.num_indices,
             gpu_texture: texture,
             mvp_buffer: uniform_buffer,
-            vertex_buffer,
-            index_buffer
+            mesh: init_data.mesh.clone()
         }
     }
 }
@@ -91,8 +61,8 @@ impl WgpuDrawlet for TexturedMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_bind_group(0, self.mvp_buffer.get_bind_group(), &[]);
         render_pass.set_bind_group(1, self.gpu_texture.get_bind_group(), &[]);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, self.mesh.vertex_data.buffer.slice(..));
+        render_pass.set_index_buffer(self.mesh.index_data.buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 }
