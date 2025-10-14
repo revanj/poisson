@@ -7,5 +7,6 @@ members= [
     "rj",
     "arch_playground",
     "nothing_game",
-    "cs418_logo"
+    "cs418_logo",
+    "cs418_orbits"
 ]
