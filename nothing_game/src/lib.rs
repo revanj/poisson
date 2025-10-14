@@ -77,8 +77,8 @@ impl PoissonGame for NothingGame {
         let textured_mesh_data = TexturedMeshData {
             mvp_data: Matrix4::identity(),
             mesh: WgpuMesh {
-                index_data: index_buffer_data,
-                vertex_data: vertices,
+                index: index_buffer_data,
+                vertex: vertices,
             },
             texture_data: binding,
         };

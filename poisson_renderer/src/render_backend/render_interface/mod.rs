@@ -5,11 +5,9 @@ use crate::render_backend::web::WgpuBuffer;
 
 pub trait RenderObject {}
 
-pub struct WgpuMesh<T> {
-    pub index_data: WgpuBuffer,
-    pub vertex_data: WgpuBuffer,
-    pub num_indices: u32,
-    pub _phantom_data: PhantomData<T>
+pub struct WgpuMesh {
+    pub index: WgpuBuffer,
+    pub vertex: WgpuBuffer,
 }
 
 #[repr(C)]
@@ -22,7 +20,7 @@ pub struct TexturedMesh {}
 impl RenderObject for TexturedMesh {}
 pub struct TexturedMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
-    pub mesh: Arc<WgpuMesh<TexVertex>>,
+    pub mesh: Arc<WgpuMesh>,
     pub texture_data: DynamicImage
 }
 
@@ -37,7 +35,7 @@ pub struct ColoredMesh {}
 impl RenderObject for ColoredMesh {}
 pub struct ColoredMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
-    pub mesh: Arc<WgpuMesh<ColoredVertex>>
+    pub mesh: Arc<WgpuMesh>
 }
 
 

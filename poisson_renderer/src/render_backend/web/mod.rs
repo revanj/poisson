@@ -358,20 +358,6 @@ impl RenderBackend for WgpuRenderBackend {
         self.size_changed = true;
     }
 
-    fn get_default_view(self: &Self) -> ViewHandle {
-        ViewHandle {
-            id: ViewID(0)
-        }
-    }
-
-    fn create_view(self: &mut Self, view_proj: Matrix4<f32>) -> ViewHandle {
-        todo!()
-    }
-
-    fn set_view(self: &mut Self, view_handle: ViewHandle, view_proj: Matrix4<f32>) {
-        todo!()
-    }
-
     fn create_index_buffer(self: &Self, data: &[u32]) -> WgpuBuffer {
         let index_data: &[u8] = unsafe {
             std::slice::from_raw_parts(
@@ -387,7 +373,7 @@ impl RenderBackend for WgpuRenderBackend {
             }
         );
 
-        WgpuBuffer { buffer: index_buffer }
+        WgpuBuffer { buffer: index_buffer, size: data.len() }
     }
 
     fn create_vertex_buffer<T:Sized>(self: &Self, data: &[T]) -> WgpuBuffer {
@@ -405,7 +391,7 @@ impl RenderBackend for WgpuRenderBackend {
             }
         );
 
-        WgpuBuffer { buffer: vertex_buffer }
+        WgpuBuffer { buffer: vertex_buffer, size: data.len() }
     }
 }
 
@@ -643,7 +629,12 @@ pub trait CreateDrawletWgpu
 }
 
 pub struct WgpuBuffer {
+    size: usize,
     buffer: wgpu::Buffer,
 }
 
-impl Buffer for WgpuBuffer {}
+impl Buffer for WgpuBuffer {
+    fn len(&self) -> usize {
+        self.size
+    }
+}

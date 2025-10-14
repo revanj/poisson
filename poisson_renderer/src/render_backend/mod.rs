@@ -41,9 +41,6 @@ pub trait RenderBackend {
     fn render(self: &mut Self, window: &Arc<dyn Window>);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
-    fn get_default_view(self: &Self) -> ViewHandle;
-    fn create_view(self: &mut Self, view_proj: cgmath::Matrix4<f32>) -> ViewHandle;
-    fn set_view(self: &mut Self, view_handle: ViewHandle, view_proj: cgmath::Matrix4<f32>);
     fn create_index_buffer(self: &Self, data: &[u32]) -> Self::Buffer;
     fn create_vertex_buffer<T:Sized>(self: &Self, data: &[T]) -> Self::Buffer;
 
@@ -103,4 +100,6 @@ pub struct MvpUniform {
     data: [[f32; 4]; 4]
 }
 
-pub trait Buffer {}
+pub trait Buffer {
+    fn len(&self) -> usize;
+}

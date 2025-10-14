@@ -1,10 +1,9 @@
 use cgmath::prelude::*;
 use cgmath::{BaseFloat, Matrix4, Rad};
 
-pub fn perspective(fov: f32, aspect: f32, near: f32, far: f32, axis_alignment: [f32; 3]) -> Matrix4<f32>
+pub fn perspective(half_fov: f32, aspect: f32, near: f32, far: f32, axis_alignment: [f32; 3]) -> Matrix4<f32>
 {
-    let two = 2f32;
-    let f: f32 = 0.5f32/fov.tan();
+    let f: f32 = 0.5f32/ half_fov.tan();
 
     let c0r0 = f / aspect * axis_alignment[0];
     let c0r1 = 0f32;

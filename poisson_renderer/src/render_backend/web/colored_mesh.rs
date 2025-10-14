@@ -6,7 +6,7 @@ use std::sync::{Arc, Weak};
 use wgpu::{Device, Queue, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
-use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
+use crate::render_backend::{Buffer, DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
 use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, WgpuMesh};
 use crate::render_backend::web::{WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
@@ -24,7 +24,7 @@ pub struct ColoredMeshDrawlet {
     queue: Weak<Queue>,
     num_indices: u32,
     mvp_buffer: GpuMat4,
-    mesh: Arc<WgpuMesh<ColoredVertex>>
+    mesh: Arc<WgpuMesh>
 }
 
 impl ColoredMeshDrawlet {
@@ -37,7 +37,7 @@ impl ColoredMeshDrawlet {
         
         Self {
             queue: Arc::downgrade(queue),
-            num_indices: init_data.mesh.num_indices,
+            num_indices: init_data.mesh.index.len() as u32,
             mvp_buffer: uniform_buffer,
             mesh: init_data.mesh.clone()
         }
@@ -51,8 +51,8 @@ impl RenderDrawlet for ColoredMeshDrawlet {
 impl WgpuDrawlet for ColoredMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_bind_group(0, self.mvp_buffer.get_bind_group(), &[]);
-        render_pass.set_vertex_buffer(0, self.mesh.vertex_data.buffer.slice(..));
-        render_pass.set_index_buffer(self.mesh.index_data.buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, self.mesh.vertex.buffer.slice(..));
+        render_pass.set_index_buffer(self.mesh.index.buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 }

@@ -6,7 +6,7 @@ use std::sync::{Arc, Weak};
 use wgpu::{BindGroupLayout, Device, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
-use crate::render_backend::{DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
+use crate::render_backend::{Buffer, DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
 use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData, WgpuMesh};
 use crate::render_backend::web::{WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
@@ -25,7 +25,7 @@ pub struct TexturedMeshDrawlet {
     num_indices: u32,
     gpu_texture: ShaderTexture,
     mvp_buffer: GpuMat4,
-    mesh: Arc<WgpuMesh<TexVertex>>
+    mesh: Arc<WgpuMesh>
 }
 
 impl TexturedMeshDrawlet {
@@ -45,7 +45,7 @@ impl TexturedMeshDrawlet {
 
         Self {
             queue: Arc::downgrade(queue),
-            num_indices: init_data.mesh.num_indices,
+            num_indices: init_data.mesh.index.len() as u32,
             gpu_texture: texture,
             mvp_buffer: uniform_buffer,
             mesh: init_data.mesh.clone()
@@ -61,8 +61,8 @@ impl WgpuDrawlet for TexturedMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_bind_group(0, self.mvp_buffer.get_bind_group(), &[]);
         render_pass.set_bind_group(1, self.gpu_texture.get_bind_group(), &[]);
-        render_pass.set_vertex_buffer(0, self.mesh.vertex_data.buffer.slice(..));
-        render_pass.set_index_buffer(self.mesh.index_data.buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, self.mesh.vertex.buffer.slice(..));
+        render_pass.set_index_buffer(self.mesh.index.buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 }

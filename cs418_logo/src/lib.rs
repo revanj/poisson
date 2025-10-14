@@ -10,7 +10,7 @@ use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, R
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath as cg;
-use cgmath::SquareMatrix;
+use cgmath::{SquareMatrix, Vector3};
 use fs_embed::fs_embed;
 use poisson_renderer::math::utils::{orthographic, perspective};
 
@@ -36,7 +36,6 @@ pub struct NothingGame {
     scene_render_pass: Option<LayerHandle>,
     colored_mesh_pipeline: Option<PipelineHandle<ColoredMesh>>,
     orange_mesh_inst: Option<DrawletHandle<ColoredMesh>>,
-    blue_mesh_inst: Option<DrawletHandle<ColoredMesh>>,
     last_time: Instant,
     elapsed_time: f32,
     assets: fs_embed::Dir,
@@ -51,7 +50,6 @@ impl PoissonGame for NothingGame {
             scene_render_pass: None,
             colored_mesh_pipeline: None,
             orange_mesh_inst: None,
-            blue_mesh_inst: None,
             last_time: Instant::now(),
             elapsed_time: 0f32,
             assets: FILES.clone().auto_dynamic()
@@ -64,8 +62,6 @@ impl PoissonGame for NothingGame {
 
     fn init(self: &mut Self, _input: &mut Input, renderer: &mut Self::Ren) {
         self.last_time = Instant::now();
-        
-        
 
         let index_buffer_data = vec![
             1u32, 2, 0,
@@ -96,24 +92,19 @@ impl PoissonGame for NothingGame {
 
         let index_buffer = renderer.create_index_buffer(index_buffer_data.as_slice());
         let vertex_buffer = renderer.create_vertex_buffer(orange_vertices.as_slice());
-        
+
 
         for vertex in &mut orange_vertices {
             vertex.color = [1f32, 0.373f32, 0.02f32];
         }
-
-        let mut blue_vertices = orange_vertices.clone();
         
         let orange_mesh_data = ColoredMeshData {
             mvp_data: cg::Matrix4::identity(),
             mesh: Arc::new(WgpuMesh {
-                index_data: index_buffer,
-                vertex_data: vertex_buffer,
-                num_indices: index_buffer_data.len() as u32,
-                _phantom_data: PhantomData::default()
+                index: index_buffer,
+                vertex: vertex_buffer
             }),
         };
-     
 
         let triangle_shader = self.assets.get_file(shader!("shaders/colored_mesh")).unwrap();
         let triangle_shader_content = triangle_shader.read_str().unwrap();
@@ -123,7 +114,7 @@ impl PoissonGame for NothingGame {
             renderer.create_pipeline(&r_handle,
                 "cs418_logo/assets/shaders/colored_mesh",
                 triangle_shader_content.as_str());
-        
+
         self.orange_mesh_inst = Some(renderer.create_drawlet(&p_handle, orange_mesh_data));
         
         self.colored_mesh_pipeline = Some(p_handle);
@@ -134,24 +125,22 @@ impl PoissonGame for NothingGame {
         let delta_time = self.last_time.elapsed().as_secs_f32();
         self.last_time = Instant::now();
 
-        //if input.is_pressed("up") {
-            self.elapsed_time += delta_time;
-        //}
-        
+        self.elapsed_time += delta_time;
+
         let elapsed_time = self.elapsed_time;
         
         let m_orange =
-            cg::Matrix4::from_translation(cg::Vector3 {x: 400f32 + elapsed_time.cos() * 200f32, y: 300f32 + elapsed_time.sin() * 200f32,  z: 0f32})
-                * cg::Matrix4::from_scale(10f32 + elapsed_time.sin() * 5f32)
+            cg::Matrix4::from_scale(0.1f32)
                 * cg::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
-        let m_blue =
-            cg::Matrix4::from_translation(cg::Vector3 {x: 400f32 + elapsed_time.cos() * 200f32, y: 300f32 + elapsed_time.sin() * 200f32,  z: 0f32})
-                * cg::Matrix4::from_scale(1.2f32)
-                * cg::Matrix4::from_scale(10f32 + elapsed_time.sin() * 5f32)
-                * cg::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
-        
-        let v = cg::Matrix4::<f32>::identity();
-        let p = orthographic(0f32, 800f32, 600f32, 0f32, -10f32, 10f32, Self::Ren::PERSPECTIVE_ALIGNMENT);
+
+        let m_orange = cgmath::Matrix4::<f32>::identity();
+
+        let v = cgmath::Matrix4::look_at_rh(
+            cgmath::Point3::new(0.0, 0.0, 2.0),
+            cgmath::Point3::new(0.0, 0.0, 0.0),
+            cgmath::Vector3::new(0.0, 1.0, 0.0));
+        let p = perspective(PI/4f32, 800f32/600f32, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
+
         let orange_ubo = Mat4Ubo { data: p * v * m_orange };
         let drawlet_orange = renderer.get_drawlet_mut(self.orange_mesh_inst.as_ref().unwrap());
         drawlet_orange.set_mvp(orange_ubo);
