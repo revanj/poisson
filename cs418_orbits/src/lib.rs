@@ -1,16 +1,17 @@
 use std::error::Error;
 use std::f32::consts::PI;
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::ops::Deref;
+use std::sync::{Arc, Weak};
 use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
 use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle};
-use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
+use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuBuffer, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath as cg;
-use cgmath::{SquareMatrix, Vector3};
+use cgmath::{relative_ne, Matrix4, SquareMatrix, Vector3};
 use fs_embed::fs_embed;
 use poisson_renderer::math::utils::{orthographic, perspective};
 
@@ -29,27 +30,87 @@ pub async fn run_wasm() {
 
 pub fn run() ->  Result<(), impl Error> {
     init_logger();
-    run_game::<NothingGame>()
+    run_game::<Orbits>()
 }
 
-pub struct NothingGame {
+struct CelestialBody {
+    drawlet: DrawletHandle<ColoredMesh>,
+    global_transform: Matrix4<f32>,
+    transform: Matrix4<f32>,
+    spin_speed: f32,
+    spin_angle: f32,
+    revolve_speed: f32,
+    revolve_radius: f32,
+    revolve_angle: f32,
+    parent: rj::Ref<CelestialBody>,
+    children: Vec<rj::Own<CelestialBody>>
+}
+
+impl CelestialBody {
+    fn new(renderer: &mut WgpuRenderBackend,
+           pipeline: PipelineHandle<ColoredMesh>,
+           mesh: &Arc<WgpuMesh>
+    ) -> Self
+    {
+        let body_data = ColoredMeshData {
+            mvp_data: Matrix4::identity(),
+            mesh: mesh.clone(),
+        };
+        let drawlet = renderer.create_drawlet(&pipeline, body_data);
+
+        CelestialBody {
+            drawlet,
+            global_transform: Matrix4::identity(),
+            transform: Matrix4::identity(),
+            spin_speed: PI,
+            spin_angle: 0.0,
+            revolve_speed: 0.0,
+            revolve_radius: 0.0,
+            revolve_angle: 0.0,
+            parent: rj::Ref::null(),
+            children: Vec::new(),
+
+        }
+    }
+
+    fn set_mvp(self: &mut Self, renderer: &mut WgpuRenderBackend, mvp: cgmath::Matrix4<f32>) {
+        let drawlet_mut = renderer.get_drawlet_mut(&self.drawlet);
+        drawlet_mut.set_mvp(Mat4Ubo { data: mvp });
+    }
+
+    pub fn update(&mut self, renderer: &mut WgpuRenderBackend, view_proj: cgmath::Matrix4<f32>, dt: f32) {
+        self.spin_angle += dt * self.spin_speed;
+        let t = Matrix4::<f32>::from_angle_y(cg::Rad(self.spin_angle));
+        if !self.parent.is_null() {
+            if let Some(parent) = self.parent.upgrade().deref().deref() {
+                self.global_transform = parent.global_transform * t;
+            }
+        } else {
+            self.global_transform = t;
+        }
+        self.set_mvp(renderer, view_proj * self.global_transform);
+    }
+}
+
+pub struct Orbits {
     scene_render_pass: Option<LayerHandle>,
     colored_mesh_pipeline: Option<PipelineHandle<ColoredMesh>>,
-    orange_mesh_inst: Option<DrawletHandle<ColoredMesh>>,
+    sun: Option<CelestialBody>,
     last_time: Instant,
     elapsed_time: f32,
     assets: fs_embed::Dir,
 }
 
-impl PoissonGame for NothingGame {
+impl PoissonGame for Orbits {
     type Ren = WgpuRenderBackend;
 
     fn new() -> Self {
         static FILES: fs_embed::Dir = fs_embed!("assets");
+
         Self {
             scene_render_pass: None,
             colored_mesh_pipeline: None,
-            orange_mesh_inst: None,
+            sun: None,
             last_time: Instant::now(),
             elapsed_time: 0f32,
             assets: FILES.clone().auto_dynamic()
@@ -57,55 +118,40 @@ impl PoissonGame for NothingGame {
     }
 
     fn pre_init(self: &mut Self, input: &mut Input) {
-        input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
+        //input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
     }
 
     fn init(self: &mut Self, _input: &mut Input, renderer: &mut Self::Ren) {
         self.last_time = Instant::now();
-
-        let index_buffer_data = vec![
-            1u32, 2, 0,
-            0, 2, 3,
-            3, 2, 4,
-            5, 4, 3,
-            2, 11, 6,
-            2, 6 ,5,
-            6, 8, 7,
-            11, 8, 6,
-            10, 9, 11,
-            9, 8, 11
+        let tetrahedron_indices = [0u32, 1, 2, 0, 2, 3, 0, 3, 1, 1, 2, 3];
+        let tetrahedron_vertices = vec![
+            ColoredVertex {pos: [ 1f32,  1f32,  1f32], color: [1f32, 1f32, 1f32]},
+            ColoredVertex {pos: [-1f32, -1f32,  1f32], color: [0f32, 0f32, 1f32]},
+            ColoredVertex {pos: [-1f32,  1f32, -1f32], color: [0f32, 1f32, 0f32]},
+            ColoredVertex {pos: [ 1f32, -1f32, -1f32], color: [1f32, 0f32, 0f32]}
         ];
-        let mut orange_vertices = vec!{
-            ColoredVertex {pos: [-3.5f32, -5.0f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [-3.5f32, -3f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [-1.5f32, -3f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [3.5f32, -5f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [3.5f32, -3f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [1.5f32, -3f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [1.5f32, 3f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [3.5f32, 3f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [3.5f32, 5f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [-3.5f32, 5f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [-3.5f32, 3f32, 0.0f32], color: Default::default()},
-            ColoredVertex {pos: [-1.5f32, 3f32, 0.0f32], color: Default::default()},
-        };
-
-        let index_buffer = renderer.create_index_buffer(index_buffer_data.as_slice());
-        let vertex_buffer = renderer.create_vertex_buffer(orange_vertices.as_slice());
-
-
-        for vertex in &mut orange_vertices {
-            vertex.color = [1f32, 0.373f32, 0.02f32];
-        }
+        let tetrahedron_mesh = Arc::new(WgpuMesh {
+            index: renderer.create_index_buffer(&tetrahedron_indices),
+            vertex: renderer.create_vertex_buffer(tetrahedron_vertices.as_slice())
+        });
         
-        let orange_mesh_data = ColoredMeshData {
-            mvp_data: cg::Matrix4::identity(),
-            mesh: Arc::new(WgpuMesh {
-                index: index_buffer,
-                vertex: vertex_buffer
-            }),
-        };
-
+        let octahedron_indices = [
+            [0u32,1,2], [0,2,3], [0,3,4], [0,4,1], 
+            [5,1,4], [5,4,3], [5,3,2], [5,2,1]
+        ].concat();
+        let octahedron_vertices = vec![
+            ColoredVertex {pos: [ 1f32,  0f32,  0f32], color: [  1f32, 0.5f32, 0.5f32]},
+            ColoredVertex {pos: [ 0f32,  1f32,  0f32], color: [0.5f32,   1f32, 0.5f32]},
+            ColoredVertex {pos: [ 0f32,  0f32,  1f32], color: [0.5f32, 0.5f32,   1f32]},
+            ColoredVertex {pos: [ 0f32, -1f32,  0f32], color: [0.5f32,   0f32, 0.5f32]},
+            ColoredVertex {pos: [ 0f32,  0f32, -1f32], color: [0.5f32, 0.5f32,   0f32]},
+            ColoredVertex {pos: [-1f32,  0f32,  0f32], color: [  0f32, 0.5f32, 0.5f32]}
+        ];
+        let octahedron_mesh = Arc::new(WgpuMesh {
+            index: renderer.create_index_buffer(octahedron_indices.as_slice()),
+            vertex: renderer.create_vertex_buffer(octahedron_vertices.as_slice())
+        });
+        
         let triangle_shader = self.assets.get_file(shader!("shaders/colored_mesh")).unwrap();
         let triangle_shader_content = triangle_shader.read_str().unwrap();
         
@@ -115,10 +161,8 @@ impl PoissonGame for NothingGame {
                 "cs418_logo/assets/shaders/colored_mesh",
                 triangle_shader_content.as_str());
 
-        self.orange_mesh_inst = Some(renderer.create_drawlet(&p_handle, orange_mesh_data));
-        
-        self.colored_mesh_pipeline = Some(p_handle);
-        self.scene_render_pass = Some(r_handle);
+        self.sun = Some(CelestialBody::new(renderer, p_handle, &octahedron_mesh));
+
     }
 
     fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren) {
@@ -127,22 +171,15 @@ impl PoissonGame for NothingGame {
 
         self.elapsed_time += delta_time;
 
-        let elapsed_time = self.elapsed_time;
-        
-        let m_orange =
-            cg::Matrix4::from_scale(0.1f32)
-                * cg::Matrix4::from_angle_z(cgmath::Deg(90.0 * elapsed_time));
-
-        let m_orange = cgmath::Matrix4::<f32>::identity();
-
         let v = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::new(0.0, 0.0, 2.0),
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 1.0, 0.0));
-        let p = perspective(PI/4f32, 800f32/600f32, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
+        let aspect_ratio = (renderer.get_width() as f32)/(renderer.get_height() as f32);
 
-        let orange_ubo = Mat4Ubo { data: p * v * m_orange };
-        let drawlet_orange = renderer.get_drawlet_mut(self.orange_mesh_inst.as_ref().unwrap());
-        drawlet_orange.set_mvp(orange_ubo);
+        let p = perspective(PI/4f32, aspect_ratio, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
+
+        self.sun.as_mut().unwrap().update(renderer, p * v, delta_time);
+
     }
 }

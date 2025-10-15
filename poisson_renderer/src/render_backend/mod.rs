@@ -44,6 +44,9 @@ pub trait RenderBackend {
     fn create_index_buffer(self: &Self, data: &[u32]) -> Self::Buffer;
     fn create_vertex_buffer<T:Sized>(self: &Self, data: &[T]) -> Self::Buffer;
 
+    fn get_width(self: &Self) -> u32;
+    fn get_height(self: &Self) -> u32;
+
     fn get_render_pass_id() -> LayerID {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
@@ -55,6 +58,8 @@ pub trait RenderBackend {
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
         PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
+
+
 }
 
 pub trait RenderPipeline<RenObj: RenderObject> {

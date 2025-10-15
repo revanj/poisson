@@ -719,6 +719,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cs418_orbits"
+version = "0.1.0"
+dependencies = [
+ "cgmath",
+ "console_error_panic_hook",
+ "console_log",
+ "fs-embed",
+ "image",
+ "include_dir",
+ "instant",
+ "log",
+ "poisson_renderer",
+ "rj",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "winit",
+]
+
+[[package]]
 name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

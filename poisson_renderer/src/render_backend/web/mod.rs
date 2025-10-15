@@ -393,6 +393,14 @@ impl RenderBackend for WgpuRenderBackend {
 
         WgpuBuffer { buffer: vertex_buffer, size: data.len() }
     }
+
+    fn get_width(self: &Self) -> u32 {
+        self.size.width
+    }
+
+    fn get_height(self: &Self) -> u32 {
+        self.size.height
+    }
 }
 
 use wasm_bindgen::JsCast;
