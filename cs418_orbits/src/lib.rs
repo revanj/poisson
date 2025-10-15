@@ -11,16 +11,16 @@ use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, R
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuBuffer, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath as cg;
-use cgmath::{relative_ne, Matrix4, SquareMatrix, Vector3};
+use cgmath::{relative_ne, Matrix4, SquareMatrix, Vector3, Zero};
 use fs_embed::fs_embed;
 use poisson_renderer::math::utils::{orthographic, perspective};
-
 // #[cfg(not(target_arch = "wasm32"))]
 // use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, WgpuMesh, TexturedMesh};
+use rj::Own;
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -35,21 +35,26 @@ pub fn run() ->  Result<(), impl Error> {
 
 struct CelestialBody {
     drawlet: DrawletHandle<ColoredMesh>,
-    global_transform: Matrix4<f32>,
+    global_position: cg::Vector3<f32>,
     transform: Matrix4<f32>,
     spin_speed: f32,
     spin_angle: f32,
     revolve_speed: f32,
     revolve_radius: f32,
     revolve_angle: f32,
+    scale: f32,
     parent: rj::Ref<CelestialBody>,
     children: Vec<rj::Own<CelestialBody>>
 }
 
 impl CelestialBody {
     fn new(renderer: &mut WgpuRenderBackend,
-           pipeline: PipelineHandle<ColoredMesh>,
-           mesh: &Arc<WgpuMesh>
+           pipeline: &PipelineHandle<ColoredMesh>,
+           mesh: &Arc<WgpuMesh>,
+           spin_speed: f32,
+           revolve_radius: f32,
+           revolve_speed: f32,
+           scale: f32
     ) -> Self
     {
         let body_data = ColoredMeshData {
@@ -60,16 +65,16 @@ impl CelestialBody {
 
         CelestialBody {
             drawlet,
-            global_transform: Matrix4::identity(),
+            global_position: cg::Vector3 {x: 0f32, y: 0f32, z: 0f32 },
             transform: Matrix4::identity(),
-            spin_speed: PI,
+            spin_speed,
             spin_angle: 0.0,
-            revolve_speed: 0.0,
-            revolve_radius: 0.0,
+            revolve_speed,
+            revolve_radius,
             revolve_angle: 0.0,
             parent: rj::Ref::null(),
             children: Vec::new(),
-
+            scale,
         }
     }
 
@@ -80,15 +85,35 @@ impl CelestialBody {
 
     pub fn update(&mut self, renderer: &mut WgpuRenderBackend, view_proj: cgmath::Matrix4<f32>, dt: f32) {
         self.spin_angle += dt * self.spin_speed;
-        let t = Matrix4::<f32>::from_angle_y(cg::Rad(self.spin_angle));
+        self.revolve_angle += dt * self.revolve_speed;
+
+        let rotation = Matrix4::<f32>::from_angle_y(cg::Rad(self.spin_angle));
+        let translation = Vector3 {
+            x: self.revolve_radius *  self.revolve_angle.sin(),
+            y: 0f32,
+            z: self.revolve_radius *  self.revolve_angle.cos()
+        };
+        let scale = Matrix4::<f32>::from_scale(self.scale);
+
         if !self.parent.is_null() {
             if let Some(parent) = self.parent.upgrade().deref().deref() {
-                self.global_transform = parent.global_transform * t;
+                self.global_position = parent.global_position + translation;
             }
         } else {
-            self.global_transform = t;
+            self.global_position = translation;
         }
-        self.set_mvp(renderer, view_proj * self.global_transform);
+
+        let tform =  Matrix4::from_translation(self.global_position)* rotation * scale;
+
+        self.set_mvp(renderer, view_proj * tform);
+
+        for c in &mut self.children {
+            c.deref().deref().as_mut().unwrap().update(renderer, view_proj, dt);
+        }
+    }
+
+    pub fn add_child(self: &mut Self, celestial_body: rj::Own<CelestialBody>) {
+        self.children.push(celestial_body);
     }
 }
 
@@ -151,17 +176,55 @@ impl PoissonGame for Orbits {
             index: renderer.create_index_buffer(octahedron_indices.as_slice()),
             vertex: renderer.create_vertex_buffer(octahedron_vertices.as_slice())
         });
-        
+
         let triangle_shader = self.assets.get_file(shader!("shaders/colored_mesh")).unwrap();
         let triangle_shader_content = triangle_shader.read_str().unwrap();
-        
+
         let r_handle = renderer.create_render_pass();
-        let p_handle: PipelineHandle<ColoredMesh> = 
+        let p_handle: PipelineHandle<ColoredMesh> =
             renderer.create_pipeline(&r_handle,
                 "cs418_logo/assets/shaders/colored_mesh",
                 triangle_shader_content.as_str());
 
-        self.sun = Some(CelestialBody::new(renderer, p_handle, &octahedron_mesh));
+        self.sun = Some(CelestialBody::new(
+            renderer, &p_handle, &octahedron_mesh,
+            PI, 0f32, 0f32, 1f32
+        ));
+
+        let earth = rj::Own::new(
+            Some(CelestialBody::new(
+                renderer, &p_handle, &octahedron_mesh,
+                4f32*PI, 4f32, 0.2f32*PI, 0.2f32
+            )));
+        let moon = rj::Own::new(
+            Some(CelestialBody::new(
+                renderer, &p_handle, &octahedron_mesh,
+                2f32*PI, 4f32, 2f32*PI, 0.1f32
+            )));
+        earth.deref().as_mut().unwrap().add_child(moon);
+        
+
+        let mars = rj::Own::new(
+            Some(CelestialBody::new(
+                renderer, &p_handle, &octahedron_mesh,
+                4f32/2.2f32 * PI, 4f32 * 1.6f32, 0.2f32 / 1.9f32 *PI, 0.2f32 * 0.9f32
+            ))
+        );
+        
+        let phobos = rj::Own::new(
+            Some(CelestialBody::new(
+                renderer, &p_handle, &octahedron_mesh,
+                6f32 * PI, 0.8f32, 6f32 * PI, 0.1f32
+            ))
+        );
+        
+        mars.deref().as_mut().unwrap().add_child(phobos);
+        
+
+
+
+        self.sun.as_mut().unwrap().add_child(earth);
+        self.sun.as_mut().unwrap().add_child(mars);
 
     }
 
@@ -172,12 +235,12 @@ impl PoissonGame for Orbits {
         self.elapsed_time += delta_time;
 
         let v = cgmath::Matrix4::look_at_rh(
-            cgmath::Point3::new(0.0, 0.0, 2.0),
+            cgmath::Point3::new(0.0, 3.0, 12.0),
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 1.0, 0.0));
         let aspect_ratio = (renderer.get_width() as f32)/(renderer.get_height() as f32);
 
-        let p = perspective(PI/4f32, aspect_ratio, 0.1, 10.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
+        let p = perspective(PI/8f32, aspect_ratio, 0.1, 100.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
 
         self.sun.as_mut().unwrap().update(renderer, p * v, delta_time);
 
