@@ -24,7 +24,6 @@ pub struct TexturedMeshData {
     pub texture_data: DynamicImage
 }
 
-
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 pub struct ColoredVertex {

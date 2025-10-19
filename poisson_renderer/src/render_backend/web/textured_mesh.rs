@@ -3,12 +3,13 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use wgpu::{BindGroupLayout, Device, Queue, ShaderModule, SurfaceConfiguration};
+use parking_lot::Mutex;
+use wgpu::{BindGroupLayout, Queue, ShaderModule, SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
 use crate::render_backend::{Buffer, DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
 use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData, WgpuMesh};
-use crate::render_backend::web::{WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
+use crate::render_backend::web::{Device, WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
@@ -21,7 +22,7 @@ impl WgpuRenderObject for TexturedMesh {
 }
 
 pub struct TexturedMeshDrawlet {
-    queue: Weak<Queue>,
+    device: Weak<Device>,
     num_indices: u32,
     gpu_texture: ShaderTexture,
     mvp_buffer: GpuMat4,
@@ -30,21 +31,20 @@ pub struct TexturedMeshDrawlet {
 
 impl TexturedMeshDrawlet {
     fn new(
-        device: &Device,
-        queue: &Arc<Queue>,
+        device: &Arc<Device>,
         init_data: &<TexturedMeshDrawlet as RenderDrawlet>::Data
     ) -> Self {
-        let uniform_buffer = GpuMat4::from_mat4(device, &init_data.mvp_data);
+        let uniform_buffer = GpuMat4::from_mat4(&device.device, &init_data.mvp_data);
 
         let texture = ShaderTexture::from_image(
-            device, 
-            queue,
+            &device.device,
+            &device.queue,
             &init_data.texture_data, 
             Some("TexturedMesh")
         ).expect("failed to create texture");
 
         Self {
-            queue: Arc::downgrade(queue),
+            device: Arc::downgrade(device),
             num_indices: init_data.mesh.index.len() as u32,
             gpu_texture: texture,
             mvp_buffer: uniform_buffer,
@@ -70,61 +70,52 @@ impl WgpuDrawlet for TexturedMeshDrawlet {
 #[derive(AsAny)]
 pub struct TexturedMeshPipeline {
     device: Weak<Device>,
-    queue: Weak<wgpu::Queue>,
     render_pipeline: wgpu::RenderPipeline,
-    drawlets: HashMap<DrawletID, TexturedMeshDrawlet>
+    drawlets: HashMap<DrawletID, rj::Own<TexturedMeshDrawlet>>
 }
 
 impl WgpuPipelineDyn for TexturedMeshPipeline {
     fn get_pipeline(self: &Self) -> &wgpu::RenderPipeline {
         &self.render_pipeline
     }
-    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn WgpuDrawletDyn> + '_> {
-        Box::new(self.drawlets.iter().map(|(_, x)| x as &dyn WgpuDrawletDyn))
-    }
-    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn WgpuDrawletDyn> + '_> {
-        Box::new(self.drawlets.iter_mut().map(|(_, x)| x as &mut dyn WgpuDrawletDyn))
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=rj::Own<dyn WgpuDrawletDyn>> + '_> {
+        Box::new(self.drawlets.iter().map(
+            |(_, x)|
+                rj::Own::<dyn WgpuDrawletDyn>::from_inner(x.clone().into_inner())
+        ))
     }
 }
 
 impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
-    fn instantiate_drawlet(self: &mut Self, layer_id: LayerID, pipeline_id: PipelineID, init_data: TexturedMeshData) -> DrawletHandle<TexturedMesh> {
+    fn create_drawlet(self: &mut Self, init_data: TexturedMeshData) -> rj::Own<TexturedMeshDrawlet> {
         let id = <Self as RenderPipeline<TexturedMesh>>::get_drawlet_id();
         let new_drawlet = TexturedMeshDrawlet::new(
             &self.device.upgrade().unwrap(),
-            &self.queue.upgrade().unwrap(),
             &init_data);
-
-        self.drawlets.insert(id, new_drawlet);
-
-        DrawletHandle {
-            id,
-            pipeline_id,
-            layer_id,
-            _drawlet_ty: Default::default()
-        }
+        let own= rj::Own::new(new_drawlet);
+        
+        self.drawlets.insert(id, own.clone());
+        
+        own
     }
 
-    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<TexturedMesh>) -> &'_ mut TexturedMeshDrawlet {
-        self.drawlets.get_mut(&drawlet_handle.id).unwrap()
-    }
-    fn new(device: &Arc<Device>, queue: &Arc<Queue>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
+    fn new(device: &Arc<Device>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
         where Self: Sized
     {
 
-        let camera_bind_group_layout = GpuMat4::create_bind_group_layout(device);
+        let camera_bind_group_layout = GpuMat4::create_bind_group_layout(&device.device);
 
-        let texture_bind_group_layout = ShaderTexture::create_bind_group_layout(device);
+        let texture_bind_group_layout = ShaderTexture::create_bind_group_layout(&device.device);
 
         let wgsl_str = str::from_utf8(shader_u8).unwrap();
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let shader = device.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(Cow::from(wgsl_str)),
         });
 
         let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            device.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &camera_bind_group_layout,
@@ -135,7 +126,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
 
         let desc = TexVertex::desc();
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let render_pipeline = device.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
@@ -185,7 +176,6 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
 
         Self {
             device: Arc::downgrade(device),
-            queue: Arc::downgrade(queue),
             render_pipeline,
             drawlets
         }
@@ -201,6 +191,6 @@ impl TexturedMeshDrawlet {
                 (&ubo as *const Mat4Ubo) as *const u8, size_of::<Mat4Ubo>(),
             )
         };
-        self.queue.upgrade().as_ref().unwrap().write_buffer(&self.mvp_buffer.buffer, 0, bytemuck::cast_slice(ubo_slice));
+        self.device.upgrade().as_ref().unwrap().queue.write_buffer(&self.mvp_buffer.buffer, 0, bytemuck::cast_slice(ubo_slice));
     }
 }

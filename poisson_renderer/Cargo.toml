@@ -9,6 +9,7 @@ webgl = ["wgpu/webgl"]
 
 
 [dependencies]
+rj = {path = "../rj"}
 winit = {git = "https://github.com/rust-windowing/winit.git", rev = "5199474", features = []}
 poisson_macros = {path = "../poisson_macros" }
 cgmath = "0.18.0"

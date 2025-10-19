@@ -1,16 +1,15 @@
 pub mod textured_mesh;
 mod gpu_resources;
 mod per_vertex_impl;
-mod colored_mesh;
+pub mod colored_mesh;
 
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
-use parking_lot::Mutex;
 use winit::window::Window;
-use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID, Buffer};
+use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID, Buffer, DrawletID};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -19,7 +18,8 @@ use cgmath::Matrix4;
 use wgpu::util::DeviceExt;
 use image;
 use image::EncodableLayout;
-use wgpu::{BindGroup, BindGroupLayout, CommandEncoder, Device, RenderPassDepthStencilAttachment, SurfaceConfiguration, TextureFormat, TextureView};
+use parking_lot::Mutex;
+use wgpu::{BindGroup, BindGroupLayout, CommandEncoder, RenderPassDepthStencilAttachment, SurfaceConfiguration, TextureFormat, TextureView};
 use wgpu::hal::DepthStencilAttachment;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -41,17 +41,13 @@ pub trait WgpuRenderObject: RenderObject + Sized {
 
 pub trait 
 WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType> + WgpuPipelineDyn {
-    fn instantiate_drawlet(
+    fn create_drawlet(
         self: &mut Self,
-        layer_id: LayerID,
-        pipeline_id: PipelineID,
         init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data
-    ) -> DrawletHandle<RenObjType>;
+    ) -> rj::Own<RenObjType::Drawlet>;
 
-    fn get_drawlet_mut(self: &mut Self, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet ;
     fn new(
-        device: &Arc<wgpu::Device>,
-        queue: &Arc<wgpu::Queue>,
+        device: &Arc<Device>,
         shader_u8: &[u8],
         surface_config: &SurfaceConfiguration
     ) -> Self where Self: Sized;
@@ -59,8 +55,7 @@ WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType> + WgpuPip
 
 pub trait WgpuPipelineDyn: AsAny {
     fn get_pipeline(self: &Self) -> &wgpu::RenderPipeline;
-    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=&dyn WgpuDrawletDyn> + '_>;
-    fn get_instances_mut(self: &mut Self) -> Box<dyn Iterator<Item=&mut dyn WgpuDrawletDyn> + '_>;
+    fn get_instances(self: &Self) -> Box<dyn Iterator<Item=rj::Own<dyn WgpuDrawletDyn>> + '_>;
 }
 
 pub trait WgpuDrawlet: RenderDrawlet {
@@ -226,21 +221,73 @@ impl Camera {
 }
 
 pub struct WgpuRenderPass {
+    device: std::sync::Weak<Device>,
+    surface_config: SurfaceConfiguration,
     depth_stencil: Texture,
-    pipelines: HashMap<PipelineID, Box<dyn WgpuPipelineDyn>>
+    pipelines: HashMap<PipelineID, rj::Own<dyn WgpuPipelineDyn>>
 }
 
 impl WgpuRenderPass {
-    fn new(device: &Device, surface_configuration: &SurfaceConfiguration) -> Self {
+    fn new(device: &Arc<Device>, surface_configuration: &SurfaceConfiguration) -> Self {
         Self {
+            device: Arc::downgrade(device),
+            surface_config: surface_configuration.clone(),
             depth_stencil:
                 Texture::create_depth_texture(
-                    device,
+                    &device.device,
                     surface_configuration,
                     "depth stencil texture"),
             pipelines: HashMap::new()
         }
     }
+
+    pub fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, shader_path: &str, shader_text: &str) -> rj::Own<RenObjType::Pipeline> {
+        let owned_str = shader_path.to_owned();
+        let wgsl_path = owned_str.clone() + ".wgsl";
+        #[cfg(not(target_arch="wasm32"))]
+        {
+            let compiler = slang_refl::Compiler::new_wgsl_compiler();
+            let slang_path = owned_str + ".slang";
+            let linked_program = compiler.linked_program_from_file(slang_path.as_str());
+            let compiled_shader = linked_program.get_u8();
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(wgsl_path.clone()).unwrap();
+
+            file.write_all(compiled_shader).unwrap()
+        }
+        let wgsl_code;
+
+        cfg_if! {
+            if #[cfg(not(target_arch="wasm32"))] {
+                wgsl_code = fs::read(wgsl_path).unwrap();
+            } else {
+                wgsl_code = shader_text.to_owned();
+            }
+        }
+
+        let inner = Arc::new(Mutex::new(RenObjType::Pipeline::new(
+            &self.device.upgrade().as_ref().unwrap(), wgsl_code.as_bytes(), &self.surface_config
+        )));
+
+        let pipeline: rj::Own<dyn WgpuPipelineDyn + 'static> =
+            rj::Own::<dyn WgpuPipelineDyn>::from_inner(inner.clone());
+
+        let pipeline_id: PipelineID = Self::get_pipeline_id();
+
+        self.pipelines.insert(pipeline_id.clone(), pipeline.clone());
+
+        rj::Own::from_inner(inner)
+    }
+
+    fn get_pipeline_id() -> PipelineID {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER:AtomicUsize = AtomicUsize::new(1);
+        PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+
     fn render(self: &Self, encoder: &mut CommandEncoder, target_view: &TextureView) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
@@ -271,27 +318,29 @@ impl WgpuRenderPass {
         });
 
         for (_, pipeline) in &self.pipelines {
-            {
-                render_pass.set_pipeline(pipeline.get_pipeline());
-            }
-            for drawlet in pipeline.get_instances() {
-                drawlet.draw(&mut render_pass);
+            { render_pass.set_pipeline(pipeline.access().get_pipeline()); }
+            for drawlet in pipeline.access().get_instances() {
+                drawlet.access().draw(&mut render_pass);
             }
         }
     }
 }
 
+pub struct Device {
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue
+}
+
+#[derive()]
 pub struct WgpuRenderBackend {
     surface: wgpu::Surface<'static>,
     _adapter: wgpu::Adapter,
-    device: Arc<wgpu::Device>,
-    queue: Arc<wgpu::Queue>,
+    device: Arc<Device>,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     size_changed: bool,
     max_size: winit::dpi::PhysicalSize<u32>,
-    //pipelines: HashMap<PipelineID, Box<dyn WgpuPipelineDyn>>,
-    render_passes: HashMap<LayerID, WgpuRenderPass>,
+    render_passes: HashMap<LayerID, rj::Own<WgpuRenderPass>>,
 }
 
 
@@ -325,19 +374,19 @@ impl RenderBackend for WgpuRenderBackend {
             .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = self
-            .device
+            .device.device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
 
         {
             for render_pass in self.render_passes.values() {
-                render_pass.render(&mut encoder, &view);
+                render_pass.access().render(&mut encoder, &view);
             }
 
         }
 
-        self.queue.submit(Some(encoder.finish()));
+        self.device.queue.submit(Some(encoder.finish()));
         output.present();
     }
 
@@ -365,7 +414,7 @@ impl RenderBackend for WgpuRenderBackend {
             )
         };
 
-        let index_buffer = self.device.create_buffer_init(
+        let index_buffer = self.device.device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
                 contents: index_data,
@@ -383,7 +432,7 @@ impl RenderBackend for WgpuRenderBackend {
             )
         };
 
-        let vertex_buffer = self.device.create_buffer_init(
+        let vertex_buffer = self.device.device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
                 contents: vertex_data,
@@ -430,10 +479,10 @@ impl WgpuRenderBackend {
             self.config.width = self.size.width.min(max_x);
             self.config.height = self.size.height.min(max_y);
             
-            self.surface.configure(&self.device, &self.config);
+            self.surface.configure(&self.device.device, &self.config);
             log::info!("width and height is, {}, {}", self.config.width, self.config.height);
             for pass in self.render_passes.values_mut() {
-                pass.depth_stencil = Texture::create_depth_texture(self.device.as_ref(), &self.config, "depth stencil texture")
+                pass.access().depth_stencil = Texture::create_depth_texture(&self.device.as_ref().device, &self.config, "depth stencil texture")
             }
             self.size_changed = false;
         }
@@ -524,116 +573,76 @@ impl WgpuRenderBackend {
         Self {
             surface,
             _adapter: adapter,
-            device: Arc::new(device),
-            queue: Arc::new(queue),
+            device: Arc::new(Device {
+                device,
+                queue
+            }),
             config,
             size,
             size_changed: false,
             max_size: PhysicalSize {width: 800, height: 600},
-            render_passes: HashMap::new()
+            render_passes: HashMap::new(),
         }
     }
 }
 
 impl CreateDrawletWgpu for WgpuRenderBackend
 {
-    fn create_render_pass(self: &mut Self) -> LayerHandle {
+    fn create_render_pass(self: &mut Self) -> rj::Own<WgpuRenderPass> {
         let id = Self::get_render_pass_id();
-        self.render_passes.insert(
-            id.clone(),
-            WgpuRenderPass::new(
-                self.device.as_ref(),
-                &self.config
-            ));
-
-        LayerHandle { id }
-    }
-
-    fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, render_pass_handle: &LayerHandle, shader_path: &str, shader_text: &str) -> PipelineHandle<RenObjType> {
-        let owned_str = shader_path.to_owned();
-        let wgsl_path = owned_str.clone() + ".wgsl";
-        #[cfg(not(target_arch="wasm32"))]
-        {
-            let compiler = slang_refl::Compiler::new_wgsl_compiler();
-            let slang_path = owned_str + ".slang";
-            let linked_program = compiler.linked_program_from_file(slang_path.as_str());
-            let compiled_shader = linked_program.get_u8();
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(wgsl_path.clone()).unwrap();
-            
-            file.write_all(compiled_shader).unwrap()
-        }
-        let wgsl_code;
-        
-        cfg_if! {
-            if #[cfg(not(target_arch="wasm32"))] {
-                wgsl_code = fs::read(wgsl_path).unwrap();
-            } else {
-                wgsl_code = shader_text.to_owned();
-            }
-        }
-        
-        let pipeline = RenObjType::Pipeline::new(
-            &self.device, &self.queue, wgsl_code.as_bytes(), &self.config);
-
-        let pipeline_id: PipelineID = Self::get_pipeline_id();
-
-        let ret = PipelineHandle::<RenObjType> {
-            id: pipeline_id,
-            layer_id: render_pass_handle.id,
-            _pipeline_ty: PhantomData::default(),
-        };
-
-
-        self.render_passes.get_mut(&render_pass_handle.id).unwrap().pipelines.insert(pipeline_id.clone(), Box::new(pipeline));
+        let ret = rj::Own::new(WgpuRenderPass::new(
+            &self.device,
+            &self.config
+        ));
+        self.render_passes.insert(id.clone(), ret.clone());
 
         ret
     }
 
-    fn create_drawlet<RenObjType: WgpuRenderObject>(self: &mut Self, pipeline_handle: &PipelineHandle<RenObjType>, init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data) -> DrawletHandle<RenObjType>
-    {
-        let pipeline= self.render_passes.get_mut(&pipeline_handle.layer_id).unwrap().pipelines.get_mut(&pipeline_handle.id).unwrap();
-        let pipeline_any = pipeline.as_any_mut();
-        let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
 
-        pipeline_concrete.instantiate_drawlet(pipeline_handle.layer_id, pipeline_handle.id, init_data)
-    }
 
-    fn get_drawlet_mut<RenObjType: WgpuRenderObject>(self: &mut Self, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet {
-        let pipeline = self.render_passes.get_mut(&drawlet_handle.layer_id).unwrap().pipelines.get_mut(&drawlet_handle.pipeline_id).unwrap();
-        let pipeline_any = pipeline.as_any_mut();
-        let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
+    // fn create_drawlet<RenObjType: WgpuRenderObject>(self: &mut Self, pipeline_handle: &PipelineHandle<RenObjType>, init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data) -> DrawletHandle<RenObjType>
+    // {
+    //     let pipeline = self.render_pipelines.get_mut(&pipeline_handle.id).unwrap();
+    //     let mut pipeline_guard = pipeline.lock();
+    //     let pipeline_any = pipeline_guard.as_any_mut();
+    //     let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
+    //
+    //     pipeline_concrete.instantiate_drawlet(pipeline_handle.layer_id, pipeline_handle.id, init_data)
+    // }
 
-        pipeline_concrete.get_drawlet_mut(&drawlet_handle)
-    }
+    // fn get_drawlet_mut<RenObjType: WgpuRenderObject>(self: &mut Self, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet {
+    //     let drawlet = self.render_drawlets[&drawlet_handle.id].clone();
+    //     let drawlet_any = drawlet.as_any_mut();
+    //     let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
+    //
+    //     pipeline_concrete.get_drawlet_mut(&drawlet_handle)
+    // }
 }
 
 pub trait CreateDrawletWgpu
 {
     fn create_render_pass(
         self: &mut Self
-    ) -> LayerHandle;
+    ) -> rj::Own<WgpuRenderPass>;
 
-    fn create_pipeline<RenObjType: WgpuRenderObject>(
-        self: &mut Self,
-        render_pass_handle: &LayerHandle,
-        shader_path: &str,
-        shader_text: &str,
-    ) -> PipelineHandle<RenObjType>;
+    // fn create_pipeline<RenObjType: WgpuRenderObject>(
+    //     self: &mut Self,
+    //     render_pass_handle: &LayerHandle,
+    //     shader_path: &str,
+    //     shader_text: &str,
+    // ) -> PipelineHandle<RenObjType>;
 
-    fn create_drawlet<RenObjType: WgpuRenderObject>(
-        self: &mut Self,
-        pipeline: &PipelineHandle<RenObjType>,
-        init_data: <RenObjType::Drawlet as RenderDrawlet>::Data,
-    ) -> DrawletHandle<RenObjType>;
-
-    fn get_drawlet_mut<RenObjType: WgpuRenderObject>(
-        self: &mut Self,
-        drawlet_handle: &DrawletHandle<RenObjType>
-    ) -> &'_ mut RenObjType::Drawlet;
+    // fn create_drawlet<RenObjType: WgpuRenderObject>(
+    //     self: &mut Self,
+    //     pipeline: &PipelineHandle<RenObjType>,
+    //     init_data: <RenObjType::Drawlet as RenderDrawlet>::Data,
+    // ) -> DrawletHandle<RenObjType>;
+    //
+    // fn get_drawlet_mut<RenObjType: WgpuRenderObject>(
+    //     self: &mut Self,
+    //     drawlet_handle: &DrawletHandle<RenObjType>
+    // ) -> &'_ mut RenObjType::Drawlet;
 }
 
 pub struct WgpuBuffer {

@@ -2,7 +2,6 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use bytemuck::{Pod, Zeroable};
-use image::DynamicImage;
 use winit::window::Window;
 use parking_lot::Mutex;
 use winit::event::WindowEvent;
@@ -34,6 +33,12 @@ pub struct DrawletID(usize);
 pub struct ViewID(usize);
 
 
+trait Ren {
+}
+struct Wgpu {} impl Ren for Wgpu {}
+struct Vk {} impl Ren for Vk {}
+
+
 pub trait RenderBackend {
     type Buffer: Buffer;
     const PERSPECTIVE_ALIGNMENT: [f32; 3];
@@ -52,14 +57,6 @@ pub trait RenderBackend {
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
         LayerID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
-
-    fn get_pipeline_id() -> PipelineID {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static COUNTER:AtomicUsize = AtomicUsize::new(1);
-        PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
-    }
-
-
 }
 
 pub trait RenderPipeline<RenObj: RenderObject> {
