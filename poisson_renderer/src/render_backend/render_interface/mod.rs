@@ -1,13 +1,16 @@
-use std::marker::PhantomData;
+pub mod resources;
+pub mod drawlets;
+
 use std::sync::Arc;
 use image::DynamicImage;
+use crate::render_backend::render_interface::resources::GpuBufferHandle;
 use crate::render_backend::web::WgpuBuffer;
 
 pub trait RenderObject {}
 
-pub struct WgpuMesh {
-    pub index: WgpuBuffer,
-    pub vertex: WgpuBuffer,
+pub struct Mesh<T> {
+    pub index: GpuBufferHandle<u32>,
+    pub vertex: GpuBufferHandle<T>,
 }
 
 #[repr(C)]
@@ -20,7 +23,7 @@ pub struct TexturedMesh {}
 impl RenderObject for TexturedMesh {}
 pub struct TexturedMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
-    pub mesh: Arc<WgpuMesh>,
+    pub mesh: Arc<Mesh<TexVertex>>,
     pub texture_data: DynamicImage
 }
 
@@ -34,7 +37,7 @@ pub struct ColoredMesh {}
 impl RenderObject for ColoredMesh {}
 pub struct ColoredMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
-    pub mesh: Arc<WgpuMesh>
+    pub mesh: Arc<Mesh<ColoredVertex>>
 }
 
 

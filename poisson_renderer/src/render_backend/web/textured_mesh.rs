@@ -4,11 +4,11 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use parking_lot::Mutex;
-use wgpu::{BindGroupLayout, Queue, ShaderModule, SurfaceConfiguration};
+use wgpu::{SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
-use crate::render_backend::{Buffer, DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData, WgpuMesh};
+use crate::render_backend::{DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline};
+use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData, Mesh};
 use crate::render_backend::web::{Device, WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
@@ -26,7 +26,8 @@ pub struct TexturedMeshDrawlet {
     num_indices: u32,
     gpu_texture: ShaderTexture,
     mvp_buffer: GpuMat4,
-    mesh: Arc<WgpuMesh>
+    vertex_buffer: rj::Own<WgpuBuffer<TexVertex>>,
+    index_buffer: rj::Own<WgpuBuffer<u32>>
 }
 
 impl TexturedMeshDrawlet {
@@ -43,12 +44,21 @@ impl TexturedMeshDrawlet {
             Some("TexturedMesh")
         ).expect("failed to create texture");
 
+        let vertex_buffer = init_data.mesh.vertex.buffer.downcast()
+            .expect("failed to cast vertex buffer to drawlet buffer type");
+
+        let index_buffer = init_data.mesh.index.buffer.downcast()
+            .expect("failed to cast index buffer to drawlet buffer type");
+
+
+        
         Self {
             device: Arc::downgrade(device),
-            num_indices: init_data.mesh.index.len() as u32,
+            num_indices: init_data.mesh.index.get_count() as u32,
             gpu_texture: texture,
             mvp_buffer: uniform_buffer,
-            mesh: init_data.mesh.clone()
+            vertex_buffer,
+            index_buffer
         }
     }
 }
@@ -61,8 +71,8 @@ impl WgpuDrawlet for TexturedMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_bind_group(0, self.mvp_buffer.get_bind_group(), &[]);
         render_pass.set_bind_group(1, self.gpu_texture.get_bind_group(), &[]);
-        render_pass.set_vertex_buffer(0, self.mesh.vertex.buffer.slice(..));
-        render_pass.set_index_buffer(self.mesh.index.buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.access().slice());
+        render_pass.set_index_buffer(self.index_buffer.access().slice(), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 }

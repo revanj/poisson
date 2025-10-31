@@ -8,9 +8,9 @@ use parking_lot::Mutex;
 use wgpu::{ SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
-use crate::render_backend::{Buffer, DrawletHandle, DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, WgpuMesh};
-use crate::render_backend::web::{Device, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
+use crate::render_backend::{DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
+use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh};
+use crate::render_backend::web::{WgpuBuffer, Device, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
@@ -26,7 +26,8 @@ pub struct ColoredMeshDrawlet {
     device: Weak<Device>,
     num_indices: u32,
     mvp_buffer: GpuMat4,
-    mesh: Arc<WgpuMesh>
+    vertex_buffer: rj::Own<WgpuBuffer<ColoredVertex>>,
+    index_buffer: rj::Own<WgpuBuffer<u32>>
 }
 
 impl ColoredMeshDrawlet {
@@ -35,12 +36,20 @@ impl ColoredMeshDrawlet {
         init_data: &ColoredMeshData
     ) -> Self {
         let uniform_buffer = GpuMat4::from_mat4(&device.device, &init_data.mvp_data);
-        
+
+        let vertex_buffer = init_data.mesh.vertex.buffer.downcast()
+            .expect("failed to cast vertex buffer to drawlet buffer type");
+
+        let index_buffer = init_data.mesh.index.buffer.downcast()
+            .expect("failed to cast index buffer to drawlet buffer type");
+
+
         Self {
             device: Arc::downgrade(device),
-            num_indices: init_data.mesh.index.len() as u32,
+            num_indices: init_data.mesh.index.get_count() as u32,
             mvp_buffer: uniform_buffer,
-            mesh: init_data.mesh.clone()
+            vertex_buffer,
+            index_buffer
         }
     }
 }
@@ -52,8 +61,8 @@ impl RenderDrawlet for ColoredMeshDrawlet {
 impl WgpuDrawlet for ColoredMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_bind_group(0, self.mvp_buffer.get_bind_group(), &[]);
-        render_pass.set_vertex_buffer(0, self.mesh.vertex.buffer.slice(..));
-        render_pass.set_index_buffer(self.mesh.index.buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.access().slice());
+        render_pass.set_index_buffer(self.index_buffer.access().slice(), wgpu::IndexFormat::Uint32);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 }

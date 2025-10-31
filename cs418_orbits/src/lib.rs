@@ -1,27 +1,24 @@
+use cgmath as cg;
+use cgmath::{Matrix4, SquareMatrix, Vector3};
+use console_error_panic_hook;
+use fs_embed::fs_embed;
+use instant::Instant;
+use poisson_renderer::input::Input;
+use poisson_renderer::math::utils::perspective;
+use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuPipeline, WgpuRenderBackend};
+use poisson_renderer::render_backend::{LayerHandle, Mat4Ubo, PipelineHandle, RenderBackend, Wgpu};
+use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use std::error::Error;
 use std::f32::consts::PI;
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::sync::{Arc, Weak};
-use instant::Instant;
-use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
-use console_error_panic_hook;
-use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle};
-use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuBuffer, WgpuPipeline, WgpuRenderBackend};
-use winit::keyboard::{KeyCode, PhysicalKey};
-use cgmath as cg;
-use cgmath::{relative_ne, Matrix4, SquareMatrix, Vector3, Zero};
-use fs_embed::fs_embed;
-use poisson_renderer::math::utils::{orthographic, perspective};
+use std::sync::Arc;
 // #[cfg(not(target_arch = "wasm32"))]
 // use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::wasm_bindgen;
-use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, WgpuMesh, TexturedMesh};
+use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh};
 use poisson_renderer::render_backend::web::colored_mesh::{ColoredMeshDrawlet, ColoredMeshPipeline};
 use rj::Own;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -50,7 +47,7 @@ struct CelestialBody {
 
 impl CelestialBody {
     fn new(pipeline: &rj::Own<ColoredMeshPipeline>,
-           mesh: &Arc<WgpuMesh>,
+           mesh: &Arc<Mesh<ColoredVertex>>,
            spin_speed: f32,
            revolve_radius: f32,
            revolve_speed: f32,
@@ -78,7 +75,7 @@ impl CelestialBody {
         }
     }
 
-    fn set_mvp(self: &mut Self, renderer: &mut WgpuRenderBackend, mvp: cgmath::Matrix4<f32>) {
+    fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>) {
         self.drawlet.access().set_mvp(Mat4Ubo{ data: mvp  })
     }
 
@@ -96,7 +93,7 @@ impl CelestialBody {
 
         let tform =  Matrix4::from_translation(self.base_position + translation)* rotation * scale;
 
-        self.set_mvp(renderer, view_proj * tform);
+        self.set_mvp(view_proj * tform);
 
         for c in &mut self.children {
             c.access().base_position = self.base_position + translation;
@@ -153,7 +150,7 @@ impl PoissonGame for Orbits {
             ColoredVertex {pos: [-1f32,  1f32, -1f32], color: [0f32, 1f32, 0f32]},
             ColoredVertex {pos: [ 1f32, -1f32, -1f32], color: [1f32, 0f32, 0f32]}
         ];
-        let tetrahedron_mesh = Arc::new(WgpuMesh {
+        let tetrahedron_mesh = Arc::new(Mesh {
             index: renderer.create_index_buffer(&tetrahedron_indices),
             vertex: renderer.create_vertex_buffer(tetrahedron_vertices.as_slice())
         });
@@ -170,7 +167,7 @@ impl PoissonGame for Orbits {
             ColoredVertex {pos: [ 0f32,  0f32, -1f32], color: [0.5f32, 0.5f32,   0f32]},
             ColoredVertex {pos: [-1f32,  0f32,  0f32], color: [  0f32, 0.5f32, 0.5f32]}
         ];
-        let octahedron_mesh = Arc::new(WgpuMesh {
+        let octahedron_mesh = Arc::new(Mesh {
             index: renderer.create_index_buffer(octahedron_indices.as_slice()),
             vertex: renderer.create_vertex_buffer(octahedron_vertices.as_slice())
         });

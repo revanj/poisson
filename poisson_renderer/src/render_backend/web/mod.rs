@@ -9,7 +9,7 @@ use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use winit::window::Window;
-use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID, Buffer, DrawletID};
+use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID, DrawletID};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -19,7 +19,7 @@ use wgpu::util::DeviceExt;
 use image;
 use image::EncodableLayout;
 use parking_lot::Mutex;
-use wgpu::{BindGroup, BindGroupLayout, CommandEncoder, RenderPassDepthStencilAttachment, SurfaceConfiguration, TextureFormat, TextureView};
+use wgpu::{BindGroup, BindGroupLayout, BufferSlice, CommandEncoder, RenderPassDepthStencilAttachment, SurfaceConfiguration, TextureFormat, TextureView};
 use wgpu::hal::DepthStencilAttachment;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -346,7 +346,6 @@ pub struct WgpuRenderBackend {
 
 impl RenderBackend for WgpuRenderBackend {
     const PERSPECTIVE_ALIGNMENT: [f32; 3] = [1f32, 1f32, -1f32];
-    type Buffer = WgpuBuffer;
 
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
     {
@@ -407,7 +406,7 @@ impl RenderBackend for WgpuRenderBackend {
         self.size_changed = true;
     }
 
-    fn create_index_buffer(self: &Self, data: &[u32]) -> WgpuBuffer {
+    fn create_index_buffer(self: &Self, data: &[u32]) -> GpuBufferHandle<u32> {
         let index_data: &[u8] = unsafe {
             std::slice::from_raw_parts(
                 data.as_ptr() as *const u8, data.len() * size_of::<u32>()
@@ -422,10 +421,19 @@ impl RenderBackend for WgpuRenderBackend {
             }
         );
 
-        WgpuBuffer { buffer: index_buffer, size: data.len() }
+        let buffer_own = rj::Own::new(
+            WgpuBuffer::<u32> {
+                buffer: index_buffer,
+                size: data.len(),
+                _phantom_data: PhantomData::default()
+            });
+        
+
+        GpuBufferHandle::from_own(buffer_own.upcast())
+        
     }
 
-    fn create_vertex_buffer<T:Sized>(self: &Self, data: &[T]) -> WgpuBuffer {
+    fn create_vertex_buffer<T:Sized + 'static>(self: &Self, data: &[T]) -> GpuBufferHandle<T> {
         let vertex_data: &[u8] = unsafe {
             std::slice::from_raw_parts(
                 data.as_ptr() as *const u8, data.len() * size_of::<T>()
@@ -440,7 +448,15 @@ impl RenderBackend for WgpuRenderBackend {
             }
         );
 
-        WgpuBuffer { buffer: vertex_buffer, size: data.len() }
+        let buffer_own = rj::Own::new(
+            WgpuBuffer::<T> {
+                buffer: vertex_buffer,
+                size: data.len(),
+                _phantom_data: PhantomData::default()
+            }
+        );
+
+        GpuBufferHandle::from_own(buffer_own.upcast())
     }
 
     fn get_width(self: &Self) -> u32 {
@@ -453,6 +469,8 @@ impl RenderBackend for WgpuRenderBackend {
 }
 
 use wasm_bindgen::JsCast;
+use poisson_macros::AsAny;
+use crate::render_backend::render_interface::resources::{GpuBufferHandle, GpuBufferTrait};
 
 #[cfg(target_arch = "wasm32")]
 fn get_canvas_size(window: &Arc<dyn Window>) -> (u32, u32) {
@@ -645,13 +663,24 @@ pub trait CreateDrawletWgpu
     // ) -> &'_ mut RenObjType::Drawlet;
 }
 
-pub struct WgpuBuffer {
+
+pub struct WgpuBuffer<T> {
     size: usize,
     buffer: wgpu::Buffer,
+    _phantom_data: PhantomData<T>
 }
 
-impl Buffer for WgpuBuffer {
-    fn len(&self) -> usize {
+impl<T> WgpuBuffer<T> {
+    pub(crate) fn slice(&self) -> BufferSlice<'_> {
+        self.buffer.slice(..)
+    }
+}
+
+impl<T: 'static> GpuBufferTrait<T> for WgpuBuffer<T> {
+    fn get_size_bytes(&self) -> usize {
+        self.size * size_of::<T>()
+    }
+    fn get_count(&self) -> usize {
         self.size
     }
 }

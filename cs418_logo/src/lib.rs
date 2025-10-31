@@ -19,7 +19,7 @@ use poisson_renderer::math::utils::{orthographic, perspective};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
-use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, WgpuMesh, TexturedMesh};
+use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh, TexturedMesh};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -100,7 +100,7 @@ impl PoissonGame for NothingGame {
         
         let orange_mesh_data = ColoredMeshData {
             mvp_data: cg::Matrix4::identity(),
-            mesh: Arc::new(WgpuMesh {
+            mesh: Arc::new(Mesh {
                 index: index_buffer,
                 vertex: vertex_buffer
             }),

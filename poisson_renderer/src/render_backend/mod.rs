@@ -1,3 +1,5 @@
+#![feature()]
+
 use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -7,6 +9,7 @@ use parking_lot::Mutex;
 use winit::event::WindowEvent;
 use crate::{AsAny, PoissonGame};
 use crate::render_backend::render_interface::RenderObject;
+use crate::render_backend::render_interface::resources::GpuBufferHandle;
 // #[cfg(not(target_arch = "wasm32"))]
 // pub mod vulkan;
 
@@ -33,21 +36,20 @@ pub struct DrawletID(usize);
 pub struct ViewID(usize);
 
 
-trait Ren {
+pub trait Ren {
 }
-struct Wgpu {} impl Ren for Wgpu {}
-struct Vk {} impl Ren for Vk {}
+pub struct Wgpu {} impl Ren for Wgpu {}
+pub struct Vk {} impl Ren for Vk {}
 
 
 pub trait RenderBackend {
-    type Buffer: Buffer;
     const PERSPECTIVE_ALIGNMENT: [f32; 3];
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized;
     fn render(self: &mut Self, window: &Arc<dyn Window>);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
-    fn create_index_buffer(self: &Self, data: &[u32]) -> Self::Buffer;
-    fn create_vertex_buffer<T:Sized>(self: &Self, data: &[T]) -> Self::Buffer;
+    fn create_index_buffer(self: &Self, data: &[u32]) -> GpuBufferHandle<u32>;
+    fn create_vertex_buffer<T:Sized + 'static>(self: &Self, data: &[T]) -> GpuBufferHandle<T>;
 
     fn get_width(self: &Self) -> u32;
     fn get_height(self: &Self) -> u32;
@@ -100,8 +102,4 @@ pub struct ViewHandle {
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct MvpUniform {
     data: [[f32; 4]; 4]
-}
-
-pub trait Buffer {
-    fn len(&self) -> usize;
 }
