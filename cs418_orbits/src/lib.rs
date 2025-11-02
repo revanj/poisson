@@ -11,9 +11,6 @@ use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use std::error::Error;
 use std::f32::consts::PI;
 use std::sync::Arc;
-// #[cfg(not(target_arch = "wasm32"))]
-// use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
-
 use poisson_renderer::render_backend::render_interface::drawlets::{ColoredMeshDrawletTrait, DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
 use poisson_renderer::render_backend::render_interface::Mesh;
 use rj::Own;

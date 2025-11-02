@@ -1,5 +1,6 @@
 pub mod colored_mesh;
 pub mod textured_mesh;
+mod lit_colored_mesh;
 
 use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredMesh;
 use crate::render_backend::render_interface::drawlets::textured_mesh::TexturedMesh;
@@ -9,9 +10,7 @@ use crate::render_backend::{DrawletID, PassID, PipelineID, RenderDrawlet};
 
 pub(crate) trait DrawletTrait<RenObjType: RenderObject> {}
 
-pub trait ColoredMeshDrawletTrait: DrawletTrait<ColoredMesh> {
-    fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>);
-}
+
 
 pub(crate) trait PassTrait: std::any::Any {
     fn create_textured_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, rj::Own<dyn PipelineTrait<TexturedMesh>>);

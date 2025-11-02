@@ -1,6 +1,10 @@
 use std::sync::Arc;
-use crate::render_backend::render_interface::drawlets::{ColoredMeshDrawletTrait, DrawletHandle};
+use crate::render_backend::render_interface::drawlets::{DrawletHandle, DrawletTrait};
 use crate::render_backend::render_interface::{Mesh, RenderObject};
+
+pub trait ColoredMeshDrawletTrait: DrawletTrait<ColoredMesh> {
+    fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>);
+}
 
 impl DrawletHandle<ColoredMesh> {
     pub fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>) {
@@ -22,5 +26,3 @@ pub struct ColoredMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
     pub mesh: Arc<Mesh<ColoredVertex>>
 }
-
-
