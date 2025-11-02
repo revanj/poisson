@@ -1,4 +1,4 @@
-#![feature()]
+#![feature(arbitrary_self_types)]
 
 use std::any::Any;
 use std::marker::PhantomData;
@@ -24,7 +24,7 @@ pub struct Mat4Ubo {
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
-pub struct LayerID(usize);
+pub struct PassID(usize);
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct PipelineID(usize);
@@ -54,10 +54,10 @@ pub trait RenderBackend {
     fn get_width(self: &Self) -> u32;
     fn get_height(self: &Self) -> u32;
 
-    fn get_render_pass_id() -> LayerID {
+    fn get_render_pass_id() -> PassID {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
-        LayerID(COUNTER.fetch_add(1, Ordering::Relaxed))
+        PassID(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 }
 
@@ -73,30 +73,30 @@ pub trait RenderDrawlet: Sized {
     type Data;
 }
 
-#[derive(Copy, Clone)]
-pub struct LayerHandle {
-    id: LayerID,
-}
+// #[derive(Copy, Clone)]
+// pub struct PassHandle {
+//     id: PassID,
+// }
 
-#[derive(Copy, Clone)]
-pub struct PipelineHandle<D:RenderObject> {
-    id: PipelineID,
-    layer_id: LayerID,
-    _pipeline_ty: PhantomData<D>
-}
+// #[derive(Copy, Clone)]
+// pub struct PipelineHandle<D:RenderObject> {
+//     id: PipelineID,
+//     layer_id: PassID,
+//     _pipeline_ty: PhantomData<D>
+// }
 
 #[derive(Copy, Clone)]
 pub struct DrawletHandle<D:RenderObject> {
     id: DrawletID,
     pipeline_id: PipelineID,
-    layer_id: LayerID,
+    layer_id: PassID,
     _drawlet_ty: PhantomData<D>
 }
 
-#[derive(Copy, Clone)]
-pub struct ViewHandle {
-    id: ViewID
-}
+// #[derive(Copy, Clone)]
+// pub struct ViewHandle {
+//     id: ViewID
+// }
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]

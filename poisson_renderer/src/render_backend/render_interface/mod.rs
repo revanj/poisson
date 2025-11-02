@@ -3,10 +3,15 @@ pub mod drawlets;
 
 use std::sync::Arc;
 use image::DynamicImage;
+use crate::render_backend::DrawletHandle;
+use crate::render_backend::render_interface::drawlets::{ColoredMeshDrawletTrait, DrawletTrait, TexturedMeshDrawletTrait};
 use crate::render_backend::render_interface::resources::GpuBufferHandle;
 use crate::render_backend::web::WgpuBuffer;
 
-pub trait RenderObject {}
+pub trait RenderObject {
+    type Data;
+    type DynDrawlet: ?Sized;
+}
 
 pub struct Mesh<T> {
     pub index: GpuBufferHandle<u32>,
@@ -20,7 +25,10 @@ pub struct TexVertex {
     pub tex_coord: [f32; 2]
 }
 pub struct TexturedMesh {}
-impl RenderObject for TexturedMesh {}
+impl RenderObject for TexturedMesh {
+    type Data = TexturedMeshData;
+    type DynDrawlet = dyn TexturedMeshDrawletTrait;
+}
 pub struct TexturedMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
     pub mesh: Arc<Mesh<TexVertex>>,
@@ -34,7 +42,10 @@ pub struct ColoredVertex {
     pub color: [f32; 3]
 }
 pub struct ColoredMesh {}
-impl RenderObject for ColoredMesh {}
+impl RenderObject for ColoredMesh {
+    type Data = ColoredMeshData;
+    type DynDrawlet = dyn ColoredMeshDrawletTrait;
+}
 pub struct ColoredMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
     pub mesh: Arc<Mesh<ColoredVertex>>

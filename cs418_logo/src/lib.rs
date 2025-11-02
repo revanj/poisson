@@ -6,7 +6,7 @@ use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle};
+use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, PassHandle};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath as cg;
@@ -20,6 +20,7 @@ use poisson_renderer::math::utils::{orthographic, perspective};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh, TexturedMesh};
+use poisson_renderer::render_backend::render_interface::drawlets::PassHandle;
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -33,7 +34,7 @@ pub fn run() ->  Result<(), impl Error> {
 }
 
 pub struct NothingGame {
-    scene_render_pass: Option<LayerHandle>,
+    scene_render_pass: Option<PassHandle>,
     colored_mesh_pipeline: Option<PipelineHandle<ColoredMesh>>,
     orange_mesh_inst: Option<DrawletHandle<ColoredMesh>>,
     last_time: Instant,

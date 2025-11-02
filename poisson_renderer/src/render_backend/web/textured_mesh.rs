@@ -7,8 +7,10 @@ use parking_lot::Mutex;
 use wgpu::{SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
+use rj::Own;
 use crate::render_backend::{DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData, Mesh};
+use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData, Mesh, RenderObject};
+use crate::render_backend::render_interface::drawlets::{DrawletTrait, PipelineTrait, TexturedMeshDrawletTrait};
 use crate::render_backend::web::{Device, WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
@@ -204,3 +206,15 @@ impl TexturedMeshDrawlet {
         self.device.upgrade().as_ref().unwrap().queue.write_buffer(&self.mvp_buffer.buffer, 0, bytemuck::cast_slice(ubo_slice));
     }
 }
+
+impl PipelineTrait<TexturedMesh> for TexturedMeshPipeline {
+    fn create_drawlet(&mut self, init_data: TexturedMeshData) -> Own<dyn TexturedMeshDrawletTrait> {
+        WgpuPipeline::create_drawlet(self, init_data).upcast()
+    }
+}
+
+impl DrawletTrait<TexturedMesh> for TexturedMeshDrawlet {
+
+}
+
+impl TexturedMeshDrawletTrait for TexturedMeshDrawlet {}

@@ -6,7 +6,7 @@ use instant::Instant;
 use poisson_renderer::input::Input;
 use poisson_renderer::math::utils::perspective;
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuPipeline, WgpuRenderBackend};
-use poisson_renderer::render_backend::{LayerHandle, Mat4Ubo, PipelineHandle, RenderBackend, Wgpu};
+use poisson_renderer::render_backend::{Mat4Ubo, RenderBackend, Wgpu};
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use std::error::Error;
 use std::f32::consts::PI;
@@ -19,6 +19,7 @@ use poisson_renderer::render_backend::web::colored_mesh::{ColoredMeshDrawlet, Co
 use rj::Own;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
+use poisson_renderer::render_backend::render_interface::drawlets::{ColoredMeshDrawletHandle, ColoredMeshDrawletTrait, DrawletTrait, PassHandle, PipelineHandle, PipelineTrait};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -32,7 +33,7 @@ pub fn run() ->  Result<(), impl Error> {
 }
 
 struct CelestialBody {
-    drawlet: rj::Own<ColoredMeshDrawlet>,
+    drawlet: ColoredMeshDrawletHandle,
     base_position: cg::Vector3<f32>,
     transform: Matrix4<f32>,
     spin_speed: f32,
@@ -46,7 +47,7 @@ struct CelestialBody {
 }
 
 impl CelestialBody {
-    fn new(pipeline: &rj::Own<ColoredMeshPipeline>,
+    fn new(pipeline: &mut PipelineHandle<ColoredMesh>,
            mesh: &Arc<Mesh<ColoredVertex>>,
            spin_speed: f32,
            revolve_radius: f32,
@@ -58,7 +59,7 @@ impl CelestialBody {
             mvp_data: Matrix4::identity(),
             mesh: mesh.clone(),
         };
-        let drawlet = pipeline.access().create_drawlet(body_data);
+        let drawlet = pipeline.create_drawlet(body_data);
 
         CelestialBody {
             drawlet,
@@ -76,7 +77,7 @@ impl CelestialBody {
     }
 
     fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>) {
-        self.drawlet.access().set_mvp(Mat4Ubo{ data: mvp  })
+        self.drawlet.set_mvp(mvp)
     }
 
     pub fn update(&mut self, renderer: &mut WgpuRenderBackend, view_proj: cgmath::Matrix4<f32>, dt: f32) {
@@ -113,7 +114,7 @@ impl CelestialBody {
 }
 
 pub struct Orbits {
-    scene_render_pass: Option<LayerHandle>,
+    scene_render_pass: Option<PassHandle>,
     colored_mesh_pipeline: Option<PipelineHandle<ColoredMesh>>,
     sun: Option<CelestialBody>,
     last_time: Instant,
@@ -175,24 +176,24 @@ impl PoissonGame for Orbits {
         let triangle_shader = self.assets.get_file(shader!("shaders/colored_mesh")).unwrap();
         let triangle_shader_content = triangle_shader.read_str().unwrap();
 
-        let r_handle = renderer.create_render_pass();
-        let p_handle =
-            r_handle.access().create_pipeline::<ColoredMesh>(
+        let mut r_handle = renderer.create_render_pass();
+
+        let mut p_handle = r_handle.create_colored_mesh_pipeline(
                 "cs418_logo/assets/shaders/colored_mesh",
                 triangle_shader_content.as_str());
 
         self.sun = Some(CelestialBody::new(
-            &p_handle, &octahedron_mesh,
+            &mut p_handle, &octahedron_mesh,
             PI, 0f32, 0f32, 1f32
         ));
 
         let earth = rj::Own::new(CelestialBody::new(
-                 &p_handle, &octahedron_mesh,
+                 &mut p_handle, &octahedron_mesh,
                 4f32*PI, 2f32, 0.2f32*PI, 0.2f32
         ));
         let moon = rj::Own::new(
             CelestialBody::new(
-                 &p_handle, &tetrahedron_mesh,
+                 &mut p_handle, &tetrahedron_mesh,
                 2f32*PI, 0.5f32, 2f32*PI, 0.08f32
             ));
         earth.access().add_child(moon);
@@ -200,18 +201,18 @@ impl PoissonGame for Orbits {
 
         let mars = rj::Own::new(
             CelestialBody::new(
-                &p_handle, &octahedron_mesh,
+                &mut p_handle, &octahedron_mesh,
                 4f32/2.2f32 * PI, 2f32 * 1.6f32, 0.2f32 / 1.9f32 *PI, 0.2f32 * 0.9f32
             )
         );
 
         let phobos = rj::Own::new(
             CelestialBody::new(
-                &p_handle, &tetrahedron_mesh,
+                &mut p_handle, &tetrahedron_mesh,
                 6f32 * PI, 0.4f32, 4f32 * PI, 0.1f32));
 
         let deimos = rj::Own::new(
-            CelestialBody::new(&p_handle, &tetrahedron_mesh,
+            CelestialBody::new(&mut p_handle, &tetrahedron_mesh,
                 4f32/2.0f32 * PI, 0.8f32, 4f32/2.0f32 * PI, 0.05f32)
         );
 

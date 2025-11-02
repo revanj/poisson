@@ -4,7 +4,7 @@ use instant::Instant;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use console_error_panic_hook;
 use poisson_renderer::input::Input;
-use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, LayerHandle};
+use poisson_renderer::render_backend::{DrawletHandle, Mat4Ubo, PipelineHandle, RenderBackend, PassHandle};
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuRenderBackend};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use cgmath;
@@ -31,7 +31,7 @@ pub fn run() ->  Result<(), impl Error> {
 }
 
 pub struct NothingGame {
-    scene_render_pass: Option<LayerHandle>,
+    scene_render_pass: Option<PassHandle>,
     textured_mesh_pipeline: Option<PipelineHandle<TexturedMesh>>,
     textured_mesh_inst: Option<DrawletHandle<TexturedMesh>>,
     last_time: Instant,

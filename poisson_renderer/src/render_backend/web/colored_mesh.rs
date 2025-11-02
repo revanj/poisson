@@ -4,13 +4,16 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::{Arc,Weak};
+use cgmath::Matrix4;
 use parking_lot::Mutex;
 use wgpu::{ SurfaceConfiguration};
 use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
-use crate::render_backend::{DrawletID, LayerID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh};
-use crate::render_backend::web::{WgpuBuffer, Device, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
+use rj::Own;
+use crate::render_backend::{DrawletID, PassID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
+use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh, RenderObject};
+use crate::render_backend::render_interface::drawlets::{ColoredMeshDrawletTrait, DrawletTrait, PipelineTrait};
+use crate::render_backend::web::{WgpuBuffer, Device, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject, WgpuRenderPass};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
@@ -190,5 +193,20 @@ impl ColoredMeshDrawlet {
             )
         };
         self.device.upgrade().as_ref().unwrap().queue.write_buffer(&self.mvp_buffer.buffer, 0, bytemuck::cast_slice(ubo_slice));
+    }
+}
+
+impl PipelineTrait<ColoredMesh> for ColoredMeshPipeline {
+    fn create_drawlet(&mut self, init_data: ColoredMeshData) -> Own<dyn ColoredMeshDrawletTrait> {
+        WgpuPipeline::create_drawlet(self, init_data).upcast()
+    }
+}
+
+impl DrawletTrait<ColoredMesh> for ColoredMeshDrawlet {}
+impl ColoredMeshDrawletTrait for ColoredMeshDrawlet {
+    fn set_mvp(self: &mut Self, mvp: Matrix4<f32>) {
+        self.set_mvp(Mat4Ubo {
+            data: mvp,
+        })
     }
 }

@@ -9,7 +9,7 @@ use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
 use winit::window::Window;
-use crate::render_backend::{DrawletHandle, PipelineHandle, PipelineID, RenderBackend, RenderDrawlet, LayerHandle, LayerID, RenderPipeline, ViewHandle, ViewID, DrawletID};
+use crate::render_backend::{PipelineID, RenderBackend, RenderDrawlet, PassID, RenderPipeline, ViewID, DrawletID};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use bytemuck;
@@ -27,9 +27,9 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::web::WindowExtWeb;
 use crate::{render_backend, AsAny, PoissonGame};
 use crate::input::Input;
-use crate::render_backend::render_interface::RenderObject;
+use crate::render_backend::render_interface::{ColoredMesh, RenderObject, TexturedMesh};
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
-use crate::render_backend::web::textured_mesh::TexturedMeshDrawlet;
+use crate::render_backend::web::textured_mesh::{TexturedMeshDrawlet, TexturedMeshPipeline};
 
 pub trait WgpuRenderObject: RenderObject + Sized {
     type Drawlet: WgpuDrawlet;
@@ -44,7 +44,7 @@ WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType> + WgpuPip
     fn create_drawlet(
         self: &mut Self,
         init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data
-    ) -> rj::Own<RenObjType::Drawlet>;
+    ) -> rj::Own<<RenObjType as WgpuRenderObject>::Drawlet>;
 
     fn new(
         device: &Arc<Device>,
@@ -220,11 +220,38 @@ impl Camera {
     }
 }
 
+
+// impl CreatePipeline<ColoredMesh> for WgpuRenderPass {
+//     fn create_pipeline(self: &mut Self, shader_path: &str, shader_text: &str) -> Own<<ColoredMesh as WgpuRenderObject>::Pipeline> {
+//         self.create_pipeline::<ColoredMesh>(shader_path, shader_text)
+//     }
+// }
+//
+// impl CreatePipeline<TexturedMesh> for WgpuRenderPass {
+//     fn create_pipeline(self: &mut Self, shader_path: &str, shader_text: &str) -> Own<TexturedMeshPipeline> {
+//         self.create_pipeline::<TexturedMesh>(shader_path, shader_text)
+//     }
+// }
+
 pub struct WgpuRenderPass {
     device: std::sync::Weak<Device>,
     surface_config: SurfaceConfiguration,
     depth_stencil: Texture,
     pipelines: HashMap<PipelineID, rj::Own<dyn WgpuPipelineDyn>>
+}
+
+impl PassTrait for WgpuRenderPass {
+    fn create_textured_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, Own<(dyn PipelineTrait<TexturedMesh> + 'static)>) {
+        let (id, pipe) = self.create_pipeline::<TexturedMesh>(shader_path, shader_text);
+
+        (id, pipe.upcast())
+    }
+
+    fn create_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, Own<(dyn PipelineTrait<ColoredMesh> + 'static)>) {
+        let (id, pipe) = self.create_pipeline::<ColoredMesh>(shader_path, shader_text);
+
+        (id, pipe.upcast())
+    }
 }
 
 impl WgpuRenderPass {
@@ -241,7 +268,7 @@ impl WgpuRenderPass {
         }
     }
 
-    pub fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, shader_path: &str, shader_text: &str) -> rj::Own<RenObjType::Pipeline> {
+    pub fn create_pipeline<RenObjType: WgpuRenderObject>(self: &mut Self, shader_path: &str, shader_text: &str) -> (PipelineID, rj::Own<<RenObjType as WgpuRenderObject>::Pipeline>) {
         let owned_str = shader_path.to_owned();
         let wgsl_path = owned_str.clone() + ".wgsl";
         #[cfg(not(target_arch="wasm32"))]
@@ -279,10 +306,10 @@ impl WgpuRenderPass {
 
         self.pipelines.insert(pipeline_id.clone(), pipeline.clone());
 
-        rj::Own::from_inner(inner)
+        (pipeline_id.clone(), rj::Own::from_inner(inner))
     }
 
-    fn get_pipeline_id() -> PipelineID {
+    pub fn get_pipeline_id() -> PipelineID {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static COUNTER:AtomicUsize = AtomicUsize::new(1);
         PipelineID(COUNTER.fetch_add(1, Ordering::Relaxed))
@@ -340,7 +367,7 @@ pub struct WgpuRenderBackend {
     size: winit::dpi::PhysicalSize<u32>,
     size_changed: bool,
     max_size: winit::dpi::PhysicalSize<u32>,
-    render_passes: HashMap<LayerID, rj::Own<WgpuRenderPass>>,
+    render_passes: HashMap<PassID, rj::Own<WgpuRenderPass>>,
 }
 
 
@@ -470,6 +497,8 @@ impl RenderBackend for WgpuRenderBackend {
 
 use wasm_bindgen::JsCast;
 use poisson_macros::AsAny;
+use rj::Own;
+use crate::render_backend::render_interface::drawlets::{PassHandle, PassTrait, PipelineTrait};
 use crate::render_backend::render_interface::resources::{GpuBufferHandle, GpuBufferTrait};
 
 #[cfg(target_arch = "wasm32")]
@@ -606,7 +635,7 @@ impl WgpuRenderBackend {
 
 impl CreateDrawletWgpu for WgpuRenderBackend
 {
-    fn create_render_pass(self: &mut Self) -> rj::Own<WgpuRenderPass> {
+    fn create_render_pass(self: &mut Self) -> PassHandle {
         let id = Self::get_render_pass_id();
         let ret = rj::Own::new(WgpuRenderPass::new(
             &self.device,
@@ -614,7 +643,7 @@ impl CreateDrawletWgpu for WgpuRenderBackend
         ));
         self.render_passes.insert(id.clone(), ret.clone());
 
-        ret
+        PassHandle { id, ptr: ret.upcast() }
     }
 
 
@@ -642,7 +671,7 @@ pub trait CreateDrawletWgpu
 {
     fn create_render_pass(
         self: &mut Self
-    ) -> rj::Own<WgpuRenderPass>;
+    ) -> PassHandle;
 
     // fn create_pipeline<RenObjType: WgpuRenderObject>(
     //     self: &mut Self,
