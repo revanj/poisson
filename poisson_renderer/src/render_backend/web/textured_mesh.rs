@@ -9,8 +9,9 @@ use wgpu::util::DeviceExt;
 use poisson_macros::AsAny;
 use rj::Own;
 use crate::render_backend::{DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::{TexVertex, TexturedMesh, TexturedMeshData, Mesh, RenderObject};
-use crate::render_backend::render_interface::drawlets::{DrawletTrait, PipelineTrait, TexturedMeshDrawletTrait};
+use crate::render_backend::render_interface::{RenderObject};
+use crate::render_backend::render_interface::drawlets::{DrawletTrait, PipelineTrait};
+use crate::render_backend::render_interface::drawlets::textured_mesh::{UvVertex, TexturedMesh, TexturedMeshData, TexturedMeshDrawletTrait};
 use crate::render_backend::web::{Device, WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
@@ -28,7 +29,7 @@ pub struct TexturedMeshDrawlet {
     num_indices: u32,
     gpu_texture: ShaderTexture,
     mvp_buffer: GpuMat4,
-    vertex_buffer: rj::Own<WgpuBuffer<TexVertex>>,
+    vertex_buffer: rj::Own<WgpuBuffer<UvVertex>>,
     index_buffer: rj::Own<WgpuBuffer<u32>>
 }
 
@@ -136,7 +137,7 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
                 push_constant_ranges: &[],
             });
 
-        let desc = TexVertex::desc();
+        let desc = UvVertex::desc();
 
         let render_pipeline = device.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),

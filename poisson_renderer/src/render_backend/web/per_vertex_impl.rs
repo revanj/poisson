@@ -1,13 +1,14 @@
-use crate::render_backend::render_interface::{TexVertex, ColoredVertex};
+use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredVertex;
+use crate::render_backend::render_interface::drawlets::textured_mesh::UvVertex;
 
 pub trait WgpuPerVertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
 }
 
-impl WgpuPerVertex for TexVertex {
+impl WgpuPerVertex for UvVertex {
     fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: size_of::<TexVertex>() as wgpu::BufferAddress,
+            array_stride: size_of::<UvVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {

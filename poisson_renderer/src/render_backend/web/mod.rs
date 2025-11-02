@@ -27,7 +27,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::web::WindowExtWeb;
 use crate::{render_backend, AsAny, PoissonGame};
 use crate::input::Input;
-use crate::render_backend::render_interface::{ColoredMesh, RenderObject, TexturedMesh};
+use crate::render_backend::render_interface::{RenderObject};
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
 use crate::render_backend::web::textured_mesh::{TexturedMeshDrawlet, TexturedMeshPipeline};
 
@@ -499,6 +499,8 @@ use wasm_bindgen::JsCast;
 use poisson_macros::AsAny;
 use rj::Own;
 use crate::render_backend::render_interface::drawlets::{PassHandle, PassTrait, PipelineTrait};
+use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredMesh;
+use crate::render_backend::render_interface::drawlets::textured_mesh::TexturedMesh;
 use crate::render_backend::render_interface::resources::{GpuBufferHandle, GpuBufferTrait};
 
 #[cfg(target_arch = "wasm32")]

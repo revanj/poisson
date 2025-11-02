@@ -1,23 +1,22 @@
-use std::sync::Arc;
-use image::Rgba;
-use parking_lot::Mutex;
-use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, RenderObject, TexturedMesh};
-use crate::render_backend::{DrawletID, Mat4Ubo, PassID, PipelineID, RenderDrawlet, Wgpu};
-use crate::render_backend::web::colored_mesh::ColoredMeshDrawlet;
-use crate::render_backend::web::WgpuRenderObject;
+pub mod colored_mesh;
+pub mod textured_mesh;
 
-pub trait DrawletTrait<RenObjType: RenderObject> {}
-pub trait TexturedMeshDrawletTrait: DrawletTrait<TexturedMesh> {}
+use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredMesh;
+use crate::render_backend::render_interface::drawlets::textured_mesh::TexturedMesh;
+use crate::render_backend::render_interface::RenderObject;
+use crate::render_backend::web::WgpuRenderObject;
+use crate::render_backend::{DrawletID, PassID, PipelineID, RenderDrawlet};
+
+pub(crate) trait DrawletTrait<RenObjType: RenderObject> {}
+
 pub trait ColoredMeshDrawletTrait: DrawletTrait<ColoredMesh> {
     fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>);
 }
 
-pub trait PassTrait: std::any::Any {
+pub(crate) trait PassTrait: std::any::Any {
     fn create_textured_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, rj::Own<dyn PipelineTrait<TexturedMesh>>);
     fn create_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, rj::Own<dyn PipelineTrait<ColoredMesh>>);
 }
-
-
 
 pub struct PassHandle {
     pub(crate) id: PassID,
@@ -66,8 +65,3 @@ pub struct DrawletHandle<RenObjType: RenderObject> {
     pub(crate) ptr: rj::Own<RenObjType::DynDrawlet>
 }
 
-impl DrawletHandle<ColoredMesh> {
-    pub fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>) {
-        self.ptr.access().set_mvp(mvp);
-    }
-}

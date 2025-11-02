@@ -6,7 +6,7 @@ use instant::Instant;
 use poisson_renderer::input::Input;
 use poisson_renderer::math::utils::perspective;
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuPipeline, WgpuRenderBackend};
-use poisson_renderer::render_backend::{Mat4Ubo, RenderBackend, Wgpu};
+use poisson_renderer::render_backend::RenderBackend;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use std::error::Error;
 use std::f32::consts::PI;
@@ -14,12 +14,12 @@ use std::sync::Arc;
 // #[cfg(not(target_arch = "wasm32"))]
 // use poisson_renderer::render_backend::vulkan::{CreateDrawletVulkan, VulkanRenderBackend};
 
-use poisson_renderer::render_backend::render_interface::{ColoredMesh, ColoredMeshData, ColoredVertex, Mesh};
-use poisson_renderer::render_backend::web::colored_mesh::{ColoredMeshDrawlet, ColoredMeshPipeline};
+use poisson_renderer::render_backend::render_interface::drawlets::{ColoredMeshDrawletTrait, DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
+use poisson_renderer::render_backend::render_interface::Mesh;
 use rj::Own;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
-use poisson_renderer::render_backend::render_interface::drawlets::{ColoredMeshDrawletTrait, DrawletHandle, DrawletTrait, PassHandle, PipelineHandle, PipelineTrait};
+use poisson_renderer::render_backend::render_interface::drawlets::colored_mesh::{ColoredMesh, ColoredMeshData, ColoredVertex};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
