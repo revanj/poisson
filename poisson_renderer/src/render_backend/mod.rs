@@ -85,13 +85,13 @@ pub trait RenderDrawlet: Sized {
 //     _pipeline_ty: PhantomData<D>
 // }
 
-#[derive(Copy, Clone)]
-pub struct DrawletHandle<D:RenderObject> {
-    id: DrawletID,
-    pipeline_id: PipelineID,
-    layer_id: PassID,
-    _drawlet_ty: PhantomData<D>
-}
+// #[derive(Copy, Clone)]
+// pub struct DrawletHandle<D:RenderObject> {
+//     id: DrawletID,
+//     pipeline_id: PipelineID,
+//     layer_id: PassID,
+//     _drawlet_ty: PhantomData<D>
+// }
 
 // #[derive(Copy, Clone)]
 // pub struct ViewHandle {

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use image::Rgba;
 use parking_lot::Mutex;
 use crate::render_backend::render_interface::{ColoredMesh, ColoredMeshData, RenderObject, TexturedMesh};
-use crate::render_backend::{DrawletHandle, DrawletID, Mat4Ubo, PassID, PipelineID, RenderDrawlet, Wgpu};
+use crate::render_backend::{DrawletID, Mat4Ubo, PassID, PipelineID, RenderDrawlet, Wgpu};
 use crate::render_backend::web::colored_mesh::ColoredMeshDrawlet;
 use crate::render_backend::web::WgpuRenderObject;
 
@@ -50,10 +50,10 @@ pub struct PipelineHandle<RenObjType: RenderObject> {
     ptr: rj::Own<dyn PipelineTrait<RenObjType>>
 }
 
-impl PipelineHandle<ColoredMesh> {
-    pub fn create_drawlet(&mut self, init_data: ColoredMeshData) -> ColoredMeshDrawletHandle {
+impl<RenObjType: RenderObject> PipelineHandle<RenObjType> {
+    pub fn create_drawlet(&mut self, init_data: RenObjType::Data) -> DrawletHandle<RenObjType> {
         let ptr_drawlet = self.ptr.access().create_drawlet(init_data);
-        ColoredMeshDrawletHandle {
+        DrawletHandle::<RenObjType> {
             id: DrawletID(0),
             ptr: ptr_drawlet,
         }
@@ -61,12 +61,12 @@ impl PipelineHandle<ColoredMesh> {
     }
 }
 
-pub struct ColoredMeshDrawletHandle {
+pub struct DrawletHandle<RenObjType: RenderObject> {
     pub(crate) id: DrawletID,
-    pub(crate) ptr: rj::Own<dyn ColoredMeshDrawletTrait>
+    pub(crate) ptr: rj::Own<RenObjType::DynDrawlet>
 }
 
-impl ColoredMeshDrawletHandle {
+impl DrawletHandle<ColoredMesh> {
     pub fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>) {
         self.ptr.access().set_mvp(mvp);
     }

@@ -19,7 +19,7 @@ use poisson_renderer::render_backend::web::colored_mesh::{ColoredMeshDrawlet, Co
 use rj::Own;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
-use poisson_renderer::render_backend::render_interface::drawlets::{ColoredMeshDrawletHandle, ColoredMeshDrawletTrait, DrawletTrait, PassHandle, PipelineHandle, PipelineTrait};
+use poisson_renderer::render_backend::render_interface::drawlets::{ColoredMeshDrawletTrait, DrawletHandle, DrawletTrait, PassHandle, PipelineHandle, PipelineTrait};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -33,7 +33,7 @@ pub fn run() ->  Result<(), impl Error> {
 }
 
 struct CelestialBody {
-    drawlet: ColoredMeshDrawletHandle,
+    drawlet: DrawletHandle<ColoredMesh>,
     base_position: cg::Vector3<f32>,
     transform: Matrix4<f32>,
     spin_speed: f32,
