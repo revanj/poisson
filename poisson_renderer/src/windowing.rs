@@ -28,11 +28,10 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        {
+            self.renderer.lock().as_mut().unwrap().process_event(self.window.as_ref().unwrap(), &event);
+        }
         match &event {
-            // those two should push event to a queue to be resolved before render_interface loop
-            WindowEvent::KeyboardInput { .. } => {
-                self.renderer.lock().as_mut().unwrap().process_event(&event);
-            },
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             },

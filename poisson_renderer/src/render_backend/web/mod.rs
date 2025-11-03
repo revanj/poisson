@@ -449,7 +449,9 @@ impl RenderBackend for WgpuRenderBackend {
         output.present();
     }
 
-    fn process_event(self: &mut Self, event: &WindowEvent) {
+    fn process_event(self: &mut Self, window: &Window, event: &WindowEvent) {
+        self.egui_renderer
+            .handle_input(window, &event);
     }
 
     fn resize(self: &mut Self, width: u32, height: u32) {
@@ -525,6 +527,10 @@ impl RenderBackend for WgpuRenderBackend {
 
     fn get_height(self: &Self) -> u32 {
         self.size.height
+    }
+
+    fn get_egui_renderer(self: &Self) -> EguiRenderer {
+        todo!()
     }
 }
 
