@@ -7,30 +7,23 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::marker::PhantomData;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc};
 use winit::window::Window;
-use crate::render_backend::{PipelineID, RenderBackend, RenderDrawlet, PassID, RenderPipeline, ViewID, DrawletID};
+use crate::render_backend::{PipelineID, RenderBackend, RenderDrawlet, PassID, RenderPipeline};
 use wgpu;
 use winit::dpi::PhysicalSize;
-use bytemuck;
 use cfg_if::cfg_if;
-use cgmath::Matrix4;
 use egui_wgpu::ScreenDescriptor;
-use wgpu::util::DeviceExt;
-use image;
 use image::EncodableLayout;
+use wgpu::util::DeviceExt;
 use parking_lot::Mutex;
-use wgpu::{BindGroup, BindGroupLayout, BufferSlice, CommandEncoder, RenderPassDepthStencilAttachment, SurfaceConfiguration, TextureFormat, TextureView};
-use wgpu::hal::DepthStencilAttachment;
-use winit::event::{ElementState, KeyEvent, WindowEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use wgpu::{BufferSlice, CommandEncoder, SurfaceConfiguration, TextureFormat, TextureView};
+use winit::event::{WindowEvent};
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
-use crate::{render_backend, AsAny, PoissonGame};
-use crate::input::Input;
+use crate::{AsAny};
 use crate::render_backend::render_interface::{RenderObject};
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
-use crate::render_backend::web::textured_mesh::{TexturedMeshDrawlet, TexturedMeshPipeline};
 
 pub trait EguiUiShow {
     fn show(&mut self, ctx: &egui::Context);
@@ -75,168 +68,6 @@ impl<T> WgpuDrawletDyn for T where T: WgpuDrawlet {
     }
 }
 
-struct SharedRenderResource {
-    camera_bind_group_layout: BindGroupLayout,
-    camera_bind_group: BindGroup
-}
-
-struct CameraController {
-    speed: f32,
-    is_forward_pressed: bool,
-    is_backward_pressed: bool,
-    is_left_pressed: bool,
-    is_right_pressed: bool,
-    last_update_duration: instant::Instant
-}
-
-impl CameraController {
-    fn new(speed: f32) -> Self {
-        Self {
-            speed,
-            is_forward_pressed: false,
-            is_backward_pressed: false,
-            is_left_pressed: false,
-            is_right_pressed: false,
-            last_update_duration: instant::Instant::now()
-        }
-    }
-
-    fn process_events(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::KeyboardInput {
-                event:
-                KeyEvent {
-                    state,
-                    physical_key: PhysicalKey::Code(keycode),
-                    ..
-                },
-                ..
-            } => {
-                let is_pressed = *state == ElementState::Pressed;
-                match keycode {KeyCode::KeyW | KeyCode::ArrowUp => {
-                    self.is_forward_pressed = is_pressed;
-                    true
-                }
-                    KeyCode::KeyA | KeyCode::ArrowLeft => {
-                        self.is_left_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyS | KeyCode::ArrowDown => {
-                        self.is_backward_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyD | KeyCode::ArrowRight => {
-                        self.is_right_pressed = is_pressed;
-                        true
-                    }
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
-    }
-
-    fn update_camera(&mut self, camera: &mut Camera) {
-        use cgmath::InnerSpace;
-        let forward = (camera.target - camera.eye);
-        let forward_norm = forward.normalize();
-        let forward_mag = forward.magnitude();
-
-        let now = instant::Instant::now();
-        let dt = now - self.last_update_duration;
-        self.last_update_duration = now;
-
-        let dt = dt.as_secs_f32();
-
-
-        // Prevents glitching when the camera gets too close to the
-        // center of the scene.
-        if self.is_forward_pressed && forward_mag > self.speed {
-            camera.eye += forward_norm * self.speed * dt;
-        }
-        if self.is_backward_pressed {
-            camera.eye -= forward_norm * self.speed * dt;
-        }
-
-        let right = forward_norm.cross(camera.up);
-
-        // Redo radius calc in case the forward/backward is pressed.
-        let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
-
-        log::info!("dt is {}", dt);
-
-        if self.is_right_pressed {
-            // Rescale the distance between the target and the eye so
-            // that it doesn't change. The eye, therefore, still
-            // lies on the circle made by the target and eye.
-            camera.eye = camera.target - (forward + right * self.speed * dt).normalize() * forward_mag;
-        }
-        if self.is_left_pressed {
-            camera.eye = camera.target - (forward - right * self.speed * dt).normalize() * forward_mag;
-        }
-    }
-}
-
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    view_proj: [[f32; 4]; 4],
-}
-
-impl CameraUniform {
-    fn new() -> Self {
-        use cgmath::SquareMatrix;
-        Self {
-            view_proj: cgmath::Matrix4::identity().into(),
-        }
-    }
-
-    fn update_view_proj(&mut self, camera: &Camera) {
-        self.view_proj = camera.build_view_projection_matrix().into();
-    }
-}
-
-struct Camera {
-    eye: cgmath::Point3<f32>,
-    target: cgmath::Point3<f32>,
-    up: cgmath::Vector3<f32>,
-    aspect: f32,
-    fovy: f32,
-    znear: f32,
-    zfar: f32,
-}
-
-#[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
-);
-
-
-impl Camera {
-    fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
-        let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
-        let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
-    }
-}
-
-
-// impl CreatePipeline<ColoredMesh> for WgpuRenderPass {
-//     fn create_pipeline(self: &mut Self, shader_path: &str, shader_text: &str) -> Own<<ColoredMesh as WgpuRenderObject>::Pipeline> {
-//         self.create_pipeline::<ColoredMesh>(shader_path, shader_text)
-//     }
-// }
-//
-// impl CreatePipeline<TexturedMesh> for WgpuRenderPass {
-//     fn create_pipeline(self: &mut Self, shader_path: &str, shader_text: &str) -> Own<TexturedMeshPipeline> {
-//         self.create_pipeline::<TexturedMesh>(shader_path, shader_text)
-//     }
-// }
 
 pub struct WgpuRenderPass {
     device: std::sync::Weak<Device>,
@@ -424,20 +255,6 @@ impl RenderBackend for WgpuRenderBackend {
 
             egui_show_obj.show(self.egui_renderer.context());
 
-            // egui::Window::new("winit + egui + wgpu says hello!")
-            //     .resizable(true)
-            //     .vscroll(true)
-            //     .default_open(false)
-            //     .show(self.egui_renderer.context(), |ui| {
-            //         ui.label("Label!");
-            //
-            //         if ui.button("Button!").clicked() {
-            //             println!("boom!")
-            //         }
-            //
-            //         ui.separator();
-            //     });
-
             self.egui_renderer.end_frame_and_draw(
                 &self.device.device,
                 &self.device.queue,
@@ -446,9 +263,6 @@ impl RenderBackend for WgpuRenderBackend {
                 &view,
                 screen_descriptor,
             );
-
-
-
         }
 
         self.device.queue.submit(Some(encoder.finish()));
@@ -696,26 +510,6 @@ impl CreateDrawletWgpu for WgpuRenderBackend
 
         PassHandle { id, ptr: ret.upcast() }
     }
-
-
-
-    // fn create_drawlet<RenObjType: WgpuRenderObject>(self: &mut Self, pipeline_handle: &PipelineHandle<RenObjType>, init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data) -> DrawletHandle<RenObjType>
-    // {
-    //     let pipeline = self.render_pipelines.get_mut(&pipeline_handle.id).unwrap();
-    //     let mut pipeline_guard = pipeline.lock();
-    //     let pipeline_any = pipeline_guard.as_any_mut();
-    //     let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
-    //
-    //     pipeline_concrete.instantiate_drawlet(pipeline_handle.layer_id, pipeline_handle.id, init_data)
-    // }
-
-    // fn get_drawlet_mut<RenObjType: WgpuRenderObject>(self: &mut Self, drawlet_handle: &DrawletHandle<RenObjType>) -> &'_ mut RenObjType::Drawlet {
-    //     let drawlet = self.render_drawlets[&drawlet_handle.id].clone();
-    //     let drawlet_any = drawlet.as_any_mut();
-    //     let pipeline_concrete = pipeline_any.downcast_mut::<RenObjType::Pipeline>().unwrap();
-    //
-    //     pipeline_concrete.get_drawlet_mut(&drawlet_handle)
-    // }
 }
 
 pub trait CreateDrawletWgpu
@@ -724,25 +518,7 @@ pub trait CreateDrawletWgpu
         self: &mut Self
     ) -> PassHandle;
 
-    // fn create_pipeline<RenObjType: WgpuRenderObject>(
-    //     self: &mut Self,
-    //     render_pass_handle: &LayerHandle,
-    //     shader_path: &str,
-    //     shader_text: &str,
-    // ) -> PipelineHandle<RenObjType>;
-
-    // fn create_drawlet<RenObjType: WgpuRenderObject>(
-    //     self: &mut Self,
-    //     pipeline: &PipelineHandle<RenObjType>,
-    //     init_data: <RenObjType::Drawlet as RenderDrawlet>::Data,
-    // ) -> DrawletHandle<RenObjType>;
-    //
-    // fn get_drawlet_mut<RenObjType: WgpuRenderObject>(
-    //     self: &mut Self,
-    //     drawlet_handle: &DrawletHandle<RenObjType>
-    // ) -> &'_ mut RenObjType::Drawlet;
 }
-
 
 pub struct WgpuBuffer<T> {
     size: usize,
