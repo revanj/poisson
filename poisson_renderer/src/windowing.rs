@@ -28,9 +28,7 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        {
-            self.renderer.lock().as_mut().unwrap().process_event(self.window.as_ref().unwrap(), &event);
-        }
+
         match &event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -39,10 +37,15 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
                 self.init_or_update();
             },
             WindowEvent::Resized(PhysicalSize { width, height }) => {
+                log::info!("resized window to {}x{}", width, height);
                 self.renderer.lock().as_mut().unwrap().resize(*width, *height);
                 self.init_or_update();
             },
             _ => (),
+        }
+
+        {
+            self.renderer.lock().as_mut().unwrap().process_event(self.window.as_ref().unwrap(), &event);
         }
         
         self.input.process_event(&event);

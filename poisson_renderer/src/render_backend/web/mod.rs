@@ -231,7 +231,7 @@ impl RenderBackend for WgpuRenderBackend {
         self.resize_surface_if_needed(window);
 
         let screen_descriptor = ScreenDescriptor {
-            size_in_pixels: [self.config.width, self.config.height],
+            size_in_pixels: [window.inner_size().width, window.inner_size().height],
             pixels_per_point: window.scale_factor() as f32,
         };
 
@@ -378,18 +378,20 @@ impl WgpuRenderBackend {
             let mut max_x = u32::MAX;
             let mut max_y = u32::MAX;
 
-            #[cfg(target_arch = "wasm32")]
-            {
-                (max_x, max_y) = get_canvas_size(window);
-                self.config.width = max_x;
-                self.config.height = max_y;
-            }
+            // #[cfg(target_arch = "wasm32")]
+            // {
+            //     (max_x, max_y) = get_canvas_size(window);
+            //     self.config.width = max_x;
+            //     self.config.height = max_y;
+            // }
+
+            log::info!("canvas_size_is: {}, {}", self.config.height, self.config.width);
 
             self.config.width = self.size.width.min(max_x);
             self.config.height = self.size.height.min(max_y);
             
             self.surface.configure(&self.device.device, &self.config);
-            log::info!("width and height is, {}, {}", self.config.width, self.config.height);
+
             for pass in self.render_passes.values_mut() {
                 pass.access().depth_stencil = Texture::create_depth_texture(&self.device.as_ref().device, &self.config, "depth stencil texture")
             }
@@ -463,14 +465,6 @@ impl WgpuRenderBackend {
         let mut size = window.inner_size();
         size.width = size.width.max(800);
         size.height = size.height.max(600);
-
-        let surface_caps = surface.get_capabilities(&adapter);
-        let surface_format = surface_caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| f.is_srgb()) // wgpu 0.20+ helper
-            .unwrap_or(wgpu::TextureFormat::Rgba8UnormSrgb);
 
         let mut config = surface
             .get_default_config(&adapter, size.width, size.height)
