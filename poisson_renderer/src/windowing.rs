@@ -9,7 +9,7 @@ use crate::render_backend::RenderBackend;
 
 impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
 {
-    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop)
+    fn resumed(&mut self, event_loop: &ActiveEventLoop)
     {
         let window_attributes = WindowAttributes::default().with_resizable(true);
 
@@ -27,7 +27,7 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
         }
     }
 
-    fn window_event(&mut self, event_loop: &dyn ActiveEventLoop, _: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         match &event {
             // those two should push event to a queue to be resolved before render_interface loop
             WindowEvent::KeyboardInput { .. } => {
@@ -39,7 +39,7 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
             WindowEvent::RedrawRequested { .. } => {
                 self.init_or_update();
             },
-            WindowEvent::SurfaceResized(PhysicalSize { width, height }) => {
+            WindowEvent::Resized(PhysicalSize { width, height }) => {
                 self.renderer.lock().as_mut().unwrap().resize(*width, *height);
                 self.init_or_update();
             },

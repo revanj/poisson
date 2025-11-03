@@ -44,8 +44,8 @@ pub struct Vk {} impl Ren for Vk {}
 
 pub trait RenderBackend {
     const PERSPECTIVE_ALIGNMENT: [f32; 3];
-    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized;
-    fn render(self: &mut Self, window: &Arc<dyn Window>);
+    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<Window>) where Self: Sized;
+    fn render(self: &mut Self, window: &Arc<Window>);
     fn process_event(self: &mut Self, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
     fn create_index_buffer(self: &Self, data: &[u32]) -> GpuBufferHandle<u32>;

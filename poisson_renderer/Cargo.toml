@@ -10,14 +10,18 @@ webgl = ["wgpu/webgl"]
 
 [dependencies]
 rj = {path = "../rj"}
-winit = {git = "https://github.com/rust-windowing/winit.git", rev = "5199474", features = []}
+#winit = {git = "https://github.com/rust-windowing/winit.git", rev = "5199474", features = []}
+winit = "0.30.12"
+egui = "0.32.1"
+egui-wgpu = { version = "0.32.1", features = ["winit"] }
+egui-winit =  { version = "0.32.1",default-features = false, features = ["bytemuck", "links", "wayland", "x11"] }
 poisson_macros = {path = "../poisson_macros" }
 cgmath = "0.18.0"
 cfg-if = "1.0.0"
 parking_lot = "0.12.4"
 async-trait = "0.1.88"
 web-sys = { version = "0.3.77", features = ["Location"] }
-wgpu = { version = "26" , features = ["webgl"]}
+wgpu = { version = "25.0.1", features = ["webgl"]}
 wasm-bindgen-futures = "0.4.50"
 log = "0.4.27"
 fern = "0.7"

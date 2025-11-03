@@ -11,6 +11,7 @@ pub mod input;
 pub mod utils;
 mod game_elements;
 pub mod math;
+mod egui;
 
 use parking_lot::Mutex;
 
@@ -24,6 +25,7 @@ use {
     wasm_bindgen::prelude::wasm_bindgen,
     web_sys
 };
+use crate::egui::EguiRenderer;
 
 pub trait PoissonGame {
     type Ren: RenderBackend;
@@ -41,7 +43,7 @@ trait AsAny {
 pub struct PoissonEngine<GameType>
 where GameType: PoissonGame
 {
-    window: Option<Arc<dyn Window>>,
+    window: Option<Arc<Window>>,
     input: Input,
     renderer: Arc<Mutex<Option<GameType::Ren>>>,
     game: GameType,
@@ -89,7 +91,7 @@ pub fn run_game<Game>() -> Result<(), impl std::error::Error>
 where Game: PoissonGame
 {
     let event_loop = EventLoop::new()?;
-    event_loop.run_app(PoissonEngine::<Game>::new())
+    event_loop.run_app(&mut PoissonEngine::<Game>::new())
 }
 
 

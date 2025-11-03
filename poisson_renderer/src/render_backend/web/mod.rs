@@ -15,6 +15,7 @@ use winit::dpi::PhysicalSize;
 use bytemuck;
 use cfg_if::cfg_if;
 use cgmath::Matrix4;
+use egui_wgpu::ScreenDescriptor;
 use wgpu::util::DeviceExt;
 use image;
 use image::EncodableLayout;
@@ -24,7 +25,7 @@ use wgpu::hal::DepthStencilAttachment;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 #[cfg(target_arch = "wasm32")]
-use winit::platform::web::WindowExtWeb;
+use winit::platform::web::WindowExtWebSys;
 use crate::{render_backend, AsAny, PoissonGame};
 use crate::input::Input;
 use crate::render_backend::render_interface::{RenderObject};
@@ -322,7 +323,6 @@ impl WgpuRenderPass {
                 wgpu::RenderPassColorAttachment {
                     view: target_view,
                     resolve_target: None,
-                    depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 1.0,
@@ -330,7 +330,7 @@ impl WgpuRenderPass {
                             b: 1.0,
                             a: 1.0,
                         }),
-                        store: wgpu::StoreOp::Discard,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -368,13 +368,14 @@ pub struct WgpuRenderBackend {
     size_changed: bool,
     max_size: winit::dpi::PhysicalSize<u32>,
     render_passes: HashMap<PassID, rj::Own<WgpuRenderPass>>,
+    egui_renderer: EguiRenderer,
 }
 
 
 impl RenderBackend for WgpuRenderBackend {
     const PERSPECTIVE_ALIGNMENT: [f32; 3] = [1f32, 1f32, -1f32];
 
-    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<dyn Window>) where Self: Sized
+    fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<Window>) where Self: Sized
     {
         cfg_if::cfg_if! {
             if #[cfg(target_arch="wasm32")] {
@@ -391,8 +392,13 @@ impl RenderBackend for WgpuRenderBackend {
         }
     }
 
-    fn render(self: &mut Self, window: &Arc<dyn Window>) {
+    fn render(self: &mut Self, window: &Arc<Window>) {
         self.resize_surface_if_needed(window);
+
+        let screen_descriptor = ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: window.scale_factor() as f32,
+        };
 
         let output = self.surface.get_current_texture().unwrap();
         let view = output
@@ -409,6 +415,33 @@ impl RenderBackend for WgpuRenderBackend {
             for render_pass in self.render_passes.values() {
                 render_pass.access().render(&mut encoder, &view);
             }
+
+            self.egui_renderer.begin_frame(window);
+
+            egui::Window::new("winit + egui + wgpu says hello!")
+                .resizable(true)
+                .vscroll(true)
+                .default_open(false)
+                .show(self.egui_renderer.context(), |ui| {
+                    ui.label("Label!");
+
+                    if ui.button("Button!").clicked() {
+                        println!("boom!")
+                    }
+
+                    ui.separator();
+                });
+
+            self.egui_renderer.end_frame_and_draw(
+                &self.device.device,
+                &self.device.queue,
+                &mut encoder,
+                window,
+                &view,
+                screen_descriptor,
+            );
+
+
 
         }
 
@@ -498,13 +531,14 @@ impl RenderBackend for WgpuRenderBackend {
 use wasm_bindgen::JsCast;
 use poisson_macros::AsAny;
 use rj::Own;
+use crate::egui::EguiRenderer;
 use crate::render_backend::render_interface::drawlets::{PassHandle, PassTrait, PipelineTrait};
 use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredMesh;
 use crate::render_backend::render_interface::drawlets::textured_mesh::TexturedMesh;
 use crate::render_backend::render_interface::resources::{GpuBufferHandle, GpuBufferTrait};
 
 #[cfg(target_arch = "wasm32")]
-fn get_canvas_size(window: &Arc<dyn Window>) -> (u32, u32) {
+fn get_canvas_size(window: &Arc<Window>) -> (u32, u32) {
     let canvas = window.canvas().unwrap();
     // let dpr = window.device_pixel_ratio();
     let width = canvas.client_width() as u32;
@@ -513,7 +547,7 @@ fn get_canvas_size(window: &Arc<dyn Window>) -> (u32, u32) {
 }
 
 impl WgpuRenderBackend {
-    fn resize_surface_if_needed(&mut self, window: &Arc<dyn Window>) {
+    fn resize_surface_if_needed(&mut self, window: &Arc<Window>) {
         if self.size_changed {
             let mut max_x = u32::MAX;
             let mut max_y = u32::MAX;
@@ -537,7 +571,7 @@ impl WgpuRenderBackend {
         }
     }
 
-    pub async fn new(window: &Arc<dyn Window>) -> Self {
+    pub async fn new(window: &Arc<Window>) -> Self {
         #[cfg(any(target_arch = "wasm32"))]
         {
             let canvas = window.canvas().unwrap();
@@ -600,7 +634,7 @@ impl WgpuRenderBackend {
             .await
             .unwrap();
 
-        let mut size = window.surface_size();
+        let mut size = window.inner_size();
         size.width = size.width.max(800);
         size.height = size.height.max(600);
 
@@ -619,6 +653,8 @@ impl WgpuRenderBackend {
 
         surface.configure(&device, &config);
 
+        let egui_renderer = EguiRenderer::new(&device, config.format, None, 1, window.as_ref());
+
         Self {
             surface,
             _adapter: adapter,
@@ -631,6 +667,7 @@ impl WgpuRenderBackend {
             size_changed: false,
             max_size: PhysicalSize {width: 800, height: 600},
             render_passes: HashMap::new(),
+            egui_renderer,
         }
     }
 }

@@ -11,7 +11,7 @@ use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use std::error::Error;
 use std::f32::consts::PI;
 use std::sync::Arc;
-use poisson_renderer::render_backend::render_interface::drawlets::{ColoredMeshDrawletTrait, DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
+use poisson_renderer::render_backend::render_interface::drawlets::{DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
 use poisson_renderer::render_backend::render_interface::Mesh;
 use rj::Own;
 #[cfg(target_arch = "wasm32")]

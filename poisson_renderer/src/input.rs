@@ -38,11 +38,7 @@ impl Input {
                     *pressed = s.is_pressed();
                 }
             }
-            WindowEvent::PointerMoved { .. } => {}
-            WindowEvent::PointerEntered { .. } => {}
-            WindowEvent::PointerLeft { .. } => {}
             WindowEvent::MouseWheel { .. } => {}
-            WindowEvent::PointerButton { .. } => {}
             _ => {}
         }
         
