@@ -26,6 +26,7 @@ use {
     web_sys
 };
 use crate::egui::EguiRenderer;
+use crate::render_backend::web::EguiUiShow;
 
 pub trait PoissonGame {
     type Ren: RenderBackend;
@@ -33,6 +34,7 @@ pub trait PoissonGame {
     fn pre_init(self: &mut Self, input: &mut Input);
     fn init(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren);
     fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren);
+    fn get_egui_ui_show(self: &mut Self) -> &mut impl EguiUiShow;
 }
 
 trait AsAny {

@@ -118,6 +118,7 @@ pub struct Orbits {
     last_time: Instant,
     elapsed_time: f32,
     assets: fs_embed::Dir,
+    egui_state: EguiState,
 }
 
 impl PoissonGame for Orbits {
@@ -132,7 +133,8 @@ impl PoissonGame for Orbits {
             sun: None,
             last_time: Instant::now(),
             elapsed_time: 0f32,
-            assets: FILES.clone().auto_dynamic()
+            assets: FILES.clone().auto_dynamic(),
+            egui_state: EguiState {},
         }
     }
 
@@ -242,6 +244,10 @@ impl PoissonGame for Orbits {
 
         self.sun.as_mut().unwrap().update(renderer, p * v, delta_time);
 
+    }
+
+    fn get_egui_ui_show(self: &mut Self) -> &mut impl EguiUiShow {
+        &mut self.egui_state
     }
 }
 struct EguiState {}
