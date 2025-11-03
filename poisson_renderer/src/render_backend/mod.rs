@@ -11,6 +11,7 @@ use crate::{AsAny, PoissonGame};
 use crate::egui::EguiRenderer;
 use crate::render_backend::render_interface::RenderObject;
 use crate::render_backend::render_interface::resources::GpuBufferHandle;
+use crate::render_backend::web::EguiUiShow;
 // #[cfg(not(target_arch = "wasm32"))]
 // pub mod vulkan;
 
@@ -46,7 +47,7 @@ pub struct Vk {} impl Ren for Vk {}
 pub trait RenderBackend {
     const PERSPECTIVE_ALIGNMENT: [f32; 3];
     fn init(backend_clone: Arc<Mutex<Option<Self>>>, window: Arc<Window>) where Self: Sized;
-    fn render(self: &mut Self, window: &Arc<Window>);
+    fn render(self: &mut Self, window: &Arc<Window>, egui_show_obj: &mut dyn EguiUiShow);
     fn process_event(self: &mut Self, window: &Window, event: &WindowEvent);
     fn resize(self: &mut Self, width: u32, height: u32);
     fn create_index_buffer(self: &Self, data: &[u32]) -> GpuBufferHandle<u32>;

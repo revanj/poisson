@@ -396,7 +396,7 @@ impl RenderBackend for WgpuRenderBackend {
         }
     }
 
-    fn render(self: &mut Self, window: &Arc<Window>) {
+    fn render(self: &mut Self, window: &Arc<Window>, egui_show_obj: &mut dyn EguiUiShow) {
         self.resize_surface_if_needed(window);
 
         let screen_descriptor = ScreenDescriptor {
@@ -422,19 +422,21 @@ impl RenderBackend for WgpuRenderBackend {
 
             self.egui_renderer.begin_frame(window);
 
-            egui::Window::new("winit + egui + wgpu says hello!")
-                .resizable(true)
-                .vscroll(true)
-                .default_open(false)
-                .show(self.egui_renderer.context(), |ui| {
-                    ui.label("Label!");
+            egui_show_obj.show(self.egui_renderer.context());
 
-                    if ui.button("Button!").clicked() {
-                        println!("boom!")
-                    }
-
-                    ui.separator();
-                });
+            // egui::Window::new("winit + egui + wgpu says hello!")
+            //     .resizable(true)
+            //     .vscroll(true)
+            //     .default_open(false)
+            //     .show(self.egui_renderer.context(), |ui| {
+            //         ui.label("Label!");
+            //
+            //         if ui.button("Button!").clicked() {
+            //             println!("boom!")
+            //         }
+            //
+            //         ui.separator();
+            //     });
 
             self.egui_renderer.end_frame_and_draw(
                 &self.device.device,
