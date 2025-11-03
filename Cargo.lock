@@ -723,6 +723,7 @@ dependencies = [
  "cgmath",
  "console_error_panic_hook",
  "console_log",
+ "egui",
  "fs-embed",
  "image",
  "include_dir",

@@ -32,6 +32,10 @@ use crate::render_backend::render_interface::{RenderObject};
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
 use crate::render_backend::web::textured_mesh::{TexturedMeshDrawlet, TexturedMeshPipeline};
 
+pub trait EguiUiShow {
+    fn show(&mut self, ctx: &egui::Context);
+}
+
 pub trait WgpuRenderObject: RenderObject + Sized {
     type Drawlet: WgpuDrawlet;
     type Pipeline: WgpuPipeline<Self> + WgpuPipelineDyn + 'static;

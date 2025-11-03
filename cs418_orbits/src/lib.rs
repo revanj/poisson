@@ -5,12 +5,13 @@ use fs_embed::fs_embed;
 use instant::Instant;
 use poisson_renderer::input::Input;
 use poisson_renderer::math::utils::perspective;
-use poisson_renderer::render_backend::web::{CreateDrawletWgpu, WgpuPipeline, WgpuRenderBackend};
+use poisson_renderer::render_backend::web::{CreateDrawletWgpu, EguiUiShow, WgpuPipeline, WgpuRenderBackend};
 use poisson_renderer::render_backend::RenderBackend;
 use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
 use std::error::Error;
 use std::f32::consts::PI;
 use std::sync::Arc;
+use std::task::Context;
 use poisson_renderer::render_backend::render_interface::drawlets::{DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
 use poisson_renderer::render_backend::render_interface::Mesh;
 use rj::Own;
@@ -241,5 +242,23 @@ impl PoissonGame for Orbits {
 
         self.sun.as_mut().unwrap().update(renderer, p * v, delta_time);
 
+    }
+}
+struct EguiState {}
+impl EguiUiShow for EguiState {
+    fn show(&mut self, ctx: &egui::Context) {
+        egui::Window::new("winit + egui + wgpu says hello!")
+            .resizable(true)
+            .vscroll(true)
+            .default_open(true)
+            .show(ctx, |ui| {
+                ui.label("Label!");
+
+                if ui.button("Button!").clicked() {
+                    println!("boom!")
+                }
+
+                ui.separator();
+            });
     }
 }
