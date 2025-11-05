@@ -50,6 +50,7 @@ pub struct TerrainParams {
 
 pub struct Orbits {
     //document: Option<Document>,
+    terrain_mesh: Option<DrawletHandle<LitColoredMesh>>,
     scene_render_pass: Option<PassHandle>,
     lit_colored_mesh_pipeline: Option<PipelineHandle<LitColoredMesh>>,
     last_time: Instant,
@@ -69,6 +70,7 @@ impl PoissonGame for Orbits {
             //document: None,
             scene_render_pass: None,
             lit_colored_mesh_pipeline: None,
+            terrain_mesh: None,
             last_time: Instant::now(),
             elapsed_time: 0f32,
             assets: FILES.clone().auto_dynamic(),
@@ -132,7 +134,7 @@ impl PoissonGame for Orbits {
             {
                 let data = self.terrain_params.borrow();
                 let data = data.as_ref().unwrap();
-                let mesh_grid = mesh::mesh_grid(data.grid_size-1);
+                let mesh_grid = mesh::mesh_grid(data.grid_size - 1);
                 let vertex_buffer = renderer.create_vertex_buffer(mesh_grid.0.as_slice());
                 let index_buffer = renderer.create_index_buffer(mesh_grid.1.as_slice());
                 let lit_mesh_data = LitColoredMeshData {
@@ -143,7 +145,7 @@ impl PoissonGame for Orbits {
                         vertex: vertex_buffer,
                     }),
                 };
-                self.lit_colored_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data);
+                self.terrain_mesh = Some(self.lit_colored_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data));
             }
             self.terrain_params.replace(None);
         }
@@ -157,12 +159,16 @@ impl PoissonGame for Orbits {
         self.elapsed_time += delta_time;
 
         let v = cgmath::Matrix4::look_at_rh(
-            cgmath::Point3::new(0.0, 2.0, 8.0),
+            cgmath::Point3::new(2.0, 2.0, 2.0),
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 1.0, 0.0));
         let aspect_ratio = (renderer.get_width() as f32)/(renderer.get_height() as f32);
 
         let p = perspective(PI/12f32, aspect_ratio, 0.1, 100.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
+
+        if let Some(terrain_mesh) = &mut self.terrain_mesh {
+            terrain_mesh.set_mvp(p * v);
+        }
     }
 
     fn get_egui_ui_show(self: &mut Self) -> &mut impl EguiUiShow {

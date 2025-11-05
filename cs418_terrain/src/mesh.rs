@@ -12,11 +12,11 @@ pub fn mesh_grid(n_segments: usize) -> (Vec<NormalColoredVertex>, Vec<u32>) {
                 (f_i / n_segments_f -0.5f32) * 2f32,
                 (f_j / n_segments_f -0.5f32) * 2f32
             );
-
+            println!("the point is, {}, {}",pt_x, pt_z);
             let vertex = NormalColoredVertex {
                 pos: [pt_x, 0f32, pt_z],
                 color: [0.8f32, 0.8f32, 0.8f32],
-                normal: [0f32, 1f32, 0f32],
+                normal: [0f32, 0f32, 0f32],
             };
 
             vertices.push(vertex);

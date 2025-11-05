@@ -225,13 +225,11 @@ impl DrawletTrait<LitColoredMesh> for LitColoredMeshDrawlet {}
 
 impl LitColoredMeshDrawletTrait for LitColoredMeshDrawlet {
     fn set_mvp(self: &mut Self, mvp: Matrix4<f32>) {
-        self.set_mvp(Mat4Ubo {
-            data: mvp,
-        })
+        self.set_mvp(Mat4Ubo { data: mvp, })
     }
 
     fn set_light_dir(self: &mut Self, light_dir: Vector3<f32>) {
-
+        self.set_light_dir(light_dir)
     }
 }
 

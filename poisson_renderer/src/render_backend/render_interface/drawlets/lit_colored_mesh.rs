@@ -1,9 +1,10 @@
 use std::sync::Arc;
+use bytemuck::{Pod, Zeroable};
 use crate::render_backend::render_interface::drawlets::{DrawletHandle, DrawletTrait};
 use crate::render_backend::render_interface::{Mesh, RenderObject};
 
 #[repr(C)]
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Pod, Zeroable)]
 pub struct NormalColoredVertex {
     pub pos: [f32; 3],
     pub color: [f32; 3],

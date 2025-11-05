@@ -1,3 +1,4 @@
+use wgpu::BufferAddress;
 use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredVertex;
 use crate::render_backend::render_interface::drawlets::lit_colored_mesh::NormalColoredVertex;
 use crate::render_backend::render_interface::drawlets::textured_mesh::UvVertex;
@@ -51,7 +52,7 @@ impl WgpuPerVertex for ColoredVertex {
 impl WgpuPerVertex for NormalColoredVertex {
     fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: size_of::<ColoredVertex>() as wgpu::BufferAddress,
+            array_stride: size_of::<NormalColoredVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
@@ -65,7 +66,7 @@ impl WgpuPerVertex for NormalColoredVertex {
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 wgpu::VertexAttribute {
-                    offset: size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: size_of::<[f32; 6]>() as wgpu::BufferAddress,
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x3,
                 }
