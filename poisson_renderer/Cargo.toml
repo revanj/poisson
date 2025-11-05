@@ -20,7 +20,7 @@ cgmath = "0.18.0"
 cfg-if = "1.0.0"
 parking_lot = "0.12.4"
 async-trait = "0.1.88"
-web-sys = { version = "0.3.77", features = ["Location"] }
+web-sys = { version = "0.3.77", features = ["Location", "Window"] }
 wgpu = { version = "25.0.1", features = ["webgl"]}
 wasm-bindgen-futures = "0.4.50"
 log = "0.4.27"

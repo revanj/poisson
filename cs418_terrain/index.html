@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script type="module">
+      import init from "./pkg/cs418_terrain.js";
+      init().then(() => {
+        console.log("WASM Loaded");
+      });
+    </script>
+    <title>Terrain</title>
+    <style>
+      body {
+        flex-grow: 1;
+        line-height: 0rem;
+      }
+      .controls {
+        flex: 0 0 auto;
+      }
+      .controls > * { margin: 1em; }
+    </style>
+  </head>
+  <form class="controls" action="javascript:void(0);">
+    <label>Grid size: <input id="gridsize" type="number" value="50"/></label>
+    <label>Faults: <input id="faults" type="number" value="50"/></label>
+    <input id="submit" type="submit" value="Regenerate Terrain"/>
+  </form>
+  <body id="wgpu-app-container">
+  </body>
+</html>
+

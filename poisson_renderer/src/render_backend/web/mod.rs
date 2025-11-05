@@ -19,8 +19,10 @@ use wgpu::util::DeviceExt;
 use parking_lot::Mutex;
 use wgpu::{BufferSlice, CommandEncoder, SurfaceConfiguration, TextureFormat, TextureView};
 use winit::event::{WindowEvent};
+
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
+
 use crate::{AsAny};
 use crate::render_backend::render_interface::{RenderObject};
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
@@ -231,7 +233,7 @@ impl RenderBackend for WgpuRenderBackend {
         self.resize_surface_if_needed(window);
 
         let screen_descriptor = ScreenDescriptor {
-            size_in_pixels: [window.inner_size().width, window.inner_size().height],
+            size_in_pixels: [self.config.width, self.config.height],
             pixels_per_point: window.scale_factor() as f32,
         };
 
@@ -378,12 +380,12 @@ impl WgpuRenderBackend {
             let mut max_x = u32::MAX;
             let mut max_y = u32::MAX;
 
-            // #[cfg(target_arch = "wasm32")]
-            // {
-            //     (max_x, max_y) = get_canvas_size(window);
-            //     self.config.width = max_x;
-            //     self.config.height = max_y;
-            // }
+            #[cfg(target_arch = "wasm32")]
+            {
+                (max_x, max_y) = get_canvas_size(window);
+                self.config.width = max_x;
+                self.config.height = max_y;
+            }
 
             log::info!("canvas_size_is: {}, {}", self.config.height, self.config.width);
 
@@ -455,7 +457,7 @@ impl WgpuRenderBackend {
                 required_limits:
                     if cfg!(target_arch = "wasm32") {
                         wgpu::Limits::downlevel_webgl2_defaults() }
-                    else { wgpu::Limits::default() },
+                    else { wgpu::Limits::default() }.using_resolution(adapter.limits()),
                 memory_hints: wgpu::MemoryHints::Performance,
                 trace: wgpu::Trace::Off,
             })
