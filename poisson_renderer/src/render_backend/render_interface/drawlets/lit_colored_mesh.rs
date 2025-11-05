@@ -31,6 +31,6 @@ impl RenderObject for LitColoredMesh {
 }
 pub struct LitColoredMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
-    pub light_dir: cgmath::Vector3<f32>,
+    pub light_dir: cgmath::Vector4<f32>,
     pub mesh: Arc<Mesh<NormalColoredVertex>>
 }

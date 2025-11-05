@@ -9,12 +9,13 @@ use poisson_renderer::input::Input;
 use poisson_renderer::math::utils::perspective;
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, EguiUiShow, WgpuPipeline, WgpuRenderBackend};
 use poisson_renderer::render_backend::RenderBackend;
-use poisson_renderer::{init_logger, run_game, shader, PoissonGame};
+use poisson_renderer::{init_logger, render_backend, run_game, shader, PoissonGame};
 use std::error::Error;
 use std::f32::consts::PI;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Context;
+use cgmath::SquareMatrix;
 use web_sys::Document;
 use poisson_renderer::render_backend::render_interface::drawlets::{DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
 use poisson_renderer::render_backend::render_interface::Mesh;
@@ -29,6 +30,7 @@ cfg_if::cfg_if! {
 
 
 use poisson_renderer::render_backend::render_interface::drawlets::colored_mesh::{ColoredMesh, ColoredMeshData, ColoredVertex};
+use poisson_renderer::render_backend::render_interface::drawlets::lit_colored_mesh::{LitColoredMesh, LitColoredMeshData};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -49,7 +51,7 @@ pub struct TerrainParams {
 pub struct Orbits {
     //document: Option<Document>,
     scene_render_pass: Option<PassHandle>,
-    colored_mesh_pipeline: Option<PipelineHandle<ColoredMesh>>,
+    lit_colored_mesh_pipeline: Option<PipelineHandle<LitColoredMesh>>,
     last_time: Instant,
     elapsed_time: f32,
     assets: fs_embed::Dir,
@@ -66,7 +68,7 @@ impl PoissonGame for Orbits {
         Self {
             //document: None,
             scene_render_pass: None,
-            colored_mesh_pipeline: None,
+            lit_colored_mesh_pipeline: None,
             last_time: Instant::now(),
             elapsed_time: 0f32,
             assets: FILES.clone().auto_dynamic(),
@@ -111,15 +113,17 @@ impl PoissonGame for Orbits {
 
         self.last_time = Instant::now();
 
-        let colored_mesh_shader = self.assets.get_file(shader!("shaders/colored_mesh")).unwrap();
-        let colored_mesh_shader_content = colored_mesh_shader.read_str().unwrap();
+        let lit_colored_mesh_shader = self.assets.get_file(shader!("shaders/lit_colored_mesh")).unwrap();
+        let lit_colored_mesh_shader_content = lit_colored_mesh_shader.read_str().unwrap();
 
         let mut r_handle = renderer.create_render_pass();
 
-        let mut p_handle = r_handle.create_colored_mesh_pipeline(
-            "cs418_terrain/assets/shaders/colored_mesh",
-            colored_mesh_shader_content.as_str());
+        let p_handle = r_handle.create_lit_colored_mesh_pipeline(
+            "cs418_terrain/assets/shaders/lit_colored_mesh",
+            lit_colored_mesh_shader_content.as_str());
 
+        self.scene_render_pass = Some(r_handle);
+        self.lit_colored_mesh_pipeline = Some(p_handle);
     }
 
     fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren) {
@@ -128,7 +132,18 @@ impl PoissonGame for Orbits {
             {
                 let data = self.terrain_params.borrow();
                 let data = data.as_ref().unwrap();
-                log::info!("params_submitted, {}, {}", data.faults, data.grid_size);
+                let mesh_grid = mesh::mesh_grid(data.grid_size-1);
+                let vertex_buffer = renderer.create_vertex_buffer(mesh_grid.0.as_slice());
+                let index_buffer = renderer.create_index_buffer(mesh_grid.1.as_slice());
+                let lit_mesh_data = LitColoredMeshData {
+                    mvp_data: cg::Matrix4::identity(),
+                    light_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
+                    mesh: Arc::new(Mesh {
+                        index: index_buffer,
+                        vertex: vertex_buffer,
+                    }),
+                };
+                self.lit_colored_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data);
             }
             self.terrain_params.replace(None);
         }

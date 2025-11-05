@@ -1,4 +1,6 @@
-fn mesh_grid(n_segments: usize) -> (Vec<f32>, Vec<u32>) {
+use poisson_renderer::render_backend::render_interface::drawlets::lit_colored_mesh::NormalColoredVertex;
+
+pub fn mesh_grid(n_segments: usize) -> (Vec<NormalColoredVertex>, Vec<u32>) {
     let n_vertices = n_segments + 1;
     let n_segments_f = n_segments as f32;
     let mut vertices = Vec::with_capacity(n_vertices * n_vertices);
@@ -11,9 +13,13 @@ fn mesh_grid(n_segments: usize) -> (Vec<f32>, Vec<u32>) {
                 (f_j / n_segments_f -0.5f32) * 2f32
             );
 
-            vertices.push(pt_x);
-            vertices.push(0f32);
-            vertices.push(pt_z);
+            let vertex = NormalColoredVertex {
+                pos: [pt_x, 0f32, pt_z],
+                color: [0.8f32, 0.8f32, 0.8f32],
+                normal: [0f32, 1f32, 0f32],
+            };
+
+            vertices.push(vertex);
         }
     }
 

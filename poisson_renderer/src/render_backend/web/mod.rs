@@ -2,6 +2,7 @@ pub mod textured_mesh;
 mod gpu_resources;
 mod per_vertex_impl;
 pub mod colored_mesh;
+mod lit_colored_mesh;
 
 use std::collections::HashMap;
 use std::fs;
@@ -87,6 +88,12 @@ impl PassTrait for WgpuRenderPass {
 
     fn create_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, Own<(dyn PipelineTrait<ColoredMesh> + 'static)>) {
         let (id, pipe) = self.create_pipeline::<ColoredMesh>(shader_path, shader_text);
+
+        (id, pipe.upcast())
+    }
+
+    fn create_lit_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, Own<dyn PipelineTrait<LitColoredMesh>>) {
+        let (id, pipe) = self.create_pipeline::<LitColoredMesh>(shader_path, shader_text);
 
         (id, pipe.upcast())
     }
@@ -362,6 +369,7 @@ use rj::Own;
 use crate::egui::EguiRenderer;
 use crate::render_backend::render_interface::drawlets::{PassHandle, PassTrait, PipelineTrait};
 use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredMesh;
+use crate::render_backend::render_interface::drawlets::lit_colored_mesh::LitColoredMesh;
 use crate::render_backend::render_interface::drawlets::textured_mesh::TexturedMesh;
 use crate::render_backend::render_interface::resources::{GpuBufferHandle, GpuBufferTrait};
 
