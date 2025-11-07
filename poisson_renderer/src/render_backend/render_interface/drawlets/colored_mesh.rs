@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use crate::render_backend::render_interface::drawlets::{DrawletHandle, DrawletTrait};
 use crate::render_backend::render_interface::{Mesh, RenderObject};
-use crate::render_backend::render_interface::drawlets::lit_colored_mesh::LitColoredMesh;
 
 pub trait ColoredMeshDrawletTrait: DrawletTrait<ColoredMesh> {
     fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>);

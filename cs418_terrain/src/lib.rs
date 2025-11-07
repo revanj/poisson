@@ -40,7 +40,7 @@ pub async fn run_wasm() {
 
 pub fn run() ->  Result<(), impl Error> {
     init_logger();
-    run_game::<Orbits>()
+    run_game::<Terrain>()
 }
 
 pub struct TerrainParams {
@@ -48,7 +48,7 @@ pub struct TerrainParams {
     pub grid_size: usize
 }
 
-pub struct Orbits {
+pub struct Terrain {
     //document: Option<Document>,
     terrain_mesh: Option<DrawletHandle<LitColoredMesh>>,
     scene_render_pass: Option<PassHandle>,
@@ -60,7 +60,7 @@ pub struct Orbits {
     terrain_params: Rc<RefCell<Option<TerrainParams>>>,
 }
 
-impl PoissonGame for Orbits {
+impl PoissonGame for Terrain {
     type Ren = WgpuRenderBackend;
 
     fn new() -> Self {

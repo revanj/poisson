@@ -5,11 +5,10 @@ pub mod lit_colored_mesh;
 use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredMesh;
 use crate::render_backend::render_interface::drawlets::textured_mesh::TexturedMesh;
 use crate::render_backend::render_interface::RenderObject;
-use crate::render_backend::web::WgpuRenderObject;
-use crate::render_backend::{DrawletID, PassID, PipelineID, RenderDrawlet};
+use crate::render_backend::{DrawletID, PassID, PipelineID};
 use crate::render_backend::render_interface::drawlets::lit_colored_mesh::LitColoredMesh;
 
-pub(crate) trait DrawletTrait<RenObjType: RenderObject> {}
+pub trait DrawletTrait<RenObjType: RenderObject> {}
 
 
 pub trait CreatePipeline<T>  where T: RenderObject {

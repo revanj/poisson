@@ -1,23 +1,20 @@
+use crate::render_backend::render_interface::drawlets::colored_mesh::{ColoredMesh, ColoredMeshData, ColoredMeshDrawletTrait, ColoredVertex};
+use crate::render_backend::render_interface::drawlets::{DrawletTrait, PipelineTrait};
+use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
+use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
+use crate::render_backend::web::gpu_resources::interface::WgpuUniformResource;
+use crate::render_backend::web::per_vertex_impl::WgpuPerVertex;
+use crate::render_backend::web::{Device, WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
+use crate::render_backend::{DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline};
 use crate::AsAny;
+use cgmath::Matrix4;
+use poisson_macros::AsAny;
+use rj::Own;
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::ops::Deref;
-use std::sync::{Arc,Weak};
-use cgmath::Matrix4;
-use parking_lot::Mutex;
-use wgpu::{ SurfaceConfiguration};
-use wgpu::util::DeviceExt;
-use poisson_macros::AsAny;
-use rj::Own;
-use crate::render_backend::{DrawletID, PassID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::drawlets::{DrawletTrait, PipelineTrait};
-use crate::render_backend::render_interface::drawlets::colored_mesh::{ColoredMesh, ColoredMeshData, ColoredMeshDrawletTrait, ColoredVertex};
-use crate::render_backend::web::{WgpuBuffer, Device, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject, WgpuRenderPass};
-use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
-use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
-use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
-use crate::render_backend::web::per_vertex_impl::WgpuPerVertex;
+use std::sync::{Arc, Weak};
+use wgpu::SurfaceConfiguration;
 
 impl WgpuRenderObject for ColoredMesh {
     type Drawlet = ColoredMeshDrawlet;
