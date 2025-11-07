@@ -12,10 +12,11 @@ use poisson_renderer::render_backend::RenderBackend;
 use poisson_renderer::{init_logger, render_backend, run_game, shader, PoissonGame};
 use std::error::Error;
 use std::f32::consts::PI;
+use std::ops::Index;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Context;
-use cgmath::SquareMatrix;
+use cgmath::{EuclideanSpace, SquareMatrix};
 use web_sys::Document;
 use poisson_renderer::render_backend::render_interface::drawlets::{DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
 use poisson_renderer::render_backend::render_interface::Mesh;
@@ -108,8 +109,8 @@ impl PoissonGame for Terrain {
             closure.forget();
         } else {
             self.terrain_params = Rc::new(RefCell::new(Some(TerrainParams {
-                faults: 1,
-                grid_size: 3,
+                faults: 50,
+                grid_size: 50,
             })))
         }}
 
@@ -140,12 +141,14 @@ impl PoissonGame for Terrain {
                 let lit_mesh_data = LitColoredMeshData {
                     mvp_data: cg::Matrix4::identity(),
                     light_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
+                    view_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
                     mesh: Arc::new(Mesh {
                         index: index_buffer,
                         vertex: vertex_buffer,
                     }),
                 };
                 self.terrain_mesh = Some(self.lit_colored_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data));
+                self.terrain_mesh.as_mut().unwrap().set_light_direction(cg::Vector3::<f32>::new(2f32, 2f32, 2f32));
             }
             self.terrain_params.replace(None);
         }
@@ -158,8 +161,10 @@ impl PoissonGame for Terrain {
 
         self.elapsed_time += delta_time;
 
+        let camera_center = cgmath::Vector3::new(2.0f32 * self.elapsed_time.cos(), 2.0f32, 2.0f32 * self.elapsed_time.sin());
+
         let v = cgmath::Matrix4::look_at_rh(
-            cgmath::Point3::new(2.0, 2.0, 0.0),
+            cgmath::Point3::from_vec(camera_center),
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 1.0, 0.0));
         let aspect_ratio = (renderer.get_width() as f32)/(renderer.get_height() as f32);
@@ -168,6 +173,8 @@ impl PoissonGame for Terrain {
 
         if let Some(terrain_mesh) = &mut self.terrain_mesh {
             terrain_mesh.set_mvp(p * v);
+            terrain_mesh.set_light_direction(cg::Vector3::<f32>::new(0.0, 1.0, 1.0));
+            terrain_mesh.set_view_direction(camera_center);
         }
     }
 

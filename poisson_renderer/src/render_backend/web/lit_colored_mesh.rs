@@ -8,7 +8,7 @@ use cgmath::{Matrix4, Vector3};
 use egui::IMEPurpose::Normal;
 use parking_lot::Mutex;
 use wgpu::{ SurfaceConfiguration};
-use wgpu::util::DeviceExt;
+use wgpu::util::{DeviceExt, RenderEncoder};
 use poisson_macros::AsAny;
 use rj::Own;
 use crate::render_backend::{DrawletID, PassID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
@@ -33,6 +33,7 @@ pub struct LitColoredMeshDrawlet {
     num_indices: u32,
     mvp_buffer: GpuMat4,
     light_buffer: GpuVec4,
+    view_buffer: GpuVec4,
     vertex_buffer: rj::Own<WgpuBuffer<NormalColoredVertex>>,
     index_buffer: rj::Own<WgpuBuffer<u32>>
 }
@@ -44,6 +45,7 @@ impl LitColoredMeshDrawlet {
     ) -> Self {
         let uniform_buffer = GpuMat4::from_mat4(&device.device, &init_data.mvp_data);
         let light_dir = GpuVec4::from_vec4(&device.device, &init_data.light_dir);
+        let view_dir = GpuVec4::from_vec4(&device.device, &init_data.view_dir);
 
         let vertex_buffer = init_data.mesh.vertex.buffer.downcast()
             .expect("failed to cast vertex buffer to drawlet buffer type");
@@ -56,6 +58,7 @@ impl LitColoredMeshDrawlet {
             num_indices: init_data.mesh.index.get_count() as u32,
             mvp_buffer: uniform_buffer,
             light_buffer: light_dir,
+            view_buffer: view_dir,
             vertex_buffer,
             index_buffer
         }
@@ -70,6 +73,7 @@ impl WgpuDrawlet for LitColoredMeshDrawlet {
     fn draw(self: &Self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_bind_group(0, self.mvp_buffer.get_bind_group(), &[]);
         render_pass.set_bind_group(1, self.light_buffer.get_bind_group(), &[]);
+        render_pass.set_bind_group(2, self.view_buffer.get_bind_group(), &[]);
 
         render_pass.set_vertex_buffer(0, self.vertex_buffer.access().slice());
         render_pass.set_index_buffer(self.index_buffer.access().slice(), wgpu::IndexFormat::Uint32);
@@ -117,6 +121,7 @@ impl WgpuPipeline<LitColoredMesh> for LitColoredMeshPipeline {
     {
         let camera_bind_group_layout = GpuMat4::create_bind_group_layout(&device.device);
         let light_dir_bind_group_layout = GpuVec4::create_bind_group_layout(&device.device);
+        let view_dir_bind_group_layout = GpuVec4::create_bind_group_layout(&device.device);
 
         let wgsl_str = str::from_utf8(shader_u8).unwrap();
 
@@ -131,6 +136,7 @@ impl WgpuPipeline<LitColoredMesh> for LitColoredMeshPipeline {
                 bind_group_layouts: &[
                     &camera_bind_group_layout,
                     &light_dir_bind_group_layout,
+                    &view_dir_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -161,7 +167,7 @@ impl WgpuPipeline<LitColoredMesh> for LitColoredMeshPipeline {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
@@ -213,6 +219,15 @@ impl LitColoredMeshDrawlet {
         };
         self.device.upgrade().as_ref().unwrap().queue.write_buffer(&self.light_buffer.buffer, 0, bytemuck::cast_slice(light_dir_slice));
     }
+
+    pub fn set_view_dir(self: &mut Self, view_direction: cgmath::Vector3<f32>) {
+        let view_dir_slice: &[u8] = unsafe {
+            std::slice::from_raw_parts(
+                (&view_direction as *const cgmath::Vector3<f32> as *const u8), size_of::<Vector3<f32>>()
+            )
+        };
+        self.device.upgrade().as_ref().unwrap().queue.write_buffer(&self.view_buffer.buffer, 0, bytemuck::cast_slice(view_dir_slice));
+    }
 }
 
 impl PipelineTrait<LitColoredMesh> for LitColoredMeshPipeline {
@@ -229,7 +244,11 @@ impl LitColoredMeshDrawletTrait for LitColoredMeshDrawlet {
     }
 
     fn set_light_dir(self: &mut Self, light_dir: Vector3<f32>) {
-        self.set_light_dir(light_dir)
+        self.set_light_dir(light_dir);
+    }
+
+    fn set_view_dir(self: &mut Self, view_dir: Vector3<f32>) {
+        self.set_view_dir(view_dir);
     }
 }
 

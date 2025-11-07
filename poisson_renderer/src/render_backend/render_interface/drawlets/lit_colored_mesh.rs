@@ -14,6 +14,7 @@ pub struct NormalColoredVertex {
 pub trait LitColoredMeshDrawletTrait: DrawletTrait<LitColoredMesh> {
     fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>);
     fn set_light_dir(self: &mut Self, light_dir: cgmath::Vector3<f32>);
+    fn set_view_dir(self: &mut Self, view_dir: cgmath::Vector3<f32>);
 }
 
 impl DrawletHandle<LitColoredMesh> {
@@ -22,6 +23,9 @@ impl DrawletHandle<LitColoredMesh> {
     }
     pub fn set_light_direction(self: &mut Self, light_dir: cgmath::Vector3<f32>) {
         self.ptr.access().set_light_dir(light_dir);
+    }
+    pub fn set_view_direction(self: &mut Self, view_dir: cgmath::Vector3<f32>) {
+        self.ptr.access().set_view_dir(view_dir);
     }
 }
 
@@ -33,5 +37,6 @@ impl RenderObject for LitColoredMesh {
 pub struct LitColoredMeshData {
     pub mvp_data: cgmath::Matrix4<f32>,
     pub light_dir: cgmath::Vector4<f32>,
+    pub view_dir: cgmath::Vector4<f32>,
     pub mesh: Arc<Mesh<NormalColoredVertex>>
 }

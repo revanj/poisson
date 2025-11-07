@@ -8,8 +8,14 @@ struct Light
     float4 light_dir;
 }
 
+struct View
+{
+    float4 view_dir;
+}
+
 ParameterBlock<Uniform> uniform_var;
 ParameterBlock<Light> light_var;
+ParameterBlock<View> view_var;
 
 
 struct AssembledVertex
@@ -56,6 +62,16 @@ VertexStageOutput vertex(
 Fragment fragment(CoarseVertex coarseVertex : CoarseVertex) : SV_Target
 {
     Fragment output;
-    output.color = float4((coarseVertex.normal / 2.0) + float3(0.5, 0.5, 0.5), 1.0);
+    float3 light_vec = normalize(light_var.light_dir.xyz);
+    float3 view_vec = normalize(view_var.view_dir.xyz);
+    float3 normal_vec = normalize(coarseVertex.normal);
+    float3 ambient = float3(0.1, 0.1, 0.1);
+    float3 diffuse = max(dot(light_vec, normal_vec), 0.0) * coarseVertex.color;
+    float3 reflect_vector = reflect(light_vec, normal_vec);
+    float3 rv = max(dot(reflect_vector, view_vec), 0);
+
+    float3 specular = 0.4 * pow(rv, 5.0);
+
+    output.color = float4(ambient + diffuse + specular, 1.0);
     return output;
 }

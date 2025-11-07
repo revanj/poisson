@@ -18,7 +18,7 @@ pub fn mesh_grid(n_segments: usize, n_faults: usize) -> (Vec<NormalColoredVertex
             );
             let vertex = NormalColoredVertex {
                 pos: [pt_x, 0f32, pt_z],
-                color: [0.8f32, 0.8f32, 0.8f32],
+                color: [0.8f32, 0.7f32, 0.6f32],
                 normal: [0f32, 0f32, 0f32],
             };
 
