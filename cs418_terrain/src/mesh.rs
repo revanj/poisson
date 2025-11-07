@@ -16,9 +16,10 @@ pub fn mesh_grid(n_segments: usize, n_faults: usize) -> (Vec<NormalColoredVertex
                 (f_i / n_segments_f -0.5f32) * 2f32,
                 (f_j / n_segments_f -0.5f32) * 2f32
             );
+
             let vertex = NormalColoredVertex {
                 pos: [pt_x, 0f32, pt_z],
-                color: [0.8f32, 0.7f32, 0.6f32],
+                color: [0.8f32, 0.6f32, 0.4f32],
                 normal: [0f32, 0f32, 0f32],
             };
 
@@ -45,6 +46,7 @@ pub fn mesh_grid(n_segments: usize, n_faults: usize) -> (Vec<NormalColoredVertex
         }
     }
 
+
     let max_height = vertices.iter().map(|v| v.pos[1]).reduce(|max, y| if y > max { y } else { max }).unwrap();
     let min_height = vertices.iter().map(|v| v.pos[1]).reduce(|min, y| if y < min { y } else { min }).unwrap();
 
@@ -57,9 +59,6 @@ pub fn mesh_grid(n_segments: usize, n_faults: usize) -> (Vec<NormalColoredVertex
             pt.pos[1] = 0f32;
         }
     }
-
-
-
 
     let mut indices = Vec::new();
     for i in 0..n_segments {
@@ -79,33 +78,18 @@ pub fn mesh_grid(n_segments: usize, n_faults: usize) -> (Vec<NormalColoredVertex
         }
     }
 
-    for vert_index in 0..vertices.len() {
-        let mut total_cross_product = rj::Vector::<f32, 3>::new([0f32; 3]);
-        for occurrence_index in 0..indices.len() {
-            if indices[occurrence_index] == vert_index as u32 {
-                let offset = occurrence_index - occurrence_index % 3;
-                let first_index = indices[offset];
-                let second_index = indices[offset + 1];
-                let third_index = indices[offset + 2];
+    for x in 0..n_vertices {
+        for y in 0..n_vertices {
+            let n =  rj::Vector::<f32, 3>::new(if x > 0 {vertices[y * n_vertices + (x - 1)].pos} else {vertices[y * n_vertices + x].pos});
+            let s = rj::Vector::<f32, 3>::new(if x < n_vertices - 1 {vertices[y * n_vertices + (x + 1)].pos} else {vertices[y * n_vertices + x].pos});
+            let w = rj::Vector::<f32, 3>::new(if y > 0 {vertices[(y-1) * n_vertices + x].pos} else {vertices[y * n_vertices + x].pos});
+            let e = rj::Vector::<f32, 3>::new(if y < n_vertices - 1 {vertices[(y + 1) * n_vertices + x].pos} else {vertices[y * n_vertices + x].pos});
 
-                let first_vertex_pos = rj::Vector::new(vertices[first_index as usize].pos);
-                let second_vertex_pos = rj::Vector::new(vertices[second_index as usize].pos);
-                let third_vertex_pos = rj::Vector::new(vertices[third_index as usize].pos);
-
-
-                let first_vector = second_vertex_pos - first_vertex_pos;
-                let second_vector = third_vertex_pos - first_vertex_pos;
-
-
-                total_cross_product += first_vector.cross(second_vector);
-
-                // println!("total cross_product is {:?}", total_cross_product.data);
-
-            }
+            let cross_prod = (n - s).cross(w - e).normalized();
+            vertices[y * n_vertices + x].normal = cross_prod.data;
         }
-        vertices[vert_index].normal = total_cross_product.normalized().data;
-        // println!("normal is {:?}", vertices[vert_index].normal)
     }
 
     (vertices, indices)
+
 }

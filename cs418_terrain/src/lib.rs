@@ -173,7 +173,7 @@ impl PoissonGame for Terrain {
 
         if let Some(terrain_mesh) = &mut self.terrain_mesh {
             terrain_mesh.set_mvp(p * v);
-            terrain_mesh.set_light_direction(cg::Vector3::<f32>::new(0.0, 1.0, 1.0));
+            terrain_mesh.set_light_direction(cg::Vector3::<f32>::new(0.0, 1.0, -0.5));
             terrain_mesh.set_view_direction(camera_center);
         }
     }

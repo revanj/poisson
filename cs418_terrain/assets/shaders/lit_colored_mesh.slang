@@ -67,10 +67,10 @@ Fragment fragment(CoarseVertex coarseVertex : CoarseVertex) : SV_Target
     float3 normal_vec = normalize(coarseVertex.normal);
     float3 ambient = float3(0.1, 0.1, 0.1);
     float3 diffuse = max(dot(light_vec, normal_vec), 0.0) * coarseVertex.color;
-    float3 reflect_vector = reflect(light_vec, normal_vec);
+    float3 reflect_vector = (2 * dot(normal_vec, light_vec)) * normal_vec - light_vec;
     float3 rv = max(dot(reflect_vector, view_vec), 0);
 
-    float3 specular = 0.4 * pow(rv, 5.0);
+    float3 specular = 0.3 * pow(rv, 6);
 
     output.color = float4(ambient + diffuse + specular, 1.0);
     return output;
