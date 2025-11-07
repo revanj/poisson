@@ -1,5 +1,5 @@
 use crate::render_backend::render_interface::drawlets::colored_mesh::{ColoredMesh, ColoredMeshData, ColoredMeshDrawletTrait, ColoredVertex};
-use crate::render_backend::render_interface::drawlets::{DrawletTrait, PipelineTrait};
+use crate::render_backend::render_interface::drawlets::{DrawletHandle, DrawletTrait, PipelineTrait};
 use crate::render_backend::web::gpu_resources::gpu_mat4::GpuMat4;
 use crate::render_backend::web::gpu_resources::gpu_texture::Texture;
 use crate::render_backend::web::gpu_resources::interface::WgpuUniformResource;
@@ -87,7 +87,7 @@ impl WgpuPipelineDyn for ColoredMeshPipeline {
 }
 
 impl WgpuPipeline<ColoredMesh> for ColoredMeshPipeline {
-    fn create_drawlet(self: &mut Self, init_data: ColoredMeshData) -> rj::Own<ColoredMeshDrawlet> {
+    fn create_drawlet(self: &mut Self, init_data: ColoredMeshData) -> (DrawletID, rj::Own<ColoredMeshDrawlet>) {
         let id = <Self as RenderPipeline<ColoredMesh>>::get_drawlet_id();
         let new_drawlet = ColoredMeshDrawlet::new(
             &self.device.upgrade().unwrap(),
@@ -97,7 +97,7 @@ impl WgpuPipeline<ColoredMesh> for ColoredMeshPipeline {
 
         self.drawlets.insert(id, own.clone());
 
-        own
+        (id, own)
     }
     
     fn new(device: &Arc<Device>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
@@ -194,8 +194,13 @@ impl ColoredMeshDrawlet {
 }
 
 impl PipelineTrait<ColoredMesh> for ColoredMeshPipeline {
-    fn create_drawlet(&mut self, init_data: ColoredMeshData) -> Own<dyn ColoredMeshDrawletTrait> {
-        WgpuPipeline::create_drawlet(self, init_data).upcast()
+    fn create_drawlet(&mut self, init_data: ColoredMeshData) -> (DrawletID, Own<(dyn ColoredMeshDrawletTrait + 'static)>) {
+        let (id, own) = WgpuPipeline::create_drawlet(self, init_data);
+
+        (id, own.upcast())
+    }
+    fn remove_drawlet(&mut self, drawlet: DrawletHandle<ColoredMesh>) {
+        let _ = self.drawlets.remove(&drawlet.id);
     }
 }
 

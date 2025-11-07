@@ -147,6 +147,10 @@ impl PoissonGame for Terrain {
                         vertex: vertex_buffer,
                     }),
                 };
+                if let Some(drawlet)= self.terrain_mesh.take() {
+                    self.lit_colored_mesh_pipeline.as_mut().unwrap().remove_drawlet(drawlet);
+                }
+
                 self.terrain_mesh = Some(self.lit_colored_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data));
                 self.terrain_mesh.as_mut().unwrap().set_light_direction(cg::Vector3::<f32>::new(2f32, 2f32, 2f32));
             }
@@ -161,7 +165,7 @@ impl PoissonGame for Terrain {
 
         self.elapsed_time += delta_time;
 
-        let camera_center = cgmath::Vector3::new(2.0f32 * self.elapsed_time.cos(), 2.0f32, 2.0f32 * self.elapsed_time.sin());
+        let camera_center = cgmath::Vector3::new(2.5f32 * self.elapsed_time.cos(), 2.5f32, 2.5f32 * self.elapsed_time.sin());
 
         let v = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::from_vec(camera_center),

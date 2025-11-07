@@ -12,7 +12,7 @@ use wgpu::util::{DeviceExt, RenderEncoder};
 use poisson_macros::AsAny;
 use rj::Own;
 use crate::render_backend::{DrawletID, PassID, Mat4Ubo, PipelineID, RenderDrawlet, RenderPipeline};
-use crate::render_backend::render_interface::drawlets::{DrawletTrait, PipelineTrait};
+use crate::render_backend::render_interface::drawlets::{DrawletHandle, DrawletTrait, PipelineTrait};
 use crate::render_backend::render_interface::drawlets::colored_mesh::{ColoredMesh, ColoredMeshData, ColoredMeshDrawletTrait, ColoredVertex};
 use crate::render_backend::render_interface::drawlets::lit_colored_mesh::{LitColoredMesh, LitColoredMeshData, LitColoredMeshDrawletTrait, NormalColoredVertex};
 use crate::render_backend::web::{WgpuBuffer, Device, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject, WgpuRenderPass};
@@ -103,7 +103,7 @@ impl WgpuPipelineDyn for LitColoredMeshPipeline {
 impl RenderPipeline<LitColoredMesh> for LitColoredMeshPipeline {}
 
 impl WgpuPipeline<LitColoredMesh> for LitColoredMeshPipeline {
-    fn create_drawlet(self: &mut Self, init_data: LitColoredMeshData) -> rj::Own<LitColoredMeshDrawlet> {
+    fn create_drawlet(self: &mut Self, init_data: LitColoredMeshData) -> (DrawletID, rj::Own<LitColoredMeshDrawlet>) {
         let id = <Self as RenderPipeline<ColoredMesh>>::get_drawlet_id();
         let new_drawlet = LitColoredMeshDrawlet::new(
             &self.device.upgrade().unwrap(),
@@ -113,7 +113,7 @@ impl WgpuPipeline<LitColoredMesh> for LitColoredMeshPipeline {
 
         self.drawlets.insert(id, own.clone());
 
-        own
+        (id, own)
     }
 
     fn new(device: &Arc<Device>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
@@ -231,8 +231,14 @@ impl LitColoredMeshDrawlet {
 }
 
 impl PipelineTrait<LitColoredMesh> for LitColoredMeshPipeline {
-    fn create_drawlet(&mut self, init_data: LitColoredMeshData) -> Own<dyn LitColoredMeshDrawletTrait> {
-        WgpuPipeline::create_drawlet(self, init_data).upcast()
+    fn create_drawlet(&mut self, init_data: LitColoredMeshData) -> (DrawletID, Own<(dyn LitColoredMeshDrawletTrait + 'static)>) {
+        let (id, own) = WgpuPipeline::create_drawlet(self, init_data);
+
+        (id, own.upcast())
+    }
+
+    fn remove_drawlet(&mut self, drawlet: DrawletHandle<LitColoredMesh>) {
+        let _ = self.drawlets.remove(&drawlet.id);
     }
 }
 

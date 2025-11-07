@@ -22,7 +22,8 @@ cfg-if = "1.0.1"
 web-sys = { version = "0.3.77", features = [
     "Window", "Document", "HtmlInputElement", "HtmlButtonElement", "console"
 ]}
-rand = "0.10.0-rc.1"
+rand = {version = "0.10.0-rc.1" }
+getrandom = { version = "0.3", features = ["wasm_js"] }
 
 
 [lib]

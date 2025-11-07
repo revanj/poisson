@@ -10,7 +10,7 @@ use poisson_macros::AsAny;
 use rj::Own;
 use crate::render_backend::{DrawletID, Mat4Ubo, RenderDrawlet, RenderPipeline};
 use crate::render_backend::render_interface::{RenderObject};
-use crate::render_backend::render_interface::drawlets::{DrawletTrait, PipelineTrait};
+use crate::render_backend::render_interface::drawlets::{DrawletHandle, DrawletTrait, PipelineTrait};
 use crate::render_backend::render_interface::drawlets::textured_mesh::{UvVertex, TexturedMesh, TexturedMeshData, TexturedMeshDrawletTrait};
 use crate::render_backend::web::{Device, WgpuBuffer, WgpuDrawlet, WgpuDrawletDyn, WgpuPipeline, WgpuPipelineDyn, WgpuRenderObject};
 use crate::render_backend::web::gpu_resources::{interface::WgpuUniformResource, gpu_texture::ShaderTexture};
@@ -100,7 +100,7 @@ impl WgpuPipelineDyn for TexturedMeshPipeline {
 }
 
 impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
-    fn create_drawlet(self: &mut Self, init_data: TexturedMeshData) -> rj::Own<TexturedMeshDrawlet> {
+    fn create_drawlet(self: &mut Self, init_data: TexturedMeshData) -> (DrawletID, rj::Own<TexturedMeshDrawlet>) {
         let id = <Self as RenderPipeline<TexturedMesh>>::get_drawlet_id();
         let new_drawlet = TexturedMeshDrawlet::new(
             &self.device.upgrade().unwrap(),
@@ -108,8 +108,8 @@ impl WgpuPipeline<TexturedMesh> for TexturedMeshPipeline {
         let own= rj::Own::new(new_drawlet);
         
         self.drawlets.insert(id, own.clone());
-        
-        own
+
+        (id, own)
     }
 
     fn new(device: &Arc<Device>, shader_u8: &[u8], surface_config: &SurfaceConfiguration) -> Self
@@ -209,8 +209,14 @@ impl TexturedMeshDrawlet {
 }
 
 impl PipelineTrait<TexturedMesh> for TexturedMeshPipeline {
-    fn create_drawlet(&mut self, init_data: TexturedMeshData) -> Own<dyn TexturedMeshDrawletTrait> {
-        WgpuPipeline::create_drawlet(self, init_data).upcast()
+    fn create_drawlet(&mut self, init_data: TexturedMeshData) -> (DrawletID, Own<(dyn TexturedMeshDrawletTrait + 'static)>) {
+        let (id, own) = WgpuPipeline::create_drawlet(self, init_data);
+
+        (id, own.upcast())
+    }
+
+    fn remove_drawlet(&mut self, drawlet: DrawletHandle<TexturedMesh>) {
+        let _ = self.drawlets.remove(&drawlet.id);
     }
 }
 

@@ -44,9 +44,9 @@ impl<GameType: PoissonGame> ApplicationHandler for PoissonEngine<GameType> where
             _ => (),
         }
 
-        {
-            self.renderer.lock().as_mut().unwrap().process_event(self.window.as_ref().unwrap(), &event);
-        }
+        // {
+        //     self.renderer.lock().as_mut().unwrap().process_event(self.window.as_ref().unwrap(), &event);
+        // }
         
         self.input.process_event(&event);
     }

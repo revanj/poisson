@@ -10,7 +10,7 @@ use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::{Arc};
 use winit::window::Window;
-use crate::render_backend::{PipelineID, RenderBackend, RenderDrawlet, PassID, RenderPipeline};
+use crate::render_backend::{PipelineID, RenderBackend, RenderDrawlet, PassID, RenderPipeline, DrawletID};
 use wgpu;
 use winit::dpi::PhysicalSize;
 use cfg_if::cfg_if;
@@ -45,7 +45,7 @@ WgpuPipeline<RenObjType: WgpuRenderObject>: RenderPipeline<RenObjType> + WgpuPip
     fn create_drawlet(
         self: &mut Self,
         init_data: <<RenObjType as WgpuRenderObject>::Drawlet as RenderDrawlet>::Data
-    ) -> rj::Own<<RenObjType as WgpuRenderObject>::Drawlet>;
+    ) -> (DrawletID, rj::Own<<RenObjType as WgpuRenderObject>::Drawlet>);
 
     fn new(
         device: &Arc<Device>,
@@ -86,7 +86,8 @@ impl<T: WgpuRenderObject> CreatePipeline<T> for WgpuRenderPass {
     }
 }
 
-impl PassTrait for WgpuRenderPass {}
+impl PassTrait for WgpuRenderPass {
+}
 
 impl WgpuRenderPass {
     fn new(device: &Arc<Device>, surface_configuration: &SurfaceConfiguration) -> Self {

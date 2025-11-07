@@ -38,11 +38,11 @@ impl PassHandle {
             ptr: pipe
         }
     }
-
 }
 
 pub trait PipelineTrait<RenObjType: RenderObject> {
-    fn create_drawlet(&mut self, init_data: RenObjType::Data) -> rj::Own<RenObjType::DynDrawlet>;
+    fn create_drawlet(&mut self, init_data: RenObjType::Data) -> (DrawletID, rj::Own<RenObjType::DynDrawlet>);
+    fn remove_drawlet(&mut self, drawlet: DrawletHandle<RenObjType>);
 }
 pub struct PipelineHandle<RenObjType: RenderObject> {
     id: PipelineID,
@@ -51,11 +51,15 @@ pub struct PipelineHandle<RenObjType: RenderObject> {
 
 impl<RenObjType: RenderObject> PipelineHandle<RenObjType> {
     pub fn create_drawlet(&mut self, init_data: RenObjType::Data) -> DrawletHandle<RenObjType> {
-        let ptr_drawlet = self.ptr.access().create_drawlet(init_data);
+        let (id, ptr_drawlet) = self.ptr.access().create_drawlet(init_data);
         DrawletHandle::<RenObjType> {
-            id: DrawletID(0),
+            id,
             ptr: ptr_drawlet,
         }
+    }
+
+    pub fn remove_drawlet(&mut self, drawlet: DrawletHandle<RenObjType>) {
+        self.ptr.access().remove_drawlet(drawlet);
     }
 }
 
