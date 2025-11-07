@@ -108,8 +108,8 @@ impl PoissonGame for Terrain {
             closure.forget();
         } else {
             self.terrain_params = Rc::new(RefCell::new(Some(TerrainParams {
-                faults: 50,
-                grid_size: 50,
+                faults: 1,
+                grid_size: 3,
             })))
         }}
 
@@ -134,7 +134,7 @@ impl PoissonGame for Terrain {
             {
                 let data = self.terrain_params.borrow();
                 let data = data.as_ref().unwrap();
-                let mesh_grid = mesh::mesh_grid(data.grid_size - 1);
+                let mesh_grid = mesh::mesh_grid(data.grid_size - 1, data.faults);
                 let vertex_buffer = renderer.create_vertex_buffer(mesh_grid.0.as_slice());
                 let index_buffer = renderer.create_index_buffer(mesh_grid.1.as_slice());
                 let lit_mesh_data = LitColoredMeshData {
@@ -159,7 +159,7 @@ impl PoissonGame for Terrain {
         self.elapsed_time += delta_time;
 
         let v = cgmath::Matrix4::look_at_rh(
-            cgmath::Point3::new(2.0, 2.0, 2.0),
+            cgmath::Point3::new(2.0, 2.0, 0.0),
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 1.0, 0.0));
         let aspect_ratio = (renderer.get_width() as f32)/(renderer.get_height() as f32);

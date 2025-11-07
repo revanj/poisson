@@ -9,12 +9,6 @@ struct Uniform_std140_0
 };
 
 @binding(0) @group(0) var<uniform> uniform_var_0 : Uniform_std140_0;
-struct Light_std140_0
-{
-    @align(16) light_dir_0 : vec4<f32>,
-};
-
-@binding(0) @group(1) var<uniform> light_var_0 : Light_std140_0;
 struct VertexStageOutput_0
 {
     @location(0) color_0 : vec3<f32>,
@@ -79,7 +73,7 @@ fn fragment( _S8 : pixelInput_0) -> Fragment_0
     _S9.coarseVertex_1._S1 = _S8._S6;
     _S9.coarseVertex_1._S2 = _S8._S7;
     var output_1 : Fragment_0;
-    output_1.color_2 = vec4<f32>(light_var_0.light_dir_0.xyz, 1.0f);
+    output_1.color_2 = vec4<f32>(_S9.coarseVertex_1._S2 / vec3<f32>(2.0f) + vec3<f32>(0.5f, 0.5f, 0.5f), 1.0f);
     return output_1;
 }
 
