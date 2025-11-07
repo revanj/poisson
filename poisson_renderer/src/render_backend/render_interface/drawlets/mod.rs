@@ -12,12 +12,16 @@ use crate::render_backend::render_interface::drawlets::lit_colored_mesh::LitColo
 pub(crate) trait DrawletTrait<RenObjType: RenderObject> {}
 
 
-
-pub(crate) trait PassTrait: std::any::Any {
-    fn create_textured_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, rj::Own<dyn PipelineTrait<TexturedMesh>>);
-    fn create_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, rj::Own<dyn PipelineTrait<ColoredMesh>>);
-    fn create_lit_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, rj::Own<dyn PipelineTrait<LitColoredMesh>>);
+pub trait CreatePipeline<T>  where T: RenderObject {
+    fn create_pipeline(&mut self, shader_path: &str, shader_text: &str)
+        -> (PipelineID, rj::Own<(dyn PipelineTrait<T> + 'static)>);
 }
+
+pub trait PassTrait: std::any::Any +
+    CreatePipeline<TexturedMesh> +
+    CreatePipeline<ColoredMesh> +
+    CreatePipeline<LitColoredMesh>
+{}
 
 pub struct PassHandle {
     pub(crate) id: PassID,
@@ -25,29 +29,17 @@ pub struct PassHandle {
 }
 
 impl PassHandle {
-    pub fn create_textured_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> PipelineHandle<TexturedMesh> {
-        let (id, pipe) = self.ptr.access().create_textured_mesh_pipeline(shader_path, shader_text);
-        PipelineHandle {
-            id,
-            ptr: pipe
-        }
-
-    }
-    pub fn create_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> PipelineHandle<ColoredMesh> {
-        let (id, pipe) = self.ptr.access().create_colored_mesh_pipeline(shader_path, shader_text);
+    pub fn create_pipeline<T: RenderObject>(&mut self, shader_path: &str, shader_text: &str)
+        -> PipelineHandle<T>
+        where (dyn PassTrait + 'static): CreatePipeline<T>
+    {
+        let (id, pipe) = self.ptr.access().create_pipeline(shader_path, shader_text);
         PipelineHandle {
             id,
             ptr: pipe
         }
     }
 
-    pub fn create_lit_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> PipelineHandle<LitColoredMesh> {
-        let (id, pipe) = self.ptr.access().create_lit_colored_mesh_pipeline(shader_path, shader_text);
-        PipelineHandle {
-            id,
-            ptr: pipe
-        }
-    }
 }
 
 pub trait PipelineTrait<RenObjType: RenderObject> {
@@ -65,7 +57,6 @@ impl<RenObjType: RenderObject> PipelineHandle<RenObjType> {
             id: DrawletID(0),
             ptr: ptr_drawlet,
         }
-
     }
 }
 

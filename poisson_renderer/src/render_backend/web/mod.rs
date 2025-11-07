@@ -34,7 +34,7 @@ pub trait EguiUiShow {
 
 pub trait WgpuRenderObject: RenderObject + Sized {
     type Drawlet: WgpuDrawlet;
-    type Pipeline: WgpuPipeline<Self> + WgpuPipelineDyn + 'static;
+    type Pipeline: PipelineTrait<Self> + WgpuPipeline<Self> + WgpuPipelineDyn + 'static;
     type Data;
 }
 
@@ -79,25 +79,14 @@ pub struct WgpuRenderPass {
     pipelines: HashMap<PipelineID, rj::Own<dyn WgpuPipelineDyn>>
 }
 
-impl PassTrait for WgpuRenderPass {
-    fn create_textured_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, Own<(dyn PipelineTrait<TexturedMesh> + 'static)>) {
-        let (id, pipe) = self.create_pipeline::<TexturedMesh>(shader_path, shader_text);
-
-        (id, pipe.upcast())
-    }
-
-    fn create_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, Own<(dyn PipelineTrait<ColoredMesh> + 'static)>) {
-        let (id, pipe) = self.create_pipeline::<ColoredMesh>(shader_path, shader_text);
-
-        (id, pipe.upcast())
-    }
-
-    fn create_lit_colored_mesh_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, Own<dyn PipelineTrait<LitColoredMesh>>) {
-        let (id, pipe) = self.create_pipeline::<LitColoredMesh>(shader_path, shader_text);
-
+impl<T: WgpuRenderObject> CreatePipeline<T> for WgpuRenderPass {
+    fn create_pipeline(&mut self, shader_path: &str, shader_text: &str) -> (PipelineID, Own<(dyn PipelineTrait<T> + 'static)>) {
+        let (id, pipe) = self.create_pipeline::<T>(shader_path, shader_text);
         (id, pipe.upcast())
     }
 }
+
+impl PassTrait for WgpuRenderPass {}
 
 impl WgpuRenderPass {
     fn new(device: &Arc<Device>, surface_configuration: &SurfaceConfiguration) -> Self {
@@ -363,14 +352,9 @@ impl RenderBackend for WgpuRenderBackend {
     }
 }
 
-use wasm_bindgen::JsCast;
-use poisson_macros::AsAny;
 use rj::Own;
 use crate::egui::EguiRenderer;
-use crate::render_backend::render_interface::drawlets::{PassHandle, PassTrait, PipelineTrait};
-use crate::render_backend::render_interface::drawlets::colored_mesh::ColoredMesh;
-use crate::render_backend::render_interface::drawlets::lit_colored_mesh::LitColoredMesh;
-use crate::render_backend::render_interface::drawlets::textured_mesh::TexturedMesh;
+use crate::render_backend::render_interface::drawlets::{CreatePipeline, PassHandle, PassTrait, PipelineTrait};
 use crate::render_backend::render_interface::resources::{GpuBufferHandle, GpuBufferTrait};
 
 #[cfg(target_arch = "wasm32")]

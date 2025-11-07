@@ -120,7 +120,7 @@ impl PoissonGame for Orbits {
 
         let mut r_handle = renderer.create_render_pass();
 
-        let p_handle = r_handle.create_lit_colored_mesh_pipeline(
+        let p_handle = r_handle.create_pipeline::<LitColoredMesh>(
             "cs418_terrain/assets/shaders/lit_colored_mesh",
             lit_colored_mesh_shader_content.as_str());
 
