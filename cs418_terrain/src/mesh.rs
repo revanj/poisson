@@ -104,7 +104,7 @@ pub fn mesh_grid(n_segments: usize, n_faults: usize) -> (Vec<NormalColoredVertex
             }
         }
         vertices[vert_index].normal = total_cross_product.normalized().data;
-        println!("normal is {:?}", vertices[vert_index].normal)
+        // println!("normal is {:?}", vertices[vert_index].normal)
     }
 
     (vertices, indices)
