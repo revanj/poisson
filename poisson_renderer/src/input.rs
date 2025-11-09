@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use winit::event::{KeyEvent, WindowEvent};
-use winit::keyboard::PhysicalKey;
+pub use winit::keyboard::PhysicalKey;
+pub use winit::keyboard::KeyCode;
 
 pub trait ProcessEvent {
     // this is non-mutable

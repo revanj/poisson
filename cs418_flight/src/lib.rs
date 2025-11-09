@@ -5,7 +5,7 @@ use cgmath as cg;
 use console_error_panic_hook;
 use fs_embed::fs_embed;
 use instant::Instant;
-use poisson_renderer::input::Input;
+use poisson_renderer::input::{Input, KeyCode, PhysicalKey};
 use poisson_renderer::math::utils::perspective;
 use poisson_renderer::render_backend::web::{CreateDrawletWgpu, EguiUiShow, WgpuPipeline, WgpuRenderBackend};
 use poisson_renderer::render_backend::RenderBackend;
@@ -16,7 +16,10 @@ use std::ops::Index;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Context;
-use cgmath::{EuclideanSpace, SquareMatrix};
+use cgmath::{EuclideanSpace, InnerSpace, SquareMatrix};
+use cgmath::num_traits::{Float, FloatConst};
+use egui::Key::V;
+use wasm_bindgen_futures::js_sys::Math::sin;
 use web_sys::Document;
 use poisson_renderer::render_backend::render_interface::drawlets::{DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
 use poisson_renderer::render_backend::render_interface::Mesh;
@@ -49,6 +52,52 @@ pub struct TerrainParams {
     pub grid_size: usize
 }
 
+struct FlightParams {
+    pos: cg::Vector3<f32>,
+    yaw: f32,
+    pitch: f32,
+}
+
+impl FlightParams {
+    fn new() -> Self {
+        Self {
+            pos: cg::Vector3::new(2.5f32, 2.5f32, 2.5f32),
+            yaw: 1.25f32 * f32::PI(),
+            pitch: -0.25f32 * f32::PI(),
+        }
+    }
+
+    pub fn turn_pitch(&mut self, speed: f32) {
+        self.pitch += speed;
+    }
+
+    pub fn turn_yaw(&mut self, speed: f32) {
+        self.yaw += speed;
+    }
+
+    pub fn move_front_back(&mut self, speed: f32) {
+        let dir = Self::yaw_pitch_to_dir(self.yaw, self.pitch);
+        self.pos += dir * speed;
+    }
+
+    fn yaw_pitch_to_dir(yaw: f32, pitch: f32) -> cg::Vector3<f32> {
+        cg::Vector3::new(
+            yaw.sin(),
+            pitch.sin(),
+            yaw.cos()
+        ).normalize()
+    }
+
+    pub fn to_view_matrix(&self) -> cg::Matrix4<f32> {
+        let dir = Self::yaw_pitch_to_dir(self.yaw, self.pitch);
+        cg::Matrix4::look_to_rh(
+            cg::Point3::from_vec(self.pos),
+            dir,
+            cg::Vector3::unit_y(),
+        )
+    }
+}
+
 pub struct Terrain {
     //document: Option<Document>,
     terrain_mesh: Option<DrawletHandle<LitColoredMesh>>,
@@ -59,6 +108,7 @@ pub struct Terrain {
     assets: fs_embed::Dir,
     egui_state: EguiState,
     terrain_params: Rc<RefCell<Option<TerrainParams>>>,
+    flight_params: FlightParams,
 }
 
 impl PoissonGame for Terrain {
@@ -77,42 +127,20 @@ impl PoissonGame for Terrain {
             assets: FILES.clone().auto_dynamic(),
             egui_state: EguiState {},
             terrain_params: Rc::new(RefCell::new(None)),
+            flight_params: FlightParams::new(),
         }
     }
 
     fn pre_init(self: &mut Self, input: &mut Input) {
-        //input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
+        input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
+        input.set_mapping("down", vec![PhysicalKey::Code(KeyCode::KeyS)]);
     }
 
     fn init(self: &mut Self, _input: &mut Input, renderer: &mut Self::Ren) {
-        cfg_if::cfg_if! {
-        if #[cfg(target_arch="wasm32")] {
-            let document = window().unwrap().document().unwrap();
-
-            let grid_size: HtmlInputElement = document.get_element_by_id("gridsize").unwrap().dyn_into().unwrap();
-            let faults :HtmlInputElement = document.get_element_by_id("faults").unwrap().dyn_into().unwrap();
-            let button: HtmlInputElement = document.get_element_by_id("submit").unwrap().dyn_into().unwrap();
-
-            let faults_clone = faults.clone();
-            let grid_size_clone = grid_size.clone();
-
-            let params_clone = self.terrain_params.clone();
-
-            let closure = Closure::wrap(Box::new(move || {
-                params_clone.replace(Some(TerrainParams {
-                    faults: faults_clone.value().parse::<usize>().unwrap(),
-                    grid_size: grid_size_clone.value().parse::<usize>().unwrap()
-                }));
-            }) as Box<dyn FnMut()>);
-
-            button.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap();
-            closure.forget();
-        } else {
-            self.terrain_params = Rc::new(RefCell::new(Some(TerrainParams {
-                faults: 50,
-                grid_size: 50,
-            })))
-        }}
+        self.terrain_params = Rc::new(RefCell::new(Some(TerrainParams {
+            faults: 50,
+            grid_size: 50,
+        })));
 
         self.last_time = Instant::now();
 
@@ -165,12 +193,19 @@ impl PoissonGame for Terrain {
 
         self.elapsed_time += delta_time;
 
-        let camera_center = cgmath::Vector3::new(3f32 * self.elapsed_time.cos(), 3f32, 3f32 * self.elapsed_time.sin());
-
+        let camera_center = cgmath::Vector3::new(2.5f32 * self.elapsed_time.cos(), 2.5f32, 2.5f32 * self.elapsed_time.sin());
         let v = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::from_vec(camera_center),
-            cgmath::Point3::new(0.0, -1.0, 0.0),
+            cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 1.0, 0.0));
+        if input.is_pressed("up") {
+            self.flight_params.turn_pitch(delta_time);
+        }
+        if input.is_pressed("down") {
+            self.flight_params.turn_pitch(-delta_time);
+        }
+
+        let v = self.flight_params.to_view_matrix();
         let aspect_ratio = (renderer.get_width() as f32)/(renderer.get_height() as f32);
 
         let p = perspective(PI/12f32, aspect_ratio, 0.1, 100.0, Self::Ren::PERSPECTIVE_ALIGNMENT);
@@ -178,7 +213,7 @@ impl PoissonGame for Terrain {
         if let Some(terrain_mesh) = &mut self.terrain_mesh {
             terrain_mesh.set_mvp(p * v);
             terrain_mesh.set_light_direction(cg::Vector3::<f32>::new(0.0, 1.0, -0.5));
-            terrain_mesh.set_view_direction(camera_center);
+            terrain_mesh.set_view_direction(self.flight_params.pos);
         }
     }
 

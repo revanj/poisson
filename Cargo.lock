@@ -719,6 +719,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
+name = "cs418_flight"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "cgmath",
+ "console_error_panic_hook",
+ "console_log",
+ "egui",
+ "fs-embed",
+ "getrandom 0.3.3",
+ "image",
+ "include_dir",
+ "instant",
+ "log",
+ "poisson_renderer",
+ "rand 0.10.0-rc.1",
+ "rj",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "cs418_logo"
 version = "0.1.0"
 dependencies = [
