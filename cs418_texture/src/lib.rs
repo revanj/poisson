@@ -214,15 +214,18 @@ impl PoissonGame for Terrain {
                             texture_color_updated_clone.replace(true);
                         }
                     }
-                    if Regex::new(r"^#[0-9a-f]{8}$").unwrap().is_match(input_str.as_str()) {
+                    else if Regex::new(r"^#[0-9a-f]{8}$").unwrap().is_match(input_str.as_str()) {
                         let r = i32::from_str_radix(&input_str[1..3], 16).unwrap().to_f32().unwrap() / 255f32;
                         let g = i32::from_str_radix(&input_str[3..5], 16).unwrap().to_f32().unwrap() / 255f32;
                         let b = i32::from_str_radix(&input_str[5..7], 16).unwrap().to_f32().unwrap() / 255f32;
                         let a = i32::from_str_radix(&input_str[7..9], 16).unwrap().to_f32().unwrap() / 255f32;
+                        log::info!("regex matched color {}, {}, {}, {}", r, g, b, a);
                         texture_color_clone.replace(Color((r, g, b, a)));
+                        texture_color_updated_clone.replace(true);
                     } // else matched image
                     else if Regex::new(r"[.](jpg|png)$").unwrap().is_match(input_str.as_str())  {
                         img_clone.set_src(input_str.as_str());
+                        texture_color_updated_clone.replace(true);
                     }
                 }) as Box<dyn FnMut()>);
 
@@ -266,7 +269,7 @@ impl PoissonGame for Terrain {
             {
                 let data = self.terrain_params.borrow();
                 let data = data.as_ref().unwrap();
-                let mesh_grid = mesh::mesh_grid(data.grid_size - 1, data.faults, true);
+                let mesh_grid = mesh::mesh_grid(data.grid_size - 1, data.faults, false);
                 self.texture_vertex_list = Vec::new();
                 for vertex in &mesh_grid.0 {
                     self.texture_vertex_list.push(
@@ -277,6 +280,8 @@ impl PoissonGame for Terrain {
                     )
                 }
                 self.index_list = mesh_grid.1;
+
+                self.color_vertex_list = Vec::new();
                 for vertex in &mesh_grid.0 {
                     self.color_vertex_list.push(
                         NormalColoredVertex {
@@ -312,10 +317,35 @@ impl PoissonGame for Terrain {
                             self.textured_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data)
                         ));
                     }
-                    Color(_) => {}
-                }
+                    Color((r, g, b, a)) => {
+                        for vertex in &mut self.color_vertex_list {
+                            vertex.color = [*r, *g, *b];
+                        }
 
+                        let vertex_buffer = renderer.create_vertex_buffer(self.color_vertex_list.as_slice());
+                        let index_buffer = renderer.create_index_buffer(self.index_list.as_slice());
+                        let lit_mesh_data = LitColoredMeshData {
+                            mvp_data: cg::Matrix4::identity(),
+                            light_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
+                            view_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
+                            mesh: Arc::new(Mesh {
+                                index: index_buffer,
+                                vertex: vertex_buffer,
+                            }),
+                        };
+
+                        if let Some(drawlet)= self.terrain_mesh.take() {
+                            match drawlet {
+                                ColoredOrTexturedMesh::ColoredMesh(drawlet) => { self.lit_colored_mesh_pipeline.as_mut().unwrap().remove_drawlet(drawlet); }
+                                ColoredOrTexturedMesh::TexturedMesh(drawlet) => { self.textured_mesh_pipeline.as_mut().unwrap().remove_drawlet(drawlet); }
+                            }
+                        }
+                        self.terrain_mesh = Some(ColoredOrTexturedMesh::ColoredMesh(
+                            self.lit_colored_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data)
+                        ));
+                    }
                 }
+            }
             self.terrain_params.replace(None);
         }
 
@@ -328,8 +358,6 @@ impl PoissonGame for Terrain {
                     let index_buffer = renderer.create_index_buffer(self.index_list.as_slice());
                     let lit_mesh_data = TexturedMeshData {
                         mvp_data: cg::Matrix4::identity(),
-                        // light_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
-                        // view_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
                         mesh: Arc::new(Mesh {
                             index: index_buffer,
                             vertex: vertex_buffer,
@@ -347,7 +375,32 @@ impl PoissonGame for Terrain {
                         self.textured_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data)
                     ));
                 }
-                Color((r, g, b, a)) => { log::info!("loaded color {}, {}, {}, {}", r, g, b, a); }
+                Color((r, g, b, a)) => {
+                    log::info!("loaded color {}, {}, {}, {}", r, g, b, a);
+                    for vertex in &mut self.color_vertex_list {
+                        vertex.color = [*r, *g, *b];
+                    }
+                    let vertex_buffer = renderer.create_vertex_buffer(self.color_vertex_list.as_slice());
+                    let index_buffer = renderer.create_index_buffer(self.index_list.as_slice());
+                    let lit_mesh_data = LitColoredMeshData {
+                        mvp_data: cg::Matrix4::identity(),
+                        light_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
+                        view_dir: cg::Vector4 {x: 1f32, y: 0f32, z: 0f32, w: 0f32},
+                        mesh: Arc::new(Mesh {
+                            index: index_buffer,
+                            vertex: vertex_buffer,
+                        }),
+                    };
+                    if let Some(drawlet)= self.terrain_mesh.take() {
+                        match drawlet {
+                            ColoredOrTexturedMesh::ColoredMesh(drawlet) => { self.lit_colored_mesh_pipeline.as_mut().unwrap().remove_drawlet(drawlet); }
+                            ColoredOrTexturedMesh::TexturedMesh(drawlet) => { self.textured_mesh_pipeline.as_mut().unwrap().remove_drawlet(drawlet); }
+                        }
+                    }
+                    self.terrain_mesh = Some(ColoredOrTexturedMesh::ColoredMesh(
+                        self.lit_colored_mesh_pipeline.as_mut().unwrap().create_drawlet(lit_mesh_data)
+                    ));
+                }
                 _ => {}
             }
         }
