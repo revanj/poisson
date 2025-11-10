@@ -803,6 +803,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "cs418_texture"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "cgmath",
+ "console_error_panic_hook",
+ "console_log",
+ "egui",
+ "fs-embed",
+ "getrandom 0.3.3",
+ "image",
+ "include_dir",
+ "instant",
+ "log",
+ "poisson_renderer",
+ "rand 0.10.0-rc.1",
+ "rj",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

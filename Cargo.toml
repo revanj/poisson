@@ -11,5 +11,6 @@ members= [
     "cs418_logo",
     "cs418_orbits",
     "cs418_terrain",
-    "cs418_flight"
+    "cs418_flight",
+    "cs418_texture"
 ]
