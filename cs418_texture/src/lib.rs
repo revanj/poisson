@@ -121,7 +121,7 @@ impl PoissonGame for Terrain {
             egui_state: EguiState {},
             terrain_params: Rc::new(RefCell::new(None)),
             texture_image: HtmlImageElement::new().unwrap(),
-            texture_color: Rc::new(RefCell::new(Color((1f32, 0f32, 1f32, 0f32))))
+            texture_color: Rc::new(RefCell::new(Color((1f32, 1f32, 1f32, 0.3f32))))
         }
     }
 
@@ -158,21 +158,6 @@ impl PoissonGame for Terrain {
                 img.set_cross_origin(Some("anonymous"));
                 img.set_src(url);
 
-                let img_clone = img.clone();
-                let texture_color_clone = Rc::clone(&self.texture_color);
-                let on_load = Closure::wrap(Box::new(move |_event: Event| {
-                    // web_sys::console::log_1(&"Image loaded!".into());
-                    // web_sys::console::log_1(&format!(
-                    //     "Size: {}x{}",
-                    //     img_clone.width(),
-                    //     img_clone.height()
-                    // ).into());
-                    let rgba_image = html_image_to_rgba(&img_clone);
-                    texture_color_clone.replace(TextureColor::Texture(rgba_image));
-                }) as Box<dyn FnMut(_)>);
-                img.add_event_listener_with_callback("load", on_load.as_ref().unchecked_ref()).unwrap();
-                on_load.forget();
-
                 let texture_color_clone = Rc::clone(&self.texture_color);
                 let on_error = Closure::wrap(Box::new(move |_event: Event| {
                     texture_color_clone.replace(TextureColor::Color((1.0f32, 0f32, 1f32, 0f32)));
@@ -180,11 +165,26 @@ impl PoissonGame for Terrain {
                 let texture_text_input: HtmlInputElement = document.get_element_by_id("texture").unwrap().dyn_into().unwrap();
                 let texture_text_input_clone = texture_text_input.clone();
 
+                let img_clone = img.clone();
+                let texture_color_clone = Rc::clone(&self.texture_color);
+                let on_load = Closure::wrap(Box::new(move |_event: Event| {
+                    let rgba_image = html_image_to_rgba(&img_clone);
+                    texture_color_clone.replace(TextureColor::Texture(rgba_image));
+                }) as Box<dyn FnMut(_)>);
+                img.add_event_listener_with_callback("load", on_load.as_ref().unchecked_ref()).unwrap();
+                on_load.forget();
+
+                img.add_event_listener_with_callback("error", on_error.as_ref().unchecked_ref()).unwrap();
+                on_error.forget();
+
                 //let self_texture_text_clone = Rc::clone(&self.texture_text);
                 let img_clone = img.clone();
                 let texture_color_clone = Rc::clone(&self.texture_color);
                 let texture_text_closure = Closure::wrap(Box::new(move || {
                     let input_str = texture_text_input_clone.value();
+                    if input_str == "" {
+                        texture_color_clone.replace(Color((1f32, 1f32, 1f32, 0.3f32)));
+                    }
                     if Regex::new(r"^#[0-9a-f]{8}$").unwrap().is_match(input_str.as_str()) {
                         let r = i32::from_str_radix(&input_str[1..3], 16).unwrap().to_f32().unwrap() / 255f32;
                         let g = i32::from_str_radix(&input_str[3..5], 16).unwrap().to_f32().unwrap() / 255f32;
@@ -195,7 +195,6 @@ impl PoissonGame for Terrain {
                     else if Regex::new(r"[.](jpg|png)$").unwrap().is_match(input_str.as_str())  {
                         img_clone.set_src(input_str.as_str());
                     }
-                    
                 }) as Box<dyn FnMut()>);
 
                 texture_text_input.add_event_listener_with_callback("input",texture_text_closure.as_ref().unchecked_ref()).unwrap();
