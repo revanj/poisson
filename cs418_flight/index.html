@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script type="module">
-      import init from "./pkg/cs418_terrain.js";
+      import init from "./pkg/cs418_flight.js";
       init().then(() => {
         console.log("WASM Loaded");
       });
@@ -34,9 +34,9 @@
 
   <body id="wgpu-app-container">
   <form class="controls" action="javascript:void(0);">
-    <label>Grid size: <input id="gridsize" type="number" value="50"/></label>
+    <!-- <label>Grid size: <input id="gridsize" type="number" value="50"/></label>
     <label>Faults: <input id="faults" type="number" value="50"/></label>
-    <input id="submit" type="submit" value="Regenerate Terrain"/>
+    <input id="submit" type="submit" value="Regenerate Terrain"/>-->
   </form>
   </body>
 </html>

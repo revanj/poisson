@@ -135,7 +135,7 @@ impl PoissonGame for Terrain {
             {
                 let data = self.terrain_params.borrow();
                 let data = data.as_ref().unwrap();
-                let mesh_grid = mesh::mesh_grid(data.grid_size - 1, data.faults);
+                let mesh_grid = mesh::mesh_grid(data.grid_size - 1, data.faults, true);
                 let vertex_buffer = renderer.create_vertex_buffer(mesh_grid.0.as_slice());
                 let index_buffer = renderer.create_index_buffer(mesh_grid.1.as_slice());
                 let lit_mesh_data = LitColoredMeshData {

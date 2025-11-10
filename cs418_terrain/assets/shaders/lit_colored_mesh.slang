@@ -70,7 +70,7 @@ Fragment fragment(CoarseVertex coarseVertex : CoarseVertex) : SV_Target
     float3 reflect_vector = (2 * dot(normal_vec, light_vec)) * normal_vec - light_vec;
     float3 rv = max(dot(reflect_vector, view_vec), 0);
 
-    float3 specular = 0.3 * pow(rv, 6);
+    float3 specular = 0.4 * pow(rv, 50);
 
     output.color = float4(ambient + diffuse + specular, 1.0);
     return output;

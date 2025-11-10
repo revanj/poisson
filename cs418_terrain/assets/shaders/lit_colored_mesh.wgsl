@@ -87,7 +87,7 @@ fn fragment( _S8 : pixelInput_0) -> Fragment_0
     var light_vec_0 : vec3<f32> = normalize(light_var_0.light_dir_0.xyz);
     var normal_vec_0 : vec3<f32> = normalize(_S9.coarseVertex_1._S2);
     var output_1 : Fragment_0;
-    output_1.color_2 = vec4<f32>(vec3<f32>(0.10000000149011612f, 0.10000000149011612f, 0.10000000149011612f) + vec3<f32>(max(dot(light_vec_0, normal_vec_0), 0.0f)) * _S9.coarseVertex_1._S1 + vec3<f32>(0.30000001192092896f) * pow(vec3<f32>(max(dot(vec3<f32>((2.0f * dot(normal_vec_0, light_vec_0))) * normal_vec_0 - light_vec_0, normalize(view_var_0.view_dir_0.xyz)), 0.0f)), vec3<f32>(vec3<i32>(i32(6)))), 1.0f);
+    output_1.color_2 = vec4<f32>(vec3<f32>(0.10000000149011612f, 0.10000000149011612f, 0.10000000149011612f) + vec3<f32>(max(dot(light_vec_0, normal_vec_0), 0.0f)) * _S9.coarseVertex_1._S1 + vec3<f32>(0.40000000596046448f) * pow(vec3<f32>(max(dot(vec3<f32>((2.0f * dot(normal_vec_0, light_vec_0))) * normal_vec_0 - light_vec_0, normalize(view_var_0.view_dir_0.xyz)), 0.0f)), vec3<f32>(vec3<i32>(i32(50)))), 1.0f);
     return output_1;
 }
 

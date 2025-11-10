@@ -69,6 +69,8 @@ impl FlightParams {
 
     pub fn turn_pitch(&mut self, speed: f32) {
         self.pitch += speed;
+        if self.pitch > f32::PI() / 2.0f32 { self.pitch = f32::PI() / 2.0f32 }
+        if self.pitch < -f32::PI() / 2.0f32 { self.pitch = -f32::PI() / 2.0f32 }
     }
 
     pub fn turn_yaw(&mut self, speed: f32) {
@@ -78,6 +80,11 @@ impl FlightParams {
     pub fn move_front_back(&mut self, speed: f32) {
         let dir = Self::yaw_pitch_to_dir(self.yaw, self.pitch);
         self.pos += dir * speed;
+    }
+    pub fn move_left_right(&mut self, speed: f32) {
+        let dir = Self::yaw_pitch_to_dir(self.yaw, self.pitch);
+        let left = cg::Vector3::unit_y().cross(dir).normalize();
+        self.pos += left * speed;
     }
 
     fn yaw_pitch_to_dir(yaw: f32, pitch: f32) -> cg::Vector3<f32> {
@@ -132,8 +139,14 @@ impl PoissonGame for Terrain {
     }
 
     fn pre_init(self: &mut Self, input: &mut Input) {
-        input.set_mapping("up", vec![PhysicalKey::Code(KeyCode::KeyW)]);
-        input.set_mapping("down", vec![PhysicalKey::Code(KeyCode::KeyS)]);
+        input.set_mapping("move_forward", vec![PhysicalKey::Code(KeyCode::KeyW)]);
+        input.set_mapping("move_back", vec![PhysicalKey::Code(KeyCode::KeyS)]);
+        input.set_mapping("move_left", vec![PhysicalKey::Code(KeyCode::KeyA)]);
+        input.set_mapping("move_right", vec![PhysicalKey::Code(KeyCode::KeyD)]);
+        input.set_mapping("rotate_right", vec![PhysicalKey::Code(KeyCode::ArrowRight)]);
+        input.set_mapping("rotate_left", vec![PhysicalKey::Code(KeyCode::ArrowLeft)]);
+        input.set_mapping("rotate_up", vec![PhysicalKey::Code(KeyCode::ArrowUp)]);
+        input.set_mapping("rotate_down", vec![PhysicalKey::Code(KeyCode::ArrowDown)]);
     }
 
     fn init(self: &mut Self, _input: &mut Input, renderer: &mut Self::Ren) {
@@ -193,17 +206,19 @@ impl PoissonGame for Terrain {
 
         self.elapsed_time += delta_time;
 
-        let camera_center = cgmath::Vector3::new(2.5f32 * self.elapsed_time.cos(), 2.5f32, 2.5f32 * self.elapsed_time.sin());
+        let camera_center = cgmath::Vector3::new(2f32 * self.elapsed_time.cos(), 2f32, 2f32 * self.elapsed_time.sin());
         let v = cgmath::Matrix4::look_at_rh(
             cgmath::Point3::from_vec(camera_center),
             cgmath::Point3::new(0.0, 0.0, 0.0),
             cgmath::Vector3::new(0.0, 1.0, 0.0));
-        if input.is_pressed("up") {
-            self.flight_params.turn_pitch(delta_time);
-        }
-        if input.is_pressed("down") {
-            self.flight_params.turn_pitch(-delta_time);
-        }
+        if input.is_pressed("rotate_up") { self.flight_params.turn_pitch(delta_time); }
+        if input.is_pressed("rotate_down") { self.flight_params.turn_pitch(-delta_time); }
+        if input.is_pressed("rotate_left") {self.flight_params.turn_yaw(delta_time); }
+        if input.is_pressed("rotate_right") {self.flight_params.turn_yaw(-delta_time); }
+        if input.is_pressed("move_forward") {self.flight_params.move_front_back(delta_time/2f32); }
+        if input.is_pressed("move_back") {self.flight_params.move_front_back(-delta_time/2f32); }
+        if input.is_pressed("move_left") { self.flight_params.move_left_right(delta_time/2f32); }
+        if input.is_pressed("move_right") { self.flight_params.move_left_right(-delta_time/2f32); }
 
         let v = self.flight_params.to_view_matrix();
         let aspect_ratio = (renderer.get_width() as f32)/(renderer.get_height() as f32);
