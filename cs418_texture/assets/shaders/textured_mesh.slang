@@ -56,5 +56,6 @@ Fragment fragment(
     Fragment output;
     output.color = texture_var.texture.Sample(texture_var.sampler, coarseVertex.tex_coord);
     output.color = texture_var.texture.Sample(texture_var.sampler, coarseVertex.tex_coord);
+    output.color.w = 1.0;
     return output;
 }

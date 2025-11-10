@@ -71,6 +71,7 @@ fn fragment( _S6 : pixelInput_0) -> Fragment_0
     _S7.coarseVertex_1._S1 = _S6._S5;
     var output_1 : Fragment_0;
     output_1.color_0 = (textureSample((texture_var_texture_0), (texture_var_sampler_0), (_S7.coarseVertex_1._S1)));
+    output_1.color_0[i32(3)] = 1.0f;
     return output_1;
 }
 
