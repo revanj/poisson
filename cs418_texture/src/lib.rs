@@ -17,8 +17,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Context;
 use cgmath::{EuclideanSpace, SquareMatrix};
+use image::RgbaImage;
 use regex::Regex;
-use web_sys::{Document, Event, HtmlImageElement};
+use web_sys::{CanvasRenderingContext2d, Document, Event, HtmlCanvasElement, HtmlImageElement};
 use poisson_renderer::render_backend::render_interface::drawlets::{DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
 use poisson_renderer::render_backend::render_interface::Mesh;
 use rj::Own;
@@ -50,6 +51,41 @@ pub struct TerrainParams {
     pub grid_size: usize
 }
 
+pub enum TextureColor {
+    Texture(RgbaImage),
+    Color((f32, f32, f32, f32)),
+    None
+}
+
+pub fn html_image_to_rgba(img: &HtmlImageElement) -> RgbaImage {
+    let document = web_sys::window().unwrap().document().unwrap();
+
+    // Create an offscreen canvas
+    let canvas: HtmlCanvasElement = document
+        .create_element("canvas").unwrap()
+        .dyn_into().unwrap();
+
+    canvas.set_width(img.width());
+    canvas.set_height(img.height());
+
+    let ctx: CanvasRenderingContext2d = canvas
+        .get_context("2d").unwrap()
+        .unwrap()
+        .dyn_into().unwrap();
+
+    ctx.draw_image_with_html_image_element(img, 0.0, 0.0).expect("failed to draw");
+
+    let image_data = ctx.get_image_data(0.0, 0.0, img.width() as f64, img.height() as f64).unwrap();
+    let data = image_data.data();
+
+    let mut pixels = vec![0u8; data.len()];
+    data.copy_to(&mut pixels).unwrap();
+
+    let rgba_image = RgbaImage::from_raw(img.width(), img.height(), pixels).expect("Failed to create image");
+
+    Ok(rgba_image)
+}
+
 pub struct Terrain {
     //document: Option<Document>,
     terrain_mesh: Option<DrawletHandle<LitColoredMesh>>,
@@ -61,6 +97,8 @@ pub struct Terrain {
     egui_state: EguiState,
     terrain_params: Rc<RefCell<Option<TerrainParams>>>,
     texture_text: Rc<RefCell<Option<String>>>,
+    texture_image: HtmlImageElement,
+    texture_color: Rc<RefCell<TextureColor>>,
 }
 
 impl PoissonGame for Terrain {
@@ -80,6 +118,8 @@ impl PoissonGame for Terrain {
             egui_state: EguiState {},
             terrain_params: Rc::new(RefCell::new(None)),
             texture_text: Rc::new(RefCell::new(None)),
+            texture_image: HtmlImageElement::new().unwrap(),
+            texture_color: Rc::new(RefCell::new(TextureColor::Color((1f32, 0f32, 1f32, 0f32)))
         }
     }
 
@@ -93,7 +133,7 @@ impl PoissonGame for Terrain {
                 let document = window().unwrap().document().unwrap();
 
                 let grid_size: HtmlInputElement = document.get_element_by_id("gridsize").unwrap().dyn_into().unwrap();
-                let faults :HtmlInputElement = document.get_element_by_id("faults").unwrap().dyn_into().unwrap();
+                let faults: HtmlInputElement = document.get_element_by_id("faults").unwrap().dyn_into().unwrap();
                 let button: HtmlInputElement = document.get_element_by_id("submit").unwrap().dyn_into().unwrap();
 
                 let faults_clone = faults.clone();
@@ -111,34 +151,48 @@ impl PoissonGame for Terrain {
                 button.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap();
                 closure.forget();
 
-                let texture_text_input: HtmlInputElement = document.get_element_by_id("texture").unwrap().dyn_into().unwrap();
-                let texture_text_input_clone = texture_text_input.clone();
-
-                let self_texture_text_clone = Rc::clone(&self.texture_text);
-                let texture_text_closure = Closure::wrap(Box::new(move || {
-                    self_texture_text_clone.replace(Some(texture_text_input_clone.value()));
-                }) as Box<dyn FnMut()>);
-                
-                texture_text_input.add_event_listener_with_callback("input",texture_text_closure.as_ref().unchecked_ref()).unwrap();
-                texture_text_closure.forget();
-
                 let url = "assets/textures/happy-tree.png";
                 let img = HtmlImageElement::new().unwrap();
                 img.set_cross_origin(Some("anonymous"));
                 img.set_src(url);
 
                 let img_clone = img.clone();
-                let onload = Closure::wrap(Box::new(move |_event: Event| {
+                let texture_color_clone = Rc::clone(&self.texture_color);
+                let on_load = Closure::wrap(Box::new(move |_event: Event| {
                     web_sys::console::log_1(&"Image loaded!".into());
                     web_sys::console::log_1(&format!(
                         "Size: {}x{}",
                         img_clone.width(),
                         img_clone.height()
                     ).into());
+                    let rgba_image = html_image_to_rgba(&img_clone);
+                    texture_color_clone.replace(TextureColor::Texture(rgba_image));
                 }) as Box<dyn FnMut(_)>);
-                img.add_event_listener_with_callback("load", onload.as_ref().unchecked_ref()).unwrap();
+                img.add_event_listener_with_callback("load", on_load.as_ref().unchecked_ref()).unwrap();
+                on_load.forget();
 
-                onload.forget();
+                let texture_color_clone = Rc::clone(&self.texture_color);
+                let on_error = Closure::wrap(Box::new(move |_event: Event| {
+                    texture_color_clone.replace(TextureColor::Color((1.0f32, 0f32, 1f32, 0f32)));
+                }));
+                let texture_text_input: HtmlInputElement = document.get_element_by_id("texture").unwrap().dyn_into().unwrap();
+                let texture_text_input_clone = texture_text_input.clone();
+
+                let self_texture_text_clone = Rc::clone(&self.texture_text);
+                let img_clone = img.clone();
+                let texture_text_closure = Closure::wrap(Box::new(move || {
+                    let input_str = 
+                    if Regex::new(r"^#[0-9a-f]{8}$").unwrap().is_match(texture_text_input_clone.value().as_str()) {
+        
+                    } // else matched image
+                    else if Regex::new(r"[.](jpg|png)$").unwrap().is_match(texture_text_input_clone.value().as_str())  {
+                        img_clone.set_src();
+                    }
+                    
+                }) as Box<dyn FnMut()>);
+
+                texture_text_input.add_event_listener_with_callback("input",texture_text_closure.as_ref().unchecked_ref()).unwrap();
+                texture_text_closure.forget();
             } else {
                 self.terrain_params = Rc::new(RefCell::new(Some(TerrainParams {
                     faults: 50,
@@ -188,16 +242,6 @@ impl PoissonGame for Terrain {
                 self.terrain_mesh.as_mut().unwrap().set_light_direction(cg::Vector3::<f32>::new(2f32, 2f32, 2f32));
             }
             self.terrain_params.replace(None);
-        }
-
-        if let Some(text) = self.texture_text.borrow_mut().take() {
-            // matched color
-            if Regex::new(r"^#[0-9a-f]{8}$").unwrap().is_match(text.as_str()) {
-
-            } // else matched image
-            else if Regex::new(r"[.](jpg|png)$").unwrap().is_match(text.as_str())  {
-
-            }
         }
 
         let delta_time = self.last_time.elapsed().as_secs_f32();
