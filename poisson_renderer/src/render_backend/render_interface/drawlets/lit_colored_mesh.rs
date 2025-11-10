@@ -7,7 +7,7 @@ use crate::render_backend::render_interface::{Mesh, RenderObject};
 #[derive(Clone, Debug, Copy, Pod, Zeroable)]
 pub struct NormalColoredVertex {
     pub pos: [f32; 3],
-    pub color: [f32; 3],
+    pub color: [f32; 4],
     pub normal: [f32; 3],
 }
 

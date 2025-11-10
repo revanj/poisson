@@ -211,6 +211,7 @@ impl PoissonGame for Terrain {
                         let original_value = texture_color_clone.replace(Color((1f32, 1f32, 1f32, 0.3f32)));
                         if let Color((1f32, 1f32, 1f32, 0.3f32)) = original_value {
                         } else {
+                            log::info!("got default color, setting replace true");
                             texture_color_updated_clone.replace(true);
                         }
                     }
@@ -262,8 +263,6 @@ impl PoissonGame for Terrain {
     }
 
     fn update(self: &mut Self, input: &mut Input, renderer: &mut Self::Ren) {
-        let mut mesh_updated = false;
-
         let params_submitted = self.terrain_params.borrow().is_some();
         if params_submitted {
             {
@@ -286,7 +285,7 @@ impl PoissonGame for Terrain {
                     self.color_vertex_list.push(
                         NormalColoredVertex {
                             pos: vertex.pos,
-                            color: [1.0; 3],
+                            color: [1.0; 4],
                             normal: vertex.normal,
                         }
                     )
@@ -318,8 +317,9 @@ impl PoissonGame for Terrain {
                         ));
                     }
                     Color((r, g, b, a)) => {
+                        log::info!("setting vertex color, {}, {}, {}, {}", r, g, b, a);
                         for vertex in &mut self.color_vertex_list {
-                            vertex.color = [*r, *g, *b];
+                            vertex.color = [*r, *g, *b, *a];
                         }
 
                         let vertex_buffer = renderer.create_vertex_buffer(self.color_vertex_list.as_slice());
@@ -378,7 +378,7 @@ impl PoissonGame for Terrain {
                 Color((r, g, b, a)) => {
                     log::info!("loaded color {}, {}, {}, {}", r, g, b, a);
                     for vertex in &mut self.color_vertex_list {
-                        vertex.color = [*r, *g, *b];
+                        vertex.color = [*r, *g, *b, *a];
                     }
                     let vertex_buffer = renderer.create_vertex_buffer(self.color_vertex_list.as_slice());
                     let index_buffer = renderer.create_index_buffer(self.index_list.as_slice());
