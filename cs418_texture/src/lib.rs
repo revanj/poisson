@@ -17,7 +17,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Context;
 use cgmath::{EuclideanSpace, SquareMatrix};
-use web_sys::Document;
+use regex::Regex;
+use web_sys::{Document, Event, HtmlImageElement};
 use poisson_renderer::render_backend::render_interface::drawlets::{DrawletHandle, PassHandle, PipelineHandle, PipelineTrait};
 use poisson_renderer::render_backend::render_interface::Mesh;
 use rj::Own;
@@ -59,6 +60,7 @@ pub struct Terrain {
     assets: fs_embed::Dir,
     egui_state: EguiState,
     terrain_params: Rc<RefCell<Option<TerrainParams>>>,
+    texture_text: Rc<RefCell<Option<String>>>,
 }
 
 impl PoissonGame for Terrain {
@@ -77,6 +79,7 @@ impl PoissonGame for Terrain {
             assets: FILES.clone().auto_dynamic(),
             egui_state: EguiState {},
             terrain_params: Rc::new(RefCell::new(None)),
+            texture_text: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -86,33 +89,63 @@ impl PoissonGame for Terrain {
 
     fn init(self: &mut Self, _input: &mut Input, renderer: &mut Self::Ren) {
         cfg_if::cfg_if! {
-        if #[cfg(target_arch="wasm32")] {
-            let document = window().unwrap().document().unwrap();
+            if #[cfg(target_arch="wasm32")] {
+                let document = window().unwrap().document().unwrap();
 
-            let grid_size: HtmlInputElement = document.get_element_by_id("gridsize").unwrap().dyn_into().unwrap();
-            let faults :HtmlInputElement = document.get_element_by_id("faults").unwrap().dyn_into().unwrap();
-            let button: HtmlInputElement = document.get_element_by_id("submit").unwrap().dyn_into().unwrap();
+                let grid_size: HtmlInputElement = document.get_element_by_id("gridsize").unwrap().dyn_into().unwrap();
+                let faults :HtmlInputElement = document.get_element_by_id("faults").unwrap().dyn_into().unwrap();
+                let button: HtmlInputElement = document.get_element_by_id("submit").unwrap().dyn_into().unwrap();
 
-            let faults_clone = faults.clone();
-            let grid_size_clone = grid_size.clone();
+                let faults_clone = faults.clone();
+                let grid_size_clone = grid_size.clone();
 
-            let params_clone = self.terrain_params.clone();
+                let params_clone = self.terrain_params.clone();
 
-            let closure = Closure::wrap(Box::new(move || {
-                params_clone.replace(Some(TerrainParams {
-                    faults: faults_clone.value().parse::<usize>().unwrap(),
-                    grid_size: grid_size_clone.value().parse::<usize>().unwrap()
-                }));
-            }) as Box<dyn FnMut()>);
+                let closure = Closure::wrap(Box::new(move || {
+                    params_clone.replace(Some(TerrainParams {
+                        faults: faults_clone.value().parse::<usize>().unwrap(),
+                        grid_size: grid_size_clone.value().parse::<usize>().unwrap()
+                    }));
+                }) as Box<dyn FnMut()>);
 
-            button.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap();
-            closure.forget();
-        } else {
-            self.terrain_params = Rc::new(RefCell::new(Some(TerrainParams {
-                faults: 50,
-                grid_size: 50,
-            })))
-        }}
+                button.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap();
+                closure.forget();
+
+                let texture_text_input: HtmlInputElement = document.get_element_by_id("texture").unwrap().dyn_into().unwrap();
+                let texture_text_input_clone = texture_text_input.clone();
+
+                let self_texture_text_clone = Rc::clone(&self.texture_text);
+                let texture_text_closure = Closure::wrap(Box::new(move || {
+                    self_texture_text_clone.replace(Some(texture_text_input_clone.value()));
+                }) as Box<dyn FnMut()>);
+                
+                texture_text_input.add_event_listener_with_callback("input",texture_text_closure.as_ref().unchecked_ref()).unwrap();
+                texture_text_closure.forget();
+
+                let url = "assets/textures/happy-tree.png";
+                let img = HtmlImageElement::new().unwrap();
+                img.set_cross_origin(Some("anonymous"));
+                img.set_src(url);
+
+                let img_clone = img.clone();
+                let onload = Closure::wrap(Box::new(move |_event: Event| {
+                    web_sys::console::log_1(&"Image loaded!".into());
+                    web_sys::console::log_1(&format!(
+                        "Size: {}x{}",
+                        img_clone.width(),
+                        img_clone.height()
+                    ).into());
+                }) as Box<dyn FnMut(_)>);
+                img.add_event_listener_with_callback("load", onload.as_ref().unchecked_ref()).unwrap();
+
+                onload.forget();
+            } else {
+                self.terrain_params = Rc::new(RefCell::new(Some(TerrainParams {
+                    faults: 50,
+                    grid_size: 50,
+                })))
+            }
+        }
 
         self.last_time = Instant::now();
 
@@ -157,9 +190,16 @@ impl PoissonGame for Terrain {
             self.terrain_params.replace(None);
         }
 
-        if let Some(terrain_params) = self.terrain_params.borrow().as_ref() {
-            log::info!("TerrainParams: {}, {}", terrain_params.faults, terrain_params.grid_size);
+        if let Some(text) = self.texture_text.borrow_mut().take() {
+            // matched color
+            if Regex::new(r"^#[0-9a-f]{8}$").unwrap().is_match(text.as_str()) {
+
+            } // else matched image
+            else if Regex::new(r"[.](jpg|png)$").unwrap().is_match(text.as_str())  {
+
+            }
         }
+
         let delta_time = self.last_time.elapsed().as_secs_f32();
         self.last_time = Instant::now();
 
