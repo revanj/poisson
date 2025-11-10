@@ -17,6 +17,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Context;
 use cgmath::{EuclideanSpace, SquareMatrix};
+use cgmath::num_traits::ToPrimitive;
+use egui::TextBuffer;
 use image::RgbaImage;
 use regex::Regex;
 use web_sys::{CanvasRenderingContext2d, Document, Event, HtmlCanvasElement, HtmlImageElement};
@@ -34,6 +36,7 @@ cfg_if::cfg_if! {
 
 use poisson_renderer::render_backend::render_interface::drawlets::colored_mesh::{ColoredMesh, ColoredMeshData, ColoredVertex};
 use poisson_renderer::render_backend::render_interface::drawlets::lit_colored_mesh::{LitColoredMesh, LitColoredMeshData};
+use crate::TextureColor::{Color, Texture};
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub async fn run_wasm() {
@@ -79,11 +82,11 @@ pub fn html_image_to_rgba(img: &HtmlImageElement) -> RgbaImage {
     let data = image_data.data();
 
     let mut pixels = vec![0u8; data.len()];
-    data.copy_to(&mut pixels).unwrap();
+    pixels.copy_from_slice(data.as_slice());
 
     let rgba_image = RgbaImage::from_raw(img.width(), img.height(), pixels).expect("Failed to create image");
 
-    Ok(rgba_image)
+    rgba_image
 }
 
 pub struct Terrain {
@@ -96,7 +99,7 @@ pub struct Terrain {
     assets: fs_embed::Dir,
     egui_state: EguiState,
     terrain_params: Rc<RefCell<Option<TerrainParams>>>,
-    texture_text: Rc<RefCell<Option<String>>>,
+    //texture_text: Rc<RefCell<Option<String>>>,
     texture_image: HtmlImageElement,
     texture_color: Rc<RefCell<TextureColor>>,
 }
@@ -117,9 +120,8 @@ impl PoissonGame for Terrain {
             assets: FILES.clone().auto_dynamic(),
             egui_state: EguiState {},
             terrain_params: Rc::new(RefCell::new(None)),
-            texture_text: Rc::new(RefCell::new(None)),
             texture_image: HtmlImageElement::new().unwrap(),
-            texture_color: Rc::new(RefCell::new(TextureColor::Color((1f32, 0f32, 1f32, 0f32)))
+            texture_color: Rc::new(RefCell::new(Color((1f32, 0f32, 1f32, 0f32))))
         }
     }
 
@@ -159,12 +161,12 @@ impl PoissonGame for Terrain {
                 let img_clone = img.clone();
                 let texture_color_clone = Rc::clone(&self.texture_color);
                 let on_load = Closure::wrap(Box::new(move |_event: Event| {
-                    web_sys::console::log_1(&"Image loaded!".into());
-                    web_sys::console::log_1(&format!(
-                        "Size: {}x{}",
-                        img_clone.width(),
-                        img_clone.height()
-                    ).into());
+                    // web_sys::console::log_1(&"Image loaded!".into());
+                    // web_sys::console::log_1(&format!(
+                    //     "Size: {}x{}",
+                    //     img_clone.width(),
+                    //     img_clone.height()
+                    // ).into());
                     let rgba_image = html_image_to_rgba(&img_clone);
                     texture_color_clone.replace(TextureColor::Texture(rgba_image));
                 }) as Box<dyn FnMut(_)>);
@@ -174,19 +176,24 @@ impl PoissonGame for Terrain {
                 let texture_color_clone = Rc::clone(&self.texture_color);
                 let on_error = Closure::wrap(Box::new(move |_event: Event| {
                     texture_color_clone.replace(TextureColor::Color((1.0f32, 0f32, 1f32, 0f32)));
-                }));
+                }) as Box<dyn FnMut(_)>);
                 let texture_text_input: HtmlInputElement = document.get_element_by_id("texture").unwrap().dyn_into().unwrap();
                 let texture_text_input_clone = texture_text_input.clone();
 
-                let self_texture_text_clone = Rc::clone(&self.texture_text);
+                //let self_texture_text_clone = Rc::clone(&self.texture_text);
                 let img_clone = img.clone();
+                let texture_color_clone = Rc::clone(&self.texture_color);
                 let texture_text_closure = Closure::wrap(Box::new(move || {
-                    let input_str = 
-                    if Regex::new(r"^#[0-9a-f]{8}$").unwrap().is_match(texture_text_input_clone.value().as_str()) {
-        
+                    let input_str = texture_text_input_clone.value();
+                    if Regex::new(r"^#[0-9a-f]{8}$").unwrap().is_match(input_str.as_str()) {
+                        let r = i32::from_str_radix(&input_str[1..3], 16).unwrap().to_f32().unwrap() / 255f32;
+                        let g = i32::from_str_radix(&input_str[3..5], 16).unwrap().to_f32().unwrap() / 255f32;
+                        let b = i32::from_str_radix(&input_str[5..7], 16).unwrap().to_f32().unwrap() / 255f32;
+                        let a = i32::from_str_radix(&input_str[7..9], 16).unwrap().to_f32().unwrap() / 255f32;
+                        texture_color_clone.replace(Color((r, g, b, a)));
                     } // else matched image
-                    else if Regex::new(r"[.](jpg|png)$").unwrap().is_match(texture_text_input_clone.value().as_str())  {
-                        img_clone.set_src();
+                    else if Regex::new(r"[.](jpg|png)$").unwrap().is_match(input_str.as_str())  {
+                        img_clone.set_src(input_str.as_str());
                     }
                     
                 }) as Box<dyn FnMut()>);
@@ -243,6 +250,13 @@ impl PoissonGame for Terrain {
             }
             self.terrain_params.replace(None);
         }
+
+        match &(*self.texture_color.borrow()) {
+            Texture(tex) => {log::info!("found image of size {}, {}", tex.width(), tex.height());}
+            Color((r,g,b,a)) => {log::info!("loaded color {}, {}, {}, {}", r, g, b, a);}
+            _ => {}
+        }
+        self.texture_color.replace(TextureColor::None);
 
         let delta_time = self.last_time.elapsed().as_secs_f32();
         self.last_time = Instant::now();
