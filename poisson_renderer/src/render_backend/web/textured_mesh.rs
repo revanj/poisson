@@ -3,6 +3,7 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
+use cgmath::{Matrix4, Vector3};
 use parking_lot::Mutex;
 use wgpu::{SurfaceConfiguration};
 use wgpu::util::DeviceExt;
@@ -220,8 +221,10 @@ impl PipelineTrait<TexturedMesh> for TexturedMeshPipeline {
     }
 }
 
-impl DrawletTrait<TexturedMesh> for TexturedMeshDrawlet {
+impl DrawletTrait<TexturedMesh> for TexturedMeshDrawlet {}
 
+impl TexturedMeshDrawletTrait for TexturedMeshDrawlet {
+    fn set_mvp(self: &mut Self, mvp: Matrix4<f32>) {
+        self.set_mvp(Mat4Ubo { data: mvp });
+    }
 }
-
-impl TexturedMeshDrawletTrait for TexturedMeshDrawlet {}

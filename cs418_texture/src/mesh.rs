@@ -2,7 +2,13 @@ use cgmath::num_traits::FloatConst;
 use rand::Rng;
 use poisson_renderer::render_backend::render_interface::drawlets::lit_colored_mesh::NormalColoredVertex;
 
-pub fn mesh_grid(n_segments: usize, n_faults: usize, is_sphere: bool) -> (Vec<NormalColoredVertex>, Vec<u32>) {
+pub struct AllVertex {
+    pub pos: [f32; 3],
+    pub normal: [f32; 3],
+    pub uv: [f32; 2],
+}
+
+pub fn mesh_grid(n_segments: usize, n_faults: usize, is_sphere: bool) -> (Vec<AllVertex>, Vec<u32>) {
     let n_vertices = n_segments + 1;
     let n_segments_f = n_segments as f32;
     let mut vertices = Vec::with_capacity(n_vertices * n_vertices);
@@ -16,9 +22,13 @@ pub fn mesh_grid(n_segments: usize, n_faults: usize, is_sphere: bool) -> (Vec<No
                 (f_i / n_segments_f -0.5f32) * 2f32,
                 (f_j / n_segments_f -0.5f32) * 2f32
             );
-            let vertex = NormalColoredVertex {
+            let (uv_x, uv_z) = (
+                f_i / n_segments_f,
+                f_j / n_segments_f
+            );
+            let vertex = AllVertex {
                 pos: [pt_x, if !is_sphere {0f32} else {(1f32 - pt_x * pt_x - pt_z * pt_z).max(0f32).sqrt() }, pt_z],
-                color: [0.8f32, 0.6f32, 0.4f32],
+                uv: [uv_x, uv_z],
                 normal: [0f32, 0f32, 0f32],
             };
 

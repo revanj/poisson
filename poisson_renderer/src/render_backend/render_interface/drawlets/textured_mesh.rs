@@ -1,9 +1,17 @@
 use std::sync::Arc;
 use image::DynamicImage;
-use crate::render_backend::render_interface::drawlets::DrawletTrait;
+use crate::render_backend::render_interface::drawlets::{DrawletHandle, DrawletTrait};
 use crate::render_backend::render_interface::{Mesh, RenderObject};
 
-pub trait TexturedMeshDrawletTrait: DrawletTrait<TexturedMesh> {}
+pub trait TexturedMeshDrawletTrait: DrawletTrait<TexturedMesh> {
+    fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>);
+}
+
+impl DrawletHandle<TexturedMesh> {
+    pub fn set_mvp(self: &mut Self, mvp: cgmath::Matrix4<f32>) {
+        self.ptr.access().set_mvp(mvp);
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
